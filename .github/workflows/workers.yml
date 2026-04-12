@@ -1,0 +1,30 @@
+name: Build and Deploy to Cloudflare Workers
+
+on:
+  push:
+    branches: ['main']
+    paths:
+      - 'lemon-getip/**'
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22'
+
+      # 部署到 Cloudflare Workers
+      - name: Deploy to Cloudflare Workers
+
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd lemon-getip
+          npm install
+          npm run deploy
