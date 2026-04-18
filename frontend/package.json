@@ -17,7 +17,8 @@
     "ip2region-ts": "^2.0.1",
     "is-ip": "^5.0.1",
     "prismjs": "^1.30.0",
-    "vue": "^3.5.32"
+    "vue": "^3.5.32",
+    "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@types/node": "^24.12.2",
