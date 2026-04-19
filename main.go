@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"lemon-ipw/ipdb"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -19,9 +21,17 @@ import (
 	"resty.dev/v3"
 )
 
+type Setting struct {
+	Port    string `json:"port"`
+	GHProxy string `json:"gh-proxy"`
+}
+
 var (
 	ip2region   *service.Ip2Region
 	ip2regionMu sync.RWMutex
+	PORTS       string
+	GH_PROXY    string
+	LOG_LEVEL   string
 )
 
 type WebsiteCheckResult struct {
@@ -96,7 +106,7 @@ func loadIp2Region() error {
 
 func syncDatabase() error {
 	for {
-		err, errv6 := ipdb.PullDatabase()
+		err, errv6 := ipdb.PullDatabase(GH_PROXY)
 		if err != nil || errv6 != nil {
 			slog.Error("Error pulling database", "error", err, "error_v6", errv6)
 			if err != nil {
@@ -451,8 +461,36 @@ func locateIP(c *gin.Context) {
 		"region": region,
 	})
 }
+func readConfig() {
+	// 1. 优先从环境变量读取
+	PORTS = os.Getenv("PORTS")
+	GH_PROXY = os.Getenv("GH_PROXY")
+
+	// 2. 如果环境变量未设置，尝试从 setting.json 读取
+	if PORTS == "" || GH_PROXY == "" {
+		settingFile := "setting.json"
+		if data, err := os.ReadFile(settingFile); err == nil {
+			var setting Setting
+			if err := json.Unmarshal(data, &setting); err == nil {
+				// 环境变量未设置时才使用配置文件中的值
+				if PORTS == "" && setting.Port != "" {
+					PORTS = setting.Port
+				}
+				if GH_PROXY == "" && setting.GHProxy != "" {
+					GH_PROXY = setting.GHProxy
+				}
+			}
+		}
+	}
+
+	// 3. 最后使用默认值
+	if PORTS == "" {
+		PORTS = "8080"
+	}
+}
 func main() {
 	go syncDatabase()
+	readConfig()
 
 	r := gin.Default()
 	r.Use(cors.Default())
@@ -460,7 +498,7 @@ func main() {
 	r.GET("/v1/ssl/*url", sslCheckHandler)
 	r.GET("/v1/location/:ip", locateIP)
 
-	if err := r.Run(); err != nil {
+	if err := r.Run(":" + PORTS); err != nil {
 		slog.Error("Server failed to start", "error", err)
 	}
 
