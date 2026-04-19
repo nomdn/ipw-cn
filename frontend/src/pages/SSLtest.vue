@@ -27,7 +27,7 @@ interface SSLCheckItem {
   is_expired: boolean
 }
 // 等蛋饺给我双栈运行容器
-const remoteAPI = ref('')
+const remoteAPI = ref('https://api-ipw.wsmdn.dpdns.org/')
 const tmpDomain = ref('https://zakoflare.com')
 const testDomain = ref('')
 const loading = ref(false)

@@ -24,6 +24,10 @@
         <el-menu-item index="/ipv6">
       <p style="display: inline-block; margin-left: 10px">IPv6 地址查询</p>
     </el-menu-item>
+
+    <el-menu-item index="/ipv6webcheck">
+      <p style="display: inline-block; margin-left: 10px">IPv6 网站检测</p>
+    </el-menu-item>
   </el-menu>
   
   <router-view />
