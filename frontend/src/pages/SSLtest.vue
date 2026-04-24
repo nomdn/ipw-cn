@@ -21,10 +21,11 @@ interface SSLCheckItem {
   total_time: number
   download_speed: number
   domain: string
-  issuer_organization: string[]
+  issuer_organization: string[] | null
   issuer_common_name: string
   subject_common_name: string
   is_expired: boolean
+  is_reachable: boolean
 }
 // 等蛋饺给我双栈运行容器
 const remoteAPI = ref('https://api-ipw.wsmdn.dpdns.org/')
@@ -84,7 +85,7 @@ function checkSSL() {
 }
 
 onMounted(() => {
-  const urlParam = route.query.url as string
+  const urlParam = route.query.site as string
   if (urlParam) {
     tmpDomain.value = urlParam
     checkSSL()
@@ -149,7 +150,7 @@ onMounted(() => {
           </tr>
           <tr>
             <td class="table-label">签发者</td>
-            <td class="table-value">{{ result.ipv4!.issuer_organization.join(', ') }}</td>
+            <td class="table-value">{{ result.ipv4!.issuer_organization?.join(', ')|| '-' }}</td>
             <td class="table-value">{{ result.ipv6?.issuer_organization?.join(', ') || '-' }}</td>
           </tr>
           <tr>
@@ -204,7 +205,7 @@ onMounted(() => {
         </tbody>
       </table>
     </div>
-    <div v-if="result && result.ipv4 && !result.ipv4.is_expired && (!result.ipv6 || !result.ipv6.is_expired)">
+    <div v-if="result && result.ipv4 && !result.ipv4.is_expired && (!result.ipv6 || !result.ipv6.is_expired) && result.ipv4.is_reachable && result.ipv6?.is_reachable">
       <h3>结论：<el-icon><CircleCheckFilled style="color: lightgreen;"/></el-icon>网站{{ testDomain }} 证书有效 </h3>
       <p><el-icon><InfoFilled style="color: lightgreen;"/></el-icon>请把下方代码贴到网站底部，把这个好消息告诉你的用户，以便用户核验。</p>
         <img src="/ssl-s1.svg"/>
@@ -221,11 +222,16 @@ onMounted(() => {
         <pre><code>&lt;a href="https://ipw.wsmdn.dpdns.org/ssl/?site=ipw.cn" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="https://ipw.wsmdn.dpdns.org/ssl-s6.svg"&gt;&lt;/a&gt;</code></pre>
 
     </div>
-    <div v-else-if="result && result.ipv4 && result.ipv4.is_expired ">
+    <div v-else-if="result && result.ipv4 && result.ipv4.is_expired && result.ipv4.is_reachable">
       <h3>结论：<CircleCloseFilled style="width: 1.3em;color: red;"/>网站{{ testDomain }} 证书无效 </h3>
       <h2>都没有证书了这网站还活啥</h2>
       <el-image src="/jingya.jpg"></el-image>
     </div>
+    <div v-else-if="result && result.ipv4 && !result.ipv6 && !result.ipv4.is_reachable">
+      <h3>结论：<CircleCloseFilled style="width: 1.3em;color: red;"/>网站{{ testDomain }} 不可达 </h3>
+      <h2>。。。</h2>
+      <el-image src="/jingya.jpg"></el-image>
+    </div> 
     <blockquote>
       网站不支持 IPv6 SSL 可能原因：<br/>
       <br/>

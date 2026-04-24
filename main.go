@@ -50,6 +50,7 @@ type WebsiteCheckDetail struct {
 	TotalTime        float64 `json:"total_time"`        // 总耗时 (ms)
 	PageSize         int64   `json:"page_size"`         // 网页大小 (bytes)
 	DownloadSpeed    float64 `json:"download_speed"`    // 下载速度 (KB/s)
+	IsReachable      bool    `json:"is_reachable"`      // 是否可访问
 }
 
 type SSLCheckDetail struct {
@@ -66,6 +67,7 @@ type SSLCheckDetail struct {
 	IssuerCommonName   string    `json:"issuer_common_name"`
 	SubjectCommonName  string    `json:"subject_common_name"`
 	IsExpired          bool      `json:"is_expired"`
+	IsReachable        bool      `json:"is_reachable"` // 是否可访问
 }
 
 type SSLCheckResult struct {
@@ -170,6 +172,7 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 		TotalTime:        totalTime,
 		PageSize:         int64(len(body)),
 		DownloadSpeed:    downloadSpeed,
+		IsReachable:      true,
 	}
 
 	return result, nil
@@ -225,6 +228,7 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 			IssuerOrganization: []string{},
 			IssuerCommonName:   "TLS Handshake Failed",
 			SubjectCommonName:  host,
+			IsReachable:        true,
 		}, nil
 	}
 
@@ -276,6 +280,7 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 		IssuerOrganization: cert.Issuer.Organization, // []string
 		IssuerCommonName:   cert.Issuer.CommonName,   // string（备选）
 		SubjectCommonName:  cert.Subject.CommonName,
+		IsReachable:        true,
 	}
 
 	return result, nil
@@ -382,7 +387,8 @@ func checkWebsiteHandler(c *gin.Context) {
 	ipv6, errV6 := checkWebsite(testUrl, "v6")
 	if errV6 != nil {
 		ipv6 = &WebsiteCheckDetail{
-			HostRecord: "Error: " + errV6.Error(),
+			HostRecord:  "Error: " + errV6.Error(),
+			IsReachable: false,
 		}
 	}
 
@@ -390,7 +396,8 @@ func checkWebsiteHandler(c *gin.Context) {
 	ipv4, errV4 := checkWebsite(testUrl, "v4")
 	if errV4 != nil {
 		ipv4 = &WebsiteCheckDetail{
-			HostRecord: "Error: " + errV4.Error(),
+			HostRecord:  "Error: " + errV4.Error(),
+			IsReachable: false,
 		}
 	}
 
@@ -418,6 +425,7 @@ func sslCheckHandler(c *gin.Context) {
 	if errV6 != nil {
 		ipv6 = &SSLCheckDetail{
 			HostRecord: "Error: " + errV6.Error(),
+			IsExpired:  true,
 		}
 	}
 
@@ -426,6 +434,7 @@ func sslCheckHandler(c *gin.Context) {
 	if errV4 != nil {
 		ipv4 = &SSLCheckDetail{
 			HostRecord: "Error: " + errV4.Error(),
+			IsExpired:  true,
 		}
 	}
 

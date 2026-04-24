@@ -22,6 +22,7 @@ interface PerformanceCheckItem {
   total_time: number
   page_size: number
   download_speed: number
+  is_reachable: boolean
 }
 // 等蛋饺给我双栈运行容器
 const remoteAPI = ref('https://api-ipw.wsmdn.dpdns.org/')
@@ -81,7 +82,7 @@ function checkSSL() {
 }
 
 onMounted(() => {
-  const urlParam = route.query.url as string
+  const urlParam = route.query.site as string
   if (urlParam) {
     tmpDomain.value = urlParam
     checkSSL()
@@ -234,6 +235,11 @@ onMounted(() => {
     <div v-else-if="result && result.ipv4 && !result.ipv6">
       <h3>结论：<CircleCloseFilled style="width: 1.3em;color: red;"/>网站{{ testDomain }} 不支持Ipv6访问 </h3>
       <h2>国家正在支持IPv6发展，我建议你赶紧想办法给IPv6适配</h2>
+      <el-image src="/jingya.jpg"></el-image>
+    </div>
+    <div v-else-if="result && !result.ipv6?.is_reachable && !result.ipv4?.is_reachable">
+      <h3>结论：<CircleCloseFilled style="width: 1.3em;color: red;"/>网站{{ testDomain }} 不可达 </h3>
+      <h2>...</h2>
       <el-image src="/jingya.jpg"></el-image>
     </div>
     <blockquote>
