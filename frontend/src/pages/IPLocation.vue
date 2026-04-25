@@ -3,7 +3,9 @@ import { ref ,onMounted} from 'vue';
 import { isIPv6 } from 'is-ip';
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue';
 import axios from 'axios';
+import { useRoute } from 'vue-router'
 import { codeToHtml } from 'shiki'
+const route = useRoute();
 const loading = ref(false);
 interface IPDetailType {
   region?: any;
@@ -68,6 +70,11 @@ onMounted(async () => {
     lang: 'bash',
     theme: 'github-dark'
   })
+  const urlParam = route.query.ip;
+  if (urlParam) {
+    ipAddress.value = urlParam as string;
+    locateIP(urlParam as string);
+  }
 });
 </script>
 <template>

@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
-import { CircleCheckFilled, CircleCloseFilled,InfoFilled } from '@element-plus/icons-vue';
+import { CircleCheckFilled, CircleCloseFilled,InfoFilled,Position } from '@element-plus/icons-vue';
 
 const route = useRoute()
 
@@ -128,8 +128,8 @@ onMounted(() => {
         <tbody>
           <tr>
             <td class="table-label">主机记录</td>
-            <td class="table-value">{{ result.ipv4!.host_record }}</td>
-            <td class="table-value">{{ result.ipv6?.host_record || '-' }}</td>
+            <td class="table-value"><div class="one-line"><RouterLink :to="`/ipv6?ip=${result.ipv4!.host_record}`">{{ result.ipv4!.host_record }}</RouterLink><el-icon><Position /></el-icon></div></td>
+            <td class="table-value"><div class="one-line"><RouterLink :to="`/ipv6?ip=${result.ipv6?.host_record}`">{{ result.ipv6?.host_record || '-' }}</RouterLink><el-icon><Position /></el-icon></div></td>
           </tr>
           <tr>
             <td class="table-label">HTTP 状态码</td>
@@ -197,7 +197,7 @@ onMounted(() => {
         </tbody>
       </table>
     </div>
-    <div v-if="result && result.ipv4  && result.ipv6">
+    <div v-if="result && result.ipv4  && result.ipv6&& result.ipv4.is_reachable && result.ipv6.is_reachable">
       <h3>结论：<el-icon><CircleCheckFilled style="color: lightgreen;"/></el-icon>网站{{ testDomain }} 支持IPv6访问 </h3>
       <p><el-icon><InfoFilled style="color: lightgreen;"/></el-icon>请把下方代码贴到网站底部，把这个好消息告诉你的用户，以便用户核验。</p>
         <img src="/ipv6-s1.svg"/>
@@ -232,12 +232,12 @@ onMounted(() => {
         <pre><code>&lt;a href="https://ipw.wsmdn.dpdns.org/ipv6webcheck/?site=ipw.cn" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="https://ipw.wsmdn.dpdns.org/ipv6-certified-s1.svg"&gt;&lt;/a&gt;</code></pre>
         <p>提示：修改IPv6徽标文件名，可修改对应样式</p>
     </div>
-    <div v-else-if="result && result.ipv4 && !result.ipv6">
-      <h3>结论：<CircleCloseFilled style="width: 1.3em;color: red;"/>网站{{ testDomain }} 不支持Ipv6访问 </h3>
+    <div v-else-if="result && result.ipv4 && result.ipv6 && result.ipv4.is_reachable && !result.ipv6.is_reachable">
+      <h3>结论：<CircleCloseFilled style="width: 1.3em;color: red;"/>网站{{ testDomain }} 不支持IPv6访问 </h3>
       <h2>国家正在支持IPv6发展，我建议你赶紧想办法给IPv6适配</h2>
       <el-image src="/jingya.jpg"></el-image>
     </div>
-    <div v-else-if="result && !result.ipv6?.is_reachable && !result.ipv4?.is_reachable">
+    <div v-else-if="result && (!result.ipv6?.is_reachable && !result.ipv4?.is_reachable)">
       <h3>结论：<CircleCloseFilled style="width: 1.3em;color: red;"/>网站{{ testDomain }} 不可达 </h3>
       <h2>...</h2>
       <el-image src="/jingya.jpg"></el-image>
