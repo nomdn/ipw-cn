@@ -29,16 +29,7 @@ const ipAddress = ref('');
 const IPDetail = ref<IPDetailType>({});
 const IPLocation = ref<any[]>([]);
 const UserIP = ref('');
-axios.get('https://test.wsmdn.dpdns.org').then(
-  function(response) {
-    ipAddress.value = response.data;
-    UserIP.value = response.data;
-  }
-).catch(
-  function(error) {
-    console.error('Error fetching IP address:', error);
-  }
-);
+
 
 function locateIP(IP: string){
   loading.value = true;
@@ -74,6 +65,18 @@ onMounted(async () => {
   if (urlParam) {
     ipAddress.value = urlParam as string;
     locateIP(urlParam as string);
+  }else{
+    axios.get('https://test.wsmdn.dpdns.org').then(
+      function(response) {
+        ipAddress.value = response.data;
+        UserIP.value = response.data;
+      }
+    ).catch(
+      function(error) {
+        console.error('Error fetching IP address:', error);
+      }
+    );
+
   }
 });
 </script>

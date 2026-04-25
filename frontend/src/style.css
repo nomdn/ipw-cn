@@ -14,6 +14,9 @@ h1 {
     text-align: center;
     unicode-bidi: isolate;
 }
+html.dark h1{
+    color: #adbac7;
+}
 h2{
     font-size: 1.5em;
     unicode-bidi: isolate;
@@ -38,7 +41,7 @@ h2{
     flex-direction: row;
     justify-content: flex-start;
     align-items: center;
-    
+
 }
 .one-line p{
     font-size: 1.3em;
@@ -46,6 +49,9 @@ h2{
 b{
     color: #2C3E50;
     font-size: 1.3em;
+}
+html.dark b{
+    color: #adbac7;
 }
 blockquote p{
     color: #999999;

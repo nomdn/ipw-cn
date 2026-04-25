@@ -299,9 +299,17 @@ onMounted(() => {
   background: #fff;
   border: 1px solid #dcdfe6;
 }
-
+html.dark .result-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #2e2d2d;
+  border: 1px solid #2e2e2e;
+}
 .result-table thead tr {
   background-color: #c0c4cc;
+}
+html.dark .result-table thead tr {
+    background: #2e2d2d;
 }
 
 .result-table .table-header {
@@ -311,10 +319,21 @@ onMounted(() => {
   text-align: left;
   border: 1px solid #dcdfe6;
 }
+html.dark .result-table .table-header {
+  padding: 12px 15px;
+  font-weight: 600;
+  color: #cfcfcf;
+  text-align: left;
+  border: 1px solid #1a1919;
+}
 
 .result-table tbody tr {
   border-bottom: 1px solid #dcdfe6;
 }
+html.dark .result-table tbody tr {
+  border-bottom: 1px solid #1a1919;
+}
+
 
 .result-table tbody tr:last-child {
   border-bottom: none;
@@ -322,6 +341,9 @@ onMounted(() => {
 
 .result-table tbody tr:hover {
   background-color: #f5f7fa;
+}
+html.dark .result-table tbody tr:hover {
+  background-color: #393a3a;
 }
 
 .result-table .table-label {
@@ -332,13 +354,20 @@ onMounted(() => {
   text-align: left;
   border: 1px solid #dcdfe6;
 }
+html.dark .result-table .table-label {
+  color: #c0c4cc;
+  border: 1px solid #1a1919;
+}
 
 .result-table .table-value {
   padding: 12px 15px;
   color: #303133;
   border: 1px solid #dcdfe6;
 }
-
+html.dark .result-table .table-value {
+  color: #cfcfcf;
+  border: 1px solid #1a1919;
+}
 .valid {
   color: #67C23A;
   font-weight: 600;
@@ -394,6 +423,16 @@ pre code {
   font-size: 0.9em;
   color: #303133;
 }
+html.dark pre {
+  background: #303133;
+}
+
+html.dark pre code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  color: #f8f9fa;
+}
+
+
 
 .badge-section {
   display: flex;
