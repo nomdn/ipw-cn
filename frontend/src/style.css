@@ -38,6 +38,7 @@ h2{
     flex-direction: row;
     justify-content: flex-start;
     align-items: center;
+    
 }
 .one-line p{
     font-size: 1.3em;
@@ -85,4 +86,24 @@ footer {
     flex-direction: column;
     align-items: center;
     margin-top: 60px;
+}
+html.dark {
+  /* 在暗色模式下，覆盖根元素的文字颜色和背景色 */
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+  --el-color-primary: #3EAF7C;
+}
+html.dark blockquote {
+  /* 在暗色模式下，覆盖根元素的文字颜色和背景色 */
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #1a1919;
+  border-left: 10px solid #111111;
+}
+:deep(.shiki span) {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace !important;
+}
+:deep(.shiki){
+  padding: 20px;
+  border-radius: 10px;
+  overflow: auto
 }

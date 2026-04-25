@@ -94,16 +94,11 @@ function isIPv4(ip: string): boolean {
 
 </template>
 <style scoped>
+@import "../style.css";
 .el-menu--horizontal > .el-menu-item:nth-child(1) {
   margin-right: auto;
 }
-:deep(.shiki span) {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace !important;
-}
-:deep(.shiki){
-  padding: 20px;
-  border-radius: 10px;
-}
+
 
 
 </style>

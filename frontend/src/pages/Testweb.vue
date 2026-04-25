@@ -253,6 +253,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
+@import "../style.css";
 .el-menu--horizontal > .el-menu-item:nth-child(1) {
   margin-right: auto;
 }
@@ -414,6 +415,9 @@ pre code {
 
 <style>
 :root {
+  --el-color-primary: #3EAF7C;
+}
+html.dark {
   --el-color-primary: #3EAF7C;
 }
 .el-icon{

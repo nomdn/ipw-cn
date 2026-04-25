@@ -127,6 +127,7 @@ onMounted(async () => {
 
 </template>
 <style scoped>
+@import "../style.css";
 .el-input {
   width: 420px;
   height: 50px;
