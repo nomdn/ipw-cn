@@ -2,6 +2,7 @@
 
 
 
+
 </script>
 
 <template>
@@ -9,19 +10,24 @@
       mode="horizontal"
       :ellipsis="false"
     >
-    <el-menu-item index="0" @click="$router.push('/')">
-      <img
-        style="width: 50px"
-        src="/hyw.webp"
-        alt="IPW logo"
-      />
-      <h2 style="display: inline-block; margin-left: 10px">柠檬味ipw.cn</h2>
+    <el-menu-item index="0">
+      <router-link to="/">
+        <img
+          src="/hyw.webp"
+          alt="IPW logo"
+        />
+        <h2 style="display: inline-block; margin-left: 10px">柠檬味ipw.cn</h2>
+      </router-link>
     </el-menu-item>
-    <el-menu-item index="1" @click="$router.push('/ipv6webcheck')"">
-      <p style="display: inline-block; margin-left: 10px">IPv6 网站检测</p>
+    <el-menu-item index="1">
+      <router-link to="/ipv6webcheck" style="font-size: 1em;">
+        <p style="display: inline-block; margin-left: 10px">IPv6 网站检测</p>
+      </router-link>
     </el-menu-item>
-    <el-menu-item index="2" @click="$router.push('/ipv6')">
-      <p style="display: inline-block; margin-left: 10px">IPv6 地址查询</p>
+    <el-menu-item index="2">
+      <router-link to="/ipv6">
+        <p style="display: inline-block; margin-left: 10px">IPv6 地址查询</p>
+      </router-link>
     </el-menu-item>
     <el-menu-item index="3">
       <a href="https://www.itdog.cn/ping_ipv6/" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 Ping测试</p></a>
@@ -32,8 +38,10 @@
     <el-menu-item index="4">
       <a href="https://www.itdog.cn/dns/" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 DNS解析</p></a>
     </el-menu-item>
-    <el-menu-item index="5" @click="$router.push('/ssl')" >
-      <p style="display: inline-block; margin-left: 10px">IPv6 SSL检查</p>
+    <el-menu-item index="5">
+      <router-link to="/ssl">
+        <p style="display: inline-block; margin-left: 10px">IPv6 SSL检查</p>
+      </router-link>
     </el-menu-item>
     <el-menu-item index="6">
       <a href="https://www.itdog.cn/http_ipv6/" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 网站测速</p></a>
@@ -73,10 +81,21 @@
   padding: 20px;
   border-radius: 10px;
 }
-
+:deep(.el-menu-item a) {
+  font-size: 1em;
+}
+:deep(.el-menu-item a p) {
+  font-size: 1em;
+}
+:deep(.el-menu-item a img) {
+  width: 50px;
+  margin-bottom: 20px;
+  
+}
 </style>
 <style>
 :root {
   --el-color-primary: #3EAF7C;
 }
+
 </style>
