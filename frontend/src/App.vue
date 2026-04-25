@@ -8,9 +8,8 @@
   <el-menu
       mode="horizontal"
       :ellipsis="false"
-      router
     >
-    <el-menu-item index="/">
+    <el-menu-item index="0" @click="$router.push('/')">
       <img
         style="width: 50px"
         src="/hyw.webp"
@@ -18,31 +17,31 @@
       />
       <h2 style="display: inline-block; margin-left: 10px">柠檬味ipw.cn</h2>
     </el-menu-item>
-    <el-menu-item index="/ipv6webcheck">
+    <el-menu-item index="1" @click="$router.push('/ipv6webcheck')"">
       <p style="display: inline-block; margin-left: 10px">IPv6 网站检测</p>
     </el-menu-item>
-    <el-menu-item index="/ipv6">
+    <el-menu-item index="2" @click="$router.push('/ipv6')">
       <p style="display: inline-block; margin-left: 10px">IPv6 地址查询</p>
     </el-menu-item>
-    <el-menu-item>
+    <el-menu-item index="3">
       <a href="https://www.itdog.cn/ping_ipv6/" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 Ping测试</p></a>
     </el-menu-item>
 
     <el-divider style="margin-top: 20px;height: 1.2em;" direction="vertical" />
 
-    <el-menu-item>
+    <el-menu-item index="4">
       <a href="https://www.itdog.cn/dns/" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 DNS解析</p></a>
     </el-menu-item>
-    <el-menu-item index="/ssl">
+    <el-menu-item index="5" @click="$router.push('/ssl')" >
       <p style="display: inline-block; margin-left: 10px">IPv6 SSL检查</p>
     </el-menu-item>
-    <el-menu-item>
+    <el-menu-item index="6">
       <a href="https://www.itdog.cn/http_ipv6/" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 网站测速</p></a>
     </el-menu-item>
     <el-divider style="margin-top: 20px;height: 1.2em;" direction="vertical" />
-    <el-sub-menu>
+    <el-sub-menu index="7">
       <template #title>IPv4工具箱</template>
-      <el-menu-item>没有</el-menu-item>
+      <el-menu-item index="7-0">没有</el-menu-item>
     </el-sub-menu>
 
 
