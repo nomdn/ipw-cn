@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"lemon-ipw/ipdb"
 	"log/slog"
@@ -17,113 +16,83 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/lionsoul2014/ip2region/binding/golang/service"
+	"github.com/spf13/viper"
 	"resty.dev/v3"
 )
 
 type Setting struct {
-	Port    string `json:"port"`
+	Port    any    `json:"port"`
 	GHProxy string `json:"gh-proxy"`
 }
 
+func (s *Setting) PortString() string {
+	switch v := s.Port.(type) {
+	case string:
+		return v
+	case float64:
+		return fmt.Sprintf("%.0f", v)
+	default:
+		return ""
+	}
+}
+
 var (
-	ip2region   *service.Ip2Region
-	ip2regionMu sync.RWMutex
-	PORTS       string
-	GH_PROXY    string
-	LOG_LEVEL   string
+	PORTS        string
+	GH_PROXY     string
+	LOG_LEVEL    string
+	websiteCache sync.Map
+	sslCache     sync.Map
 )
 
+type websiteCacheEntry struct {
+	result    *WebsiteCheckResult
+	timestamp time.Time
+}
+
+type sslCacheEntry struct {
+	result    *SSLCheckResult
+	timestamp time.Time
+}
+
 type WebsiteCheckResult struct {
-	IPv4 *WebsiteCheckDetail `json:"ipv4"` // IPv4 检测结果
-	IPv6 *WebsiteCheckDetail `json:"ipv6"` // IPv6 检测结果
+	IPv4 *WebsiteCheckDetail `json:"ipv4"`
+	IPv6 *WebsiteCheckDetail `json:"ipv6"`
 }
 
 type WebsiteCheckDetail struct {
-	HostRecord       string  `json:"host_record"`       // 主机记录
-	HTTPStatusCode   int     `json:"http_status_code"`  // HTTP 访问返回码
-	HTTPSSStatusCode int     `json:"https_status_code"` // HTTPS 访问返回码
-	DNSLookupTime    float64 `json:"dns_lookup_time"`   // 域名解析耗时 (ms)
-	TCPConnectTime   float64 `json:"tcp_connect_time"`  // TCP 连接耗时 (ms)
-	HTTPConnectTime  float64 `json:"http_connect_time"` // HTTP 连接耗时 (ms)
-	FirstByteTime    float64 `json:"first_byte_time"`   // 首字节传输耗时 (ms)
-	TotalTime        float64 `json:"total_time"`        // 总耗时 (ms)
-	PageSize         int64   `json:"page_size"`         // 网页大小 (bytes)
-	DownloadSpeed    float64 `json:"download_speed"`    // 下载速度 (KB/s)
-	IsReachable      bool    `json:"is_reachable"`      // 是否可访问
+	HostRecord       string  `json:"host_record"`
+	HTTPStatusCode   int     `json:"http_status_code"`
+	HTTPSSStatusCode int     `json:"https_status_code"`
+	DNSLookupTime    float64 `json:"dns_lookup_time"`
+	TCPConnectTime   float64 `json:"tcp_connect_time"`
+	HTTPConnectTime  float64 `json:"http_connect_time"`
+	FirstByteTime    float64 `json:"first_byte_time"`
+	TotalTime        float64 `json:"total_time"`
+	PageSize         int64   `json:"page_size"`
+	DownloadSpeed    float64 `json:"download_speed"`
+	IsReachable      bool    `json:"is_reachable"`
 }
 
 type SSLCheckDetail struct {
-	CertValidityDays   int       `json:"cert_validity_days"` // 证书有效期 (天)
-	CertStartTime      time.Time `json:"cert_start_time"`    // 证书开始时间
-	CertEndTime        time.Time `json:"cert_end_time"`      // 证书结束时间
-	HTTPVersion        string    `json:"http_version"`       // HTTP 版本
-	HostRecord         string    `json:"host_record"`        // 主机记录
-	HTTPSSStatusCode   int       `json:"https_status_code"`  // HTTPS 访问返回码
-	TotalTime          float64   `json:"total_time"`         // 总耗时 (ms)
-	DownloadSpeed      float64   `json:"download_speed"`     // 下载速度 (KB/s)
-	Domain             string    `json:"domain"`             // 下载速度 (KB/s)
+	CertValidityDays   int       `json:"cert_validity_days"`
+	CertStartTime      time.Time `json:"cert_start_time"`
+	CertEndTime        time.Time `json:"cert_end_time"`
+	HTTPVersion        string    `json:"http_version"`
+	HostRecord         string    `json:"host_record"`
+	HTTPSSStatusCode   int       `json:"https_status_code"`
+	TotalTime          float64   `json:"total_time"`
+	DownloadSpeed      float64   `json:"download_speed"`
+	Domain             string    `json:"domain"`
 	IssuerOrganization []string  `json:"issuer_organization"`
 	IssuerCommonName   string    `json:"issuer_common_name"`
 	SubjectCommonName  string    `json:"subject_common_name"`
 	IsExpired          bool      `json:"is_expired"`
-	IsReachable        bool      `json:"is_reachable"` // 是否可访问
+	IsReachable        bool      `json:"is_reachable"`
 }
 
 type SSLCheckResult struct {
-	IPv4 *SSLCheckDetail `json:"ipv4"` // IPv4 SSL 检测结果
-	IPv6 *SSLCheckDetail `json:"ipv6"` // IPv6 SSL 检测结果
-}
-
-func loadIp2Region() error {
-	ip2regionMu.Lock()
-	defer ip2regionMu.Unlock()
-
-	if ip2region != nil {
-		ip2region.Close()
-		slog.Info("Previous ip2region closed")
-	}
-
-	v4Config, err := service.NewV4Config(service.VIndexCache, "ip2region_v4.xdb", 20)
-	if err != nil {
-		slog.Error("failed to create v4 config", "error", err)
-		return err
-	}
-
-	v6Config, err := service.NewV6Config(service.VIndexCache, "ip2region_v6.xdb", 20)
-	if err != nil {
-		slog.Error("failed to create v6 config", "error", err)
-		return err
-	}
-
-	ip2region, err = service.NewIp2Region(v4Config, v6Config)
-	if err != nil {
-		slog.Error("failed to create ip2region service", "error", err)
-		return err
-	}
-
-	slog.Info("ip2region loaded successfully")
-	return nil
-}
-
-func syncDatabase() error {
-	for {
-		err, errv6 := ipdb.PullDatabase(GH_PROXY)
-		if err != nil || errv6 != nil {
-			slog.Error("Error pulling database", "error", err, "error_v6", errv6)
-			if err != nil {
-				return err
-			}
-			return errv6
-		}
-
-		if err := loadIp2Region(); err != nil {
-			slog.Error("Error loading ip2region", "error", err)
-		}
-
-		slog.Info("Database sync completed, waiting for next sync...")
-		time.Sleep(time.Hour * 24)
-	}
+	IPv4 *SSLCheckDetail `json:"ipv4"`
+	IPv6 *SSLCheckDetail `json:"ipv6"`
 }
 
 func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
@@ -155,7 +124,6 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 	body := resp.Bytes()
 	trace := resp.Request.TraceInfo()
 
-	// 清理主机记录中的端口和 IPv6 的 []
 	hostRecord := cleanHostRecord(trace.RemoteAddr)
 
 	totalTime := float64(endTime.Sub(startTime).Milliseconds())
@@ -213,7 +181,6 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 	defer tlsConn.Close()
 
 	if err := tlsConn.Handshake(); err != nil {
-		// TLS 握手失败，返回证书无效
 		return &SSLCheckDetail{
 			CertValidityDays:   0,
 			IsExpired:          true,
@@ -242,7 +209,6 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 	remainingDays := int(cert.NotAfter.Sub(now).Hours() / 24)
 	isExpired := now.After(cert.NotAfter) || now.Before(cert.NotBefore)
 
-	// 使用 HTTP 客户端获取性能数据
 	dialer2 := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, net, addr string) (net.Conn, error) {
@@ -277,8 +243,8 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 		TotalTime:          totalTime,
 		DownloadSpeed:      downloadSpeed,
 		Domain:             domain,
-		IssuerOrganization: cert.Issuer.Organization, // []string
-		IssuerCommonName:   cert.Issuer.CommonName,   // string（备选）
+		IssuerOrganization: cert.Issuer.Organization,
+		IssuerCommonName:   cert.Issuer.CommonName,
 		SubjectCommonName:  cert.Subject.CommonName,
 		IsReachable:        true,
 	}
@@ -287,33 +253,23 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 }
 
 func cleanHostRecord(addr string) string {
-	// 处理带方括号的IPv6地址格式 [IPv6]:port
 	if strings.HasPrefix(addr, "[") {
-		// 找到右方括号的位置
 		rightBracket := strings.Index(addr, "]")
 		if rightBracket != -1 {
-			// 提取IPv6地址部分（去掉方括号）
-			ipv6Addr := addr[1:rightBracket]
-			return ipv6Addr
+			return addr[1:rightBracket]
 		}
-		// 如果没有找到右方括号，继续后续处理
 	}
 
-	// 处理不带方括号的情况（IPv4或纯IPv6地址）
 	if idx := strings.LastIndex(addr, ":"); idx != -1 {
-		// 检查是否是 IPv6 地址 (有多个:)
 		colonCount := strings.Count(addr, ":")
 		if colonCount > 1 {
-			// 纯IPv6地址（无端口）或IPv6+端口，保留到最后一个:之前的部分 (去掉端口)
 			return addr[:idx]
 		}
-		// IPv4 地址带端口，去掉端口
 		if colonCount == 1 {
 			return addr[:idx]
 		}
 	}
 
-	// 如果没有端口，直接返回（可能已经是纯IP地址）
 	return addr
 }
 
@@ -381,29 +337,47 @@ func checkWebsiteHandler(c *gin.Context) {
 
 	testUrl = normalizeURL(testUrl)
 
+	if cached, ok := websiteCache.Load(testUrl); ok {
+		entry := cached.(websiteCacheEntry)
+		if time.Since(entry.timestamp) < 5*time.Minute {
+			c.JSON(200, entry.result)
+			return
+		}
+		websiteCache.Delete(testUrl)
+	}
+
 	result := &WebsiteCheckResult{}
 
-	// IPv6 检测
-	ipv6, errV6 := checkWebsite(testUrl, "v6")
-	if errV6 != nil {
-		ipv6 = &WebsiteCheckDetail{
-			HostRecord:  "Error: " + errV6.Error(),
-			IsReachable: false,
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		ipv6, errV6 := checkWebsite(testUrl, "v6")
+		if errV6 != nil {
+			ipv6 = &WebsiteCheckDetail{
+				HostRecord:  "Error: " + errV6.Error(),
+				IsReachable: false,
+			}
 		}
-	}
+		result.IPv6 = ipv6
+	}()
 
-	// IPv4 检测
-	ipv4, errV4 := checkWebsite(testUrl, "v4")
-	if errV4 != nil {
-		ipv4 = &WebsiteCheckDetail{
-			HostRecord:  "Error: " + errV4.Error(),
-			IsReachable: false,
+	go func() {
+		defer wg.Done()
+		ipv4, errV4 := checkWebsite(testUrl, "v4")
+		if errV4 != nil {
+			ipv4 = &WebsiteCheckDetail{
+				HostRecord:  "Error: " + errV4.Error(),
+				IsReachable: false,
+			}
 		}
-	}
+		result.IPv4 = ipv4
+	}()
 
-	result.IPv4 = ipv4
-	result.IPv6 = ipv6
+	wg.Wait()
 
+	websiteCache.Store(testUrl, websiteCacheEntry{result: result, timestamp: time.Now()})
 	c.JSON(200, result)
 }
 
@@ -418,103 +392,90 @@ func sslCheckHandler(c *gin.Context) {
 
 	testUrl = normalizeURL(testUrl)
 
+	if cached, ok := sslCache.Load(testUrl); ok {
+		entry := cached.(sslCacheEntry)
+		if time.Since(entry.timestamp) < 5*time.Minute {
+			c.JSON(200, entry.result)
+			return
+		}
+		sslCache.Delete(testUrl)
+	}
+
 	result := &SSLCheckResult{}
 
-	// IPv6 检测
-	ipv6, errV6 := checkSSL(testUrl, "v6")
-	if errV6 != nil {
-		ipv6 = &SSLCheckDetail{
-			HostRecord: "Error: " + errV6.Error(),
-			IsExpired:  true,
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		ipv6, errV6 := checkSSL(testUrl, "v6")
+		if errV6 != nil {
+			ipv6 = &SSLCheckDetail{
+				HostRecord: "Error: " + errV6.Error(),
+				IsExpired:  true,
+			}
 		}
-	}
+		result.IPv6 = ipv6
+	}()
 
-	// IPv4 检测
-	ipv4, errV4 := checkSSL(testUrl, "v4")
-	if errV4 != nil {
-		ipv4 = &SSLCheckDetail{
-			HostRecord: "Error: " + errV4.Error(),
-			IsExpired:  true,
+	go func() {
+		defer wg.Done()
+		ipv4, errV4 := checkSSL(testUrl, "v4")
+		if errV4 != nil {
+			ipv4 = &SSLCheckDetail{
+				HostRecord: "Error: " + errV4.Error(),
+				IsExpired:  true,
+			}
 		}
-	}
+		result.IPv4 = ipv4
+	}()
 
-	result.IPv4 = ipv4
-	result.IPv6 = ipv6
+	wg.Wait()
 
+	sslCache.Store(testUrl, sslCacheEntry{result: result, timestamp: time.Now()})
 	c.JSON(200, result)
 }
+
 func locateIP(c *gin.Context) {
 	ip := c.Param("ip")
 	slog.Debug("Locating IP", "ip", ip)
-
-	ip2regionMu.RLock()
-	defer ip2regionMu.RUnlock()
-
-	if ip2region == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "ip2region not initialized",
-		})
-		return
-	}
-
-	region, err := ip2region.Search(ip)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"ip":     ip,
-		"region": region,
-	})
+	c.JSON(http.StatusOK, ipdb.SearchIP(ip))
 }
+
 func readConfig() {
-	// 1. 优先从环境变量读取
 	PORTS = os.Getenv("PORTS")
 	GH_PROXY = os.Getenv("GH_PROXY")
 
-	// 2. 如果环境变量未设置，尝试从 setting.json 读取
 	if PORTS == "" || GH_PROXY == "" {
-		settingFile := "setting.json"
-		if data, err := os.ReadFile(settingFile); err == nil {
-			var setting Setting
-			if err := json.Unmarshal(data, &setting); err == nil {
-				// 环境变量未设置时才使用配置文件中的值
-				if PORTS == "" && setting.Port != "" {
-					PORTS = setting.Port
-				}
-				if GH_PROXY == "" && setting.GHProxy != "" {
-					GH_PROXY = setting.GHProxy
-				}
-			}
+		viper.SetConfigName("setting")
+		viper.SetConfigType("json")
+		viper.AddConfigPath(".")
+		if err := viper.ReadInConfig(); err != nil {
+			slog.Warn("Failed to read config file, using defaults", "error", err)
 		}
+		PORTS = viper.GetString("port")
+		GH_PROXY = viper.GetString("gh-proxy")
+
 	}
 
-	// 3. 最后使用默认值
 	if PORTS == "" {
 		PORTS = "8080"
 	}
 }
+
 func main() {
-	go syncDatabase()
 	readConfig()
+	slog.Info("Starting server", "port", PORTS, "gh_proxy", GH_PROXY)
+	ipdb.Init(GH_PROXY)
 
 	r := gin.Default()
 	r.Use(cors.Default())
+
 	r.GET("/v1/detail/*url", checkWebsiteHandler)
 	r.GET("/v1/ssl/*url", sslCheckHandler)
 	r.GET("/v1/location/:ip", locateIP)
 
 	if err := r.Run(":" + PORTS); err != nil {
 		slog.Error("Server failed to start", "error", err)
-	}
-
-	ip2regionMu.Lock()
-	defer ip2regionMu.Unlock()
-	if ip2region != nil {
-		ip2region.Close()
-		slog.Info("ip2region closed successfully")
 	}
 }

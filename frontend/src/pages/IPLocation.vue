@@ -1,14 +1,21 @@
 <script setup lang="ts">
 import { ref ,onMounted} from 'vue';
 import { isIPv6 } from 'is-ip';
+import {config} from '../config/index';
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue';
 import axios from 'axios';
 import { useRoute } from 'vue-router'
 import { codeToHtml } from 'shiki'
 const route = useRoute();
 const loading = ref(false);
-interface IPDetailType {
-  region?: any;
+interface IPLocationType {
+  bilibili?: any;
+  ip?: string;
+  geocn?: any;
+  ip2region?: any;
+  maxmind_asn?: any;
+  maxmind_city?: any;
+  qqwry?: any;
   [key: string]: any;
 }
 const code = `
@@ -24,10 +31,9 @@ curl 6.wsmdn.dpdns.org
 curl test.wsmdn.dpdns.org
 `
 const html = ref('');
-const remoteAPI = ref('https://api-ipw.wsmdn.dpdns.org/');
+const remoteAPI = ref(config.apiBaseUrl);
 const ipAddress = ref('');
-const IPDetail = ref<IPDetailType>({});
-const IPLocation = ref<any[]>([]);
+const IPLocation = ref<IPLocationType>({});
 const UserIP = ref('');
 
 
@@ -35,14 +41,7 @@ function locateIP(IP: string){
   loading.value = true;
   axios.get(remoteAPI.value+"v1/location/"+IP).then(
     function(response) {
-      IPDetail.value = response.data;
-      // 将IPLocation赋值移到这里，确保IPDetail已经更新
-      if (IPDetail.value && IPDetail.value.hasOwnProperty('region')) {
-        IPLocation.value = IPDetail.value.region.split("|");
-        console.log(IPLocation.value);
-      } else {
-        IPLocation.value = [];
-      }
+      IPLocation.value = response.data;
       loading.value = false;
     }
   ).catch(
@@ -66,9 +65,10 @@ onMounted(async () => {
     ipAddress.value = urlParam as string;
     locateIP(urlParam as string);
   }else{
-    axios.get('https://test.wsmdn.dpdns.org').then(
+    axios.get(config.DualStackAPI).then(
       function(response) {
         ipAddress.value = response.data;
+        
         UserIP.value = response.data;
       }
     ).catch(
@@ -106,12 +106,60 @@ onMounted(async () => {
       <div class="one-line" style="height: 40px;">
         <b>IP</b>&nbsp<p>{{ ipAddress }}</p>
       </div>
-      <div class="one-line" style="height: 40px;">
-        <b>地区</b>&nbsp<p>{{ IPLocation[4] }}&nbsp{{ IPLocation[0] }}&nbsp{{ IPLocation[1] }}&nbsp{{ IPLocation[2] }}</p>
-      </div>
-      <div class="one-line" style="height: 40px;">
-        <b>运营商</b>&nbsp<p>{{ IPLocation[3] }}</p>
-      </div>
+      <div v-if="IPLocation" class="result-section">
+          <table class="result-table">
+            <tbody>
+              <tr>
+                <td class="table-label">bilibili Live接口</td>
+                <td class="table-value">
+                  <span>
+                    {{ IPLocation.bilibili?.country }}&nbsp;{{ IPLocation.bilibili?.region }}&nbsp;{{ IPLocation.bilibili?.city }}
+                  </span>
+                </td>
+                <td class="table-value">
+                  <span>
+                    {{ IPLocation.bilibili?.isp }}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td class="table-label">IP2Region</td>
+                <td class="table-value">{{ IPLocation.ip2region?.split("|")[0] }}&nbsp;{{ IPLocation.ip2region?.split("|")[1] }}&nbsp;{{ IPLocation.ip2region?.split("|")[2] }}</td>
+                <td class="table-value">{{ IPLocation.ip2region?.split("|")[3] }}</td>
+              </tr>
+              <tr>
+                <td class="table-label">GeoCN(仅中国大陆)</td>
+                <td class="table-value">{{ IPLocation.geocn?.region }}&nbsp;{{ IPLocation.geocn?.city }}&nbsp;{{ IPLocation.geocn?.district }}</td>
+                <td class="table-value">{{ IPLocation.geocn?.isp }}</td>
+              </tr>
+              <tr>
+                <td class="table-label">Maxmind GEOLite2 ASN</td>
+                <td class="table-value">{{ IPLocation.maxmind_asn?.asn }}</td>
+                <td class="table-value">{{ IPLocation.maxmind_asn?.org }}</td>
+              </tr>
+              <tr>
+                <td class="table-label">Maxmind GEOLite2 City</td>
+                <td class="table-value">{{ IPLocation.maxmind_city?.country }}&nbsp;{{ IPLocation.maxmind_city?.region }}&nbsp;{{ IPLocation.maxmind_city?.city }}</td>
+                <td class="table-value">--</td>
+              </tr>
+              <tr>
+                <td class="table-label">纯真社区库</td>
+                <td class="table-value">{{ IPLocation.qqwry?.country }}&nbsp;{{ IPLocation.qqwry?.region }}&nbsp;{{ IPLocation.qqwry?.city }}</td>
+                <td class="table-value">{{ IPLocation.qqwry?.isp }}</td>
+              </tr>
+              <tr>
+                <td class="table-label">DB-IP City</td>
+                <td class="table-value">{{ IPLocation.dbip_city?.country }}&nbsp;{{ IPLocation.dbip_city?.region }}&nbsp;{{ IPLocation.dbip_city?.city }}</td>
+                <td class="table-value">--</td>
+              </tr>
+              <tr>
+                <td class="table-label">美团接口(VPN溯源)</td>
+                <td class="table-value">{{ IPLocation.meituan?.country }}&nbsp;{{ IPLocation.meituan?.province }}&nbsp;{{ IPLocation.meituan?.city }}&nbsp;{{ IPLocation.meituan?.district }}&nbsp;{{ IPLocation.meituan?.detail }}</td>
+                <td class="table-value">--</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
     </div>
     <div style="font-size: 1.5em;">
       <h3 v-if="isIPv6(UserIP)"><el-icon><CircleCheckFilled style="color: lightgreen;"/></el-icon>您的网络IPv6优先</h3>
@@ -160,5 +208,200 @@ onMounted(async () => {
 .el-icon{
   font-size: 1.3em;
 }
+.el-menu--horizontal > .el-menu-item:nth-child(1) {
+  margin-right: auto;
+}
 
+:deep(.shiki span) {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace !important;
+}
+
+:deep(.shiki) {
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.el-input {
+  width: 420px;
+  height: 50px;
+  font: 1.3em sans-serif;
+  margin-right: 10px;
+}
+
+.el-button {
+  width: 165px;
+  height: 50px;
+  font: 1.3em sans-serif;
+}
+
+.result-section {
+  margin-top: 30px;
+}
+
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+}
+html.dark .result-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #2e2d2d;
+  border: 1px solid #2e2e2e;
+}
+.result-table thead tr {
+  background-color: #c0c4cc;
+}
+html.dark .result-table thead tr {
+    background: #2e2d2d;
+}
+
+.result-table .table-header {
+  padding: 12px 15px;
+  font-weight: 600;
+  color: #303133;
+  text-align: left;
+  border: 1px solid #dcdfe6;
+}
+html.dark .result-table .table-header {
+  padding: 12px 15px;
+  font-weight: 600;
+  color: #cfcfcf;
+  text-align: left;
+  border: 1px solid #1a1919;
+}
+
+.result-table tbody tr {
+  border-bottom: 1px solid #dcdfe6;
+}
+html.dark .result-table tbody tr {
+  border-bottom: 1px solid #1a1919;
+}
+
+
+.result-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.result-table tbody tr:hover {
+  background-color: #f5f7fa;
+}
+html.dark .result-table tbody tr:hover {
+  background-color: #393a3a;
+}
+
+.result-table .table-label {
+  padding: 12px 15px;
+  font-weight: 600;
+  color: #606266;
+  width: 150px;
+  text-align: left;
+  border: 1px solid #dcdfe6;
+}
+html.dark .result-table .table-label {
+  color: #c0c4cc;
+  border: 1px solid #1a1919;
+}
+
+.result-table .table-value {
+  padding: 12px 15px;
+  color: #303133;
+  border: 1px solid #dcdfe6;
+}
+html.dark .result-table .table-value {
+  color: #cfcfcf;
+  border: 1px solid #1a1919;
+}
+.valid {
+  color: #67C23A;
+  font-weight: 600;
+}
+
+.expired {
+  color: #F56C6C;
+  font-weight: 600;
+}
+
+.status-code {
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 4px;
+}
+
+.status-success {
+  color: #67C23A;
+  background: #f0f9eb;
+}
+
+.status-warning {
+  color: #E6A23C;
+  background: #fdf6ec;
+}
+
+.status-error {
+  color: #F56C6C;
+  background: #fef0f0;
+}
+
+.error-message {
+  margin-top: 20px;
+  padding: 15px;
+  background: #fef0f0;
+  color: #F56C6C;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 1.1em;
+}
+
+pre {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre;
+  max-width: 100%;
+}
+
+pre code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.9em;
+  color: #303133;
+}
+html.dark pre {
+  background: #303133;
+}
+
+html.dark pre code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  color: #f8f9fa;
+}
+
+
+
+.badge-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.badge-item {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+}
+
+.badge-item h4 {
+  margin: 0 0 15px 0;
+  color: #3EAF7C;
+  font-size: 1.2em;
+}
+
+.badge-item img {
+  display: block;
+  margin-bottom: 15px;
+  max-width: 200px;
+}
 </style>

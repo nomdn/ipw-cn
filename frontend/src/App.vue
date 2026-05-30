@@ -37,12 +37,12 @@ onMounted(() => {
       <router-link to="/ipv6" style="font-size: 1em;">
         <p style="display: inline-block; margin-left: 10px">IPv6 地址查询</p>
       </router-link>
-      <a href="https://www.itdog.cn/ping_ipv6/" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 Ping测试</p></a>
-      <a href="https://www.itdog.cn/dns/" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 DNS解析</p></a>
+      <a href="https://www.itdog.cn/ping_ipv6/" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 Ping测试(ITdog)</p></a>
+      <a href="https://www.itdog.cn/dns/" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 DNS解析(ITdog)</p></a>
       <router-link to="/ssl" style="font-size: 1em;">
         <p style="display: inline-block; margin-left: 10px">IPv6 SSL检查</p>
       </router-link>
-      <a href="https://www.itdog.cn/http_ipv6/" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 网站测速</p></a>
+      <a href="https://www.itdog.cn/http_ipv6/" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 网站测速(ITdog)</p></a>
   </el-drawer>
   <el-menu
       mode="horizontal"
@@ -71,13 +71,13 @@ onMounted(() => {
       </router-link>
     </el-menu-item>
     <el-menu-item index="3" v-if="!isNarrow">
-      <a href="https://www.itdog.cn/ping_ipv6/" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 Ping测试</p></a>
+      <a href="https://www.itdog.cn/ping_ipv6/" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 Ping测试(ITdog)</p></a>
     </el-menu-item>
 
     <el-divider style="margin-top: 20px;height: 1.2em;" direction="vertical" v-if="!isNarrow"/>
 
     <el-menu-item index="4" v-if="!isNarrow">
-      <a href="https://www.itdog.cn/dns/" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 DNS解析</p></a>
+      <a href="https://www.itdog.cn/dns/" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 DNS解析(ITdog)</p></a>
     </el-menu-item>
     <el-menu-item index="5" v-if="!isNarrow">
       <router-link to="/ssl">
@@ -85,7 +85,7 @@ onMounted(() => {
       </router-link>
     </el-menu-item>
     <el-menu-item index="6" v-if="!isNarrow">
-      <a href="https://www.itdog.cn/http_ipv6/" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 网站测速</p></a>
+      <a href="https://www.itdog.cn/http_ipv6/" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 网站测速(ITdog)</p></a>
     </el-menu-item>
     <el-divider style="margin-top: 20px;height: 1.2em;" direction="vertical" v-if="!isNarrow"/>
     <el-sub-menu index="7" v-if="!isNarrow">

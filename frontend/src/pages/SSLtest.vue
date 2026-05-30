@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { CircleCheckFilled, CircleCloseFilled,InfoFilled } from '@element-plus/icons-vue';
-
+import { config } from '../config/index';
 const route = useRoute()
 
 interface SSLCheckResponse {
@@ -28,8 +28,8 @@ interface SSLCheckItem {
   is_reachable: boolean
 }
 // 等蛋饺给我双栈运行容器
-const remoteAPI = ref('https://api-ipw.wsmdn.dpdns.org/')
-const tmpDomain = ref('https://zakoflare.com')
+const remoteAPI = ref(config.apiBaseUrl)
+const tmpDomain = ref('https://www.zakoflare.com')
 const testDomain = ref('')
 const loading = ref(false)
 const error = ref('')

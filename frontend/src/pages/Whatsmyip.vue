@@ -2,6 +2,7 @@
 import { ref,onMounted } from 'vue';
 import { isIPv6 } from 'is-ip';
 import axios from 'axios';
+import { config } from '../config/index';
 import { codeToHtml } from 'shiki'
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue';
 
@@ -23,7 +24,7 @@ const html = ref('');
 const ipAddress = ref('');
 const yourIPv4 = ref('');
 const yourIPv6 = ref('');
-axios.get('https://test.wsmdn.dpdns.org').then(
+axios.get(config.DualStackAPI).then(
   function(response) {
     ipAddress.value = response.data;
   }
@@ -32,7 +33,7 @@ axios.get('https://test.wsmdn.dpdns.org').then(
     console.error('Error fetching IP address:', error);
   }
 );
-axios.get('https://4.wsmdn.dpdns.org').then(
+axios.get(config.v4OnlyAPI).then(
   function(response) {
     yourIPv4.value = response.data;
   }
@@ -41,7 +42,7 @@ axios.get('https://4.wsmdn.dpdns.org').then(
     console.error('Error fetching IP address:', error);
   }
 );
-axios.get('https://6.wsmdn.dpdns.org').then(
+axios.get(config.v6OnlyAPI).then(
   function(response) {
     yourIPv6.value = response.data;
   }

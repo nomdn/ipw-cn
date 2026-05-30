@@ -1,4 +1,12 @@
 main.exe
 ip2region_v4.xdb
 ip2region_v6.xdb
+GeoCN.mmdb
+GeoLite2-City.mmdb
+GeoLite2-ASN.mmdb
+qqwry.ipdb
+*.gz
+full.txt
+short.txt
+*.mmdb
 *.exe

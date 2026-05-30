@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
+import { config } from '../config/index';
 import { CircleCheckFilled, CircleCloseFilled,InfoFilled,Position } from '@element-plus/icons-vue';
 
 const route = useRoute()
@@ -25,8 +26,8 @@ interface PerformanceCheckItem {
   is_reachable: boolean
 }
 // 等蛋饺给我双栈运行容器
-const remoteAPI = ref('https://api-ipw.wsmdn.dpdns.org/')
-const tmpDomain = ref('https://zakoflare.com')
+const remoteAPI = ref(config.apiBaseUrl)
+const tmpDomain = ref('https://www.zakoflare.com')
 const testDomain = ref('')
 const loading = ref(false)
 const error = ref('')
