@@ -113,3 +113,20 @@ html.dark blockquote {
   border-radius: 10px;
   overflow: auto
 }
+.spoiler {
+    position: relative; /* 使得伪元素可以定位 */
+    background-color: rgba(200, 200, 200, 0.3); /* 浅灰色半透明背景 */
+    color: rgba(0, 0, 0, 0.5); /* 半透明黑色文字 */
+    user-select: none; /* 禁止选中文字 */
+    overflow: hidden; /* 隐藏溢出的内容 */
+    cursor: pointer; /* 鼠标悬停时光标变为手型 */
+    filter: blur(3px); /* 添加模糊效果 */
+    padding: 5px; /* 为文本添加内边距以增强效果 */
+    transition: filter 0.3s ease; /* 添加平滑过渡效果 */
+}
+
+.spoiler:hover {
+    background-color: inherit; /* 悬停时使用父元素的背景色 */
+    color: inherit; /* 悬停时显示原色 */
+    filter: blur(0); /* 悬停消除模糊效果 */
+}

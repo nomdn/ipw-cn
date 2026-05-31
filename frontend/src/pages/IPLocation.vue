@@ -166,7 +166,11 @@ onMounted(async () => {
       <h3 v-else-if="isIPv4(UserIP)"><el-icon><CircleCloseFilled style="color: red;"/></el-icon>您的网络IPv4优先</h3>
     </div>
     <blockquote>
-      该IPv6归属地的精度为市级，是Ip2Region的社区数据库，精度是棍母，随便用，不刷炸服务器就行。<br>
+      精度参照表：<br>
+      中国大陆:BiliBili Live > GeoCN > IP2Region > 纯真社区库 > Maxmind GEOLite2 City ≈ DB-IP<br>
+      中国大陆 IPv6 地址: BiliBili Live > GeoCN > IP2Region > Maxmind GEOLite2 City ≈ DB-IP > 纯真社区库<br>
+      境外及港澳台地址: BiliBili Live > Maxmind GEOLite2 City ≈ DB-IP > IP2Region > 纯真社区库<br>
+      美团属于VPN溯源接口，主要用于查询你的代理IP是否被美团收集并与地理位置绑定&nbsp;<span class="spoiler">美团你干点人事吧</span><br>
       手机默认开启 IPv6，宽带开启 IPv6 请自行搜索<br>
       访客IP: {{UserIP}}，<p v-if="isIPv4(UserIP)">您的网络IPv4优先</p><p v-else-if="isIPv6(UserIP)">您的网络IPv6优先</p>
     </blockquote>
