@@ -109,7 +109,7 @@ onMounted(async () => {
       <div v-if="IPLocation" class="result-section">
           <table class="result-table">
             <tbody>
-              <tr>
+              <tr v-if="IPLocation.bilibili">
                 <td class="table-label">bilibili Live接口</td>
                 <td class="table-value">
                   <span>
@@ -122,39 +122,39 @@ onMounted(async () => {
                   </span>
                 </td>
               </tr>
-              <tr>
+              <tr v-if="IPLocation.ip2region">
                 <td class="table-label">IP2Region</td>
                 <td class="table-value">{{ IPLocation.ip2region?.split("|")[0] }}&nbsp;{{ IPLocation.ip2region?.split("|")[1] }}&nbsp;{{ IPLocation.ip2region?.split("|")[2] }}</td>
                 <td class="table-value">{{ IPLocation.ip2region?.split("|")[3] }}</td>
               </tr>
-              <tr>
+              <tr v-if="IPLocation.geocn">
                 <td class="table-label">GeoCN(仅中国大陆)</td>
                 <td class="table-value">{{ IPLocation.geocn?.region }}&nbsp;{{ IPLocation.geocn?.city }}&nbsp;{{ IPLocation.geocn?.district }}</td>
                 <td class="table-value">{{ IPLocation.geocn?.isp }}</td>
               </tr>
-              <tr>
+              <tr v-if="IPLocation.maxmind_asn">
                 <td class="table-label">Maxmind GEOLite2 ASN</td>
                 <td class="table-value">{{ IPLocation.maxmind_asn?.asn }}</td>
                 <td class="table-value">{{ IPLocation.maxmind_asn?.org }}</td>
               </tr>
-              <tr>
+              <tr v-if="IPLocation.maxmind_city">
                 <td class="table-label">Maxmind GEOLite2 City</td>
                 <td class="table-value">{{ IPLocation.maxmind_city?.country }}&nbsp;{{ IPLocation.maxmind_city?.region }}&nbsp;{{ IPLocation.maxmind_city?.city }}</td>
                 <td class="table-value">--</td>
               </tr>
-              <tr>
+              <tr v-if="IPLocation.qqwry">
                 <td class="table-label">纯真社区库</td>
                 <td class="table-value">{{ IPLocation.qqwry?.country }}&nbsp;{{ IPLocation.qqwry?.region }}&nbsp;{{ IPLocation.qqwry?.city }}</td>
                 <td class="table-value">{{ IPLocation.qqwry?.isp }}</td>
               </tr>
-              <tr>
+              <tr v-if="IPLocation.dbip_city">
                 <td class="table-label">DB-IP City</td>
                 <td class="table-value">{{ IPLocation.dbip_city?.country }}&nbsp;{{ IPLocation.dbip_city?.region }}&nbsp;{{ IPLocation.dbip_city?.city }}</td>
                 <td class="table-value">--</td>
               </tr>
-              <tr>
+              <tr v-if="IPLocation.meituan">
                 <td class="table-label">美团接口(VPN溯源)</td>
-                <td class="table-value">{{ IPLocation.meituan?.country }}&nbsp;{{ IPLocation.meituan?.province }}&nbsp;{{ IPLocation.meituan?.city }}&nbsp;{{ IPLocation.meituan?.district }}&nbsp;{{ IPLocation.meituan?.detail }}</td>
+                <td class="table-value">{{ IPLocation.meituan?.country }}&nbsp;{{ IPLocation.meituan?.region }}&nbsp;{{ IPLocation.meituan?.city }}&nbsp;{{ IPLocation.meituan?.district }}&nbsp;{{ IPLocation.meituan?.detail }}</td>
                 <td class="table-value">--</td>
               </tr>
             </tbody>

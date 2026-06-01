@@ -26,7 +26,7 @@ const (
 // MeituanResult 统一返回结果（仅包含用户需要的字段）
 type MeituanResult struct {
 	Country   string  `json:"country"`   // 国家
-	Province  string  `json:"province"`  // 省份
+	Province  string  `json:"region"`    // 省份
 	City      string  `json:"city"`      // 城市
 	District  string  `json:"district"`  // 区县
 	Detail    string  `json:"detail"`    // 详细地址/街道

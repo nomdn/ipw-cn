@@ -92,7 +92,7 @@ onMounted(() => {
       <template #title>IPv4工具箱</template>
       <el-menu-item index="7-0">没有</el-menu-item>
     </el-sub-menu>
-    <el-menu-item index="8">
+    <el-menu-item index="9">
       <el-icon @click="toggleDark()" v-if="isDark" style="cursor: pointer;"><Moon style="height: 20px; width: 20px;"/></el-icon>
       <el-icon @click="toggleDark()" v-else style="cursor: pointer;"><Sunny style="height: 20px; width: 20px;"/></el-icon>
     </el-menu-item>
