@@ -25,13 +25,13 @@ const (
 // ========== 返回结果结构体 ==========
 // MeituanResult 统一返回结果（仅包含用户需要的字段）
 type MeituanResult struct {
-	Country   string  `json:"country"`   // 国家
-	Province  string  `json:"region"`    // 省份
-	City      string  `json:"city"`      // 城市
-	District  string  `json:"district"`  // 区县
-	Detail    string  `json:"detail"`    // 详细地址/街道
-	Latitude  float64 `json:"latitude"`  // 纬度
-	Longitude float64 `json:"longitude"` // 经度
+	Country   string  `json:"country"`             // 国家
+	Province  string  `json:"administrative_area"` // 省份
+	City      string  `json:"city"`                // 城市
+	District  string  `json:"district"`            // 区县
+	Detail    string  `json:"detail"`              // 详细地址/街道
+	Latitude  float64 `json:"latitude"`            // 纬度
+	Longitude float64 `json:"longitude"`           // 经度
 }
 
 // ========== 内部结构体（匹配 API 响应） ==========

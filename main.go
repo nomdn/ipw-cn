@@ -441,7 +441,16 @@ func locateIP(c *gin.Context) {
 	slog.Debug("Locating IP", "ip", ip)
 	c.JSON(http.StatusOK, ipdb.SearchIP(ip))
 }
-
+func locateUserIP(c *gin.Context) {
+	ip := c.ClientIP()
+	slog.Debug("Locating user IP", "ip", ip)
+	c.JSON(http.StatusOK, ipdb.SearchIP(ip))
+}
+func healchCheck(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"status": "ok",
+	})
+}
 func readConfig() {
 	PORTS = os.Getenv("PORTS")
 	GH_PROXY = os.Getenv("GH_PROXY")
@@ -474,6 +483,8 @@ func main() {
 	r.GET("/v1/detail/*url", checkWebsiteHandler)
 	r.GET("/v1/ssl/*url", sslCheckHandler)
 	r.GET("/v1/location/:ip", locateIP)
+	r.GET("/v1/location", locateUserIP)
+	r.GET("/", healchCheck)
 
 	if err := r.Run(":" + PORTS); err != nil {
 		slog.Error("Server failed to start", "error", err)

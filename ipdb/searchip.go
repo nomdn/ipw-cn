@@ -42,7 +42,7 @@ type meituanCacheEntry struct {
 type MMDBCityResult struct {
 	Country     string `json:"country"`
 	CountryCode string `json:"country_code"`
-	Region      string `json:"region"`
+	Region      string `json:"administrative_area"`
 	City        string `json:"city"`
 }
 
@@ -54,7 +54,7 @@ type MMDBASNResult struct {
 type GeoCNResult struct {
 	DivisionCode string `json:"division_code"`
 	ISP          string `json:"isp"`
-	Region       string `json:"region,omitempty"`
+	Region       string `json:"administrative_area,omitempty"`
 	City         string `json:"city,omitempty"`
 	District     string `json:"district,omitempty"`
 }
@@ -78,7 +78,7 @@ type BilibiliIPQueryData struct {
 
 type BilibiliResult struct {
 	Country   string  `json:"country"`
-	Region    string  `json:"region"`
+	Region    string  `json:"administrative_area"`
 	City      string  `json:"city"`
 	ISP       string  `json:"isp"`
 	Latitude  float64 `json:"latitude"`
@@ -592,11 +592,11 @@ func SearchIP(ip string, databases ...string) map[string]interface{} {
 					result["qqwry"] = "error: " + err.Error()
 				} else {
 					result["qqwry"] = map[string]string{
-						"country":      info.CountryName,
-						"region":       info.RegionName,
-						"city":         info.CityName,
-						"isp":          info.IspDomain,
-						"country_code": info.CountryCode,
+						"country":             info.CountryName,
+						"administrative_area": info.RegionName,
+						"city":                info.CityName,
+						"isp":                 info.IspDomain,
+						"country_code":        info.CountryCode,
 					}
 				}
 			} else {
