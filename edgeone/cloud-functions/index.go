@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
-	"lemon-ipw/ipdb"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"os"
 	"strings"
@@ -16,7 +18,6 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/spf13/viper"
 	"resty.dev/v3"
 )
 
@@ -149,11 +150,6 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 }
 
 func checkSSL(url string, version string) (*SSLCheckDetail, error) {
-	parsedURL, err := parseURL(url)
-	if err != nil {
-		return nil, err
-	}
-
 	var network string
 	if version == "v6" {
 		network = "tcp6"
@@ -161,93 +157,86 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 		network = "tcp4"
 	}
 
-	host := parsedURL.Hostname()
-	port := parsedURL.Port()
-	if port == "" {
-		port = "443"
+	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, net, addr string) (net.Conn, error) {
+			return dialer.DialContext(ctx, network, addr)
+		},
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+	hostRecord := ""
+	trace := &httptrace.ClientTrace{
+		GotConn: func(connInfo httptrace.GotConnInfo) {
+			hostRecord = connInfo.Conn.RemoteAddr().String()
+		},
 	}
 
-	addr := fmt.Sprintf("%s:%s", host, port)
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   10 * time.Second,
+	}
 
-	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	conn, err := dialer.DialContext(context.Background(), network, addr)
+	ctx := httptrace.WithClientTrace(context.Background(), trace)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
-
-	tlsConn := tls.Client(conn, &tls.Config{
-		ServerName:         host,
-		InsecureSkipVerify: true,
-	})
-	defer tlsConn.Close()
-
-	if err := tlsConn.Handshake(); err != nil {
-		return &SSLCheckDetail{
-			CertValidityDays:   0,
-			IsExpired:          true,
-			CertStartTime:      time.Time{},
-			CertEndTime:        time.Time{},
-			HTTPVersion:        "",
-			HostRecord:         addr,
-			HTTPSSStatusCode:   0,
-			TotalTime:          0,
-			DownloadSpeed:      0,
-			Domain:             host,
-			IssuerOrganization: []string{},
-			IssuerCommonName:   "TLS Handshake Failed",
-			SubjectCommonName:  host,
-			IsReachable:        true,
-		}, nil
-	}
-
-	state := tlsConn.ConnectionState()
-	if len(state.PeerCertificates) == 0 {
-		return nil, fmt.Errorf("no SSL certificate found")
-	}
-
-	cert := state.PeerCertificates[0]
-	now := time.Now()
-	remainingDays := int(cert.NotAfter.Sub(now).Hours() / 24)
-	isExpired := now.After(cert.NotAfter) || now.Before(cert.NotBefore)
-
-	dialer2 := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, net, addr string) (net.Conn, error) {
-			return dialer2.DialContext(ctx, network, addr)
-		},
-	}
-	client := resty.New().SetTransport(transport).SetTimeout(10 * time.Second)
 
 	startTime := time.Now()
-	resp, err := client.R().EnableTrace().Get(url)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	endTime := time.Now()
+	defer resp.Body.Close()
 
-	body := resp.Bytes()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
 	totalTime := float64(endTime.Sub(startTime).Milliseconds())
 	downloadSpeed := float64(len(body)) / 1024.0 / (totalTime / 1000.0)
 
-	hostRecord := resp.Request.TraceInfo().RemoteAddr
-	hostRecord = cleanHostRecord(hostRecord)
-	domain := cleanHostRecord(state.ServerName)
+	var cert *x509.Certificate
+	var remainingDays int
+	var isExpired bool
+	var certStartTime, certEndTime time.Time
+	var issuerOrganization []string
+	var issuerCommonName, subjectCommonName, domain string
+
+	if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
+		cert = resp.TLS.PeerCertificates[0]
+		now := time.Now()
+		remainingDays = int(cert.NotAfter.Sub(now).Hours() / 24)
+		isExpired = now.After(cert.NotAfter) || now.Before(cert.NotBefore)
+		certStartTime = cert.NotBefore
+		certEndTime = cert.NotAfter
+		issuerOrganization = cert.Issuer.Organization
+		issuerCommonName = cert.Issuer.CommonName
+		subjectCommonName = cert.Subject.CommonName
+		domain = cleanHostRecord(cert.Subject.CommonName)
+	} else {
+		return nil, fmt.Errorf("no SSL certificate found")
+	}
 
 	result := &SSLCheckDetail{
 		CertValidityDays:   remainingDays,
 		IsExpired:          isExpired,
-		CertStartTime:      cert.NotBefore,
-		CertEndTime:        cert.NotAfter,
-		HTTPVersion:        resp.Proto(),
+		CertStartTime:      certStartTime,
+		CertEndTime:        certEndTime,
+		HTTPVersion:        resp.Proto,
 		HostRecord:         hostRecord,
-		HTTPSSStatusCode:   resp.StatusCode(),
+		HTTPSSStatusCode:   resp.StatusCode,
 		TotalTime:          totalTime,
 		DownloadSpeed:      downloadSpeed,
 		Domain:             domain,
-		IssuerOrganization: cert.Issuer.Organization,
-		IssuerCommonName:   cert.Issuer.CommonName,
-		SubjectCommonName:  cert.Subject.CommonName,
+		IssuerOrganization: issuerOrganization,
+		IssuerCommonName:   issuerCommonName,
+		SubjectCommonName:  subjectCommonName,
 		IsReachable:        true,
 	}
 
@@ -406,7 +395,6 @@ func checkWebsiteHandler(c *gin.Context) {
 
 		wg.Wait()
 	}
-
 	websiteCache.Store(testUrl, websiteCacheEntry{result: result, timestamp: time.Now()})
 	c.JSON(200, result)
 }
@@ -432,7 +420,6 @@ func sslCheckHandler(c *gin.Context) {
 	}
 
 	result := &SSLCheckResult{}
-	// 根据 SINGLE_STACK 环境变量的值决定测试哪个协议，避免在单栈网络环境下出现大量错误日志和不必要的延迟
 	switch SINGLE_STACK {
 	case "ipv4":
 		ipv4, errV4 := checkSSL(testUrl, "v4")
@@ -462,6 +449,7 @@ func sslCheckHandler(c *gin.Context) {
 		}
 	default:
 		var wg sync.WaitGroup
+
 		wg.Add(2)
 
 		go func() {
@@ -495,17 +483,6 @@ func sslCheckHandler(c *gin.Context) {
 	c.JSON(200, result)
 }
 
-func locateIP(c *gin.Context) {
-	ip := c.Param("ip")
-	slog.Debug("Locating IP", "ip", ip)
-	c.JSON(http.StatusOK, ipdb.SearchIP(ip))
-}
-func locateUserIP(c *gin.Context) {
-	ip := c.ClientIP()
-	// 可能会有误报，因为某些环境下 ClientIP() 可能返回代理服务器的 IP 地址，而不是用户的真实 IP 地址
-	slog.Debug("Locating user IP", "ip", ip)
-	c.JSON(http.StatusOK, ipdb.SearchIP(ip))
-}
 func healchCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "ok",
@@ -513,29 +490,7 @@ func healchCheck(c *gin.Context) {
 }
 func readConfig() {
 	PORTS = os.Getenv("PORTS")
-	GH_PROXY = os.Getenv("GH_PROXY")
-	// SINGLE_STACK can be "ipv4", "ipv6", or empty for both
-	// 如果当前测速节点机器是单栈网络，建议设置 SINGLE_STACK 环境变量来跳过另一个协议的测试，以避免不必要的错误日志和延迟
 	SINGLE_STACK = os.Getenv("SINGLE_STACK")
-
-	if PORTS == "" || GH_PROXY == "" || SINGLE_STACK == "" {
-		viper.SetConfigName("setting")
-		viper.SetConfigType("json")
-		viper.AddConfigPath(".")
-		if err := viper.ReadInConfig(); err != nil {
-			slog.Warn("Failed to read config file, using defaults", "error", err)
-		}
-		if PORTS == "" {
-			PORTS = viper.GetString("port")
-		}
-		if GH_PROXY == "" {
-			GH_PROXY = viper.GetString("gh-proxy")
-		}
-		if SINGLE_STACK == "" {
-			SINGLE_STACK = viper.GetString("single-stack")
-		}
-	}
-
 	if PORTS == "" {
 		PORTS = "8080"
 	}
@@ -543,16 +498,12 @@ func readConfig() {
 
 func main() {
 	readConfig()
-	slog.Info("Starting server", "port", PORTS, "gh_proxy", GH_PROXY, "single_stack", SINGLE_STACK)
-	ipdb.Init(GH_PROXY)
-
+	slog.Info("Starting server", "port", PORTS, "single_stack", SINGLE_STACK)
 	r := gin.Default()
 	r.Use(cors.Default())
 
 	r.GET("/v1/detail/*url", checkWebsiteHandler)
 	r.GET("/v1/ssl/*url", sslCheckHandler)
-	r.GET("/v1/location/:ip", locateIP)
-	r.GET("/v1/location", locateUserIP)
 	r.GET("/", healchCheck)
 
 	if err := r.Run(":" + PORTS); err != nil {
