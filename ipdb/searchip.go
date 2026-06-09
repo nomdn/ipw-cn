@@ -34,10 +34,6 @@ type bilibiliCacheEntry struct {
 	result    *BilibiliResult
 	timestamp time.Time
 }
-type meituanCacheEntry struct {
-	result    *MeituanResult
-	timestamp time.Time
-}
 
 type MMDBCityResult struct {
 	Country     string `json:"country"`
@@ -559,7 +555,7 @@ func Init(ghproxy string) {
 	}()
 }
 
-var allDatabases = []string{"ip2region", "qqwry", "maxmind_city", "maxmind_asn", "geocn", "dbip_city", "bilibili", "meituan"}
+var allDatabases = []string{"ip2region", "qqwry", "maxmind_city", "maxmind_asn", "geocn", "dbip_city", "bilibili"}
 
 func SearchIP(ip string, databases ...string) map[string]interface{} {
 	if len(databases) == 0 {
@@ -642,13 +638,6 @@ func SearchIP(ip string, databases ...string) map[string]interface{} {
 				result["bilibili"] = "error: " + err.Error()
 			} else {
 				result["bilibili"] = bilibili
-			}
-		case "meituan":
-			meituan, err := MeituanSearch(ip)
-			if err != nil {
-				result["meituan"] = "error: " + err.Error()
-			} else {
-				result["meituan"] = meituan
 			}
 
 		default:

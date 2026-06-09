@@ -147,11 +147,6 @@ onMounted(async () => {
                 <td class="table-value">{{ IPLocation.dbip_city?.country }}&nbsp;{{ IPLocation.dbip_city?.administrative_area }}&nbsp;{{ IPLocation.dbip_city?.city }}</td>
                 <td class="table-value">--</td>
               </tr>
-              <tr v-if="IPLocation.meituan && (IPLocation.meituan.administrative_area || IPLocation.meituan.city || IPLocation.meituan.district || IPLocation.meituan.detail)">
-                <td class="table-label">美团接口(VPN溯源)</td>
-                <td class="table-value">{{ IPLocation.meituan?.country }}&nbsp;{{ IPLocation.meituan?.administrative_area }}&nbsp;{{ IPLocation.meituan?.city }}&nbsp;{{ IPLocation.meituan?.district }}&nbsp;{{ IPLocation.meituan?.detail }}</td>
-                <td class="table-value">--</td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -164,8 +159,8 @@ onMounted(async () => {
       精度参照表：<br>
       中国大陆:BiliBili Live > GeoCN > IP2Region > 纯真社区库 > Maxmind GEOLite2 City ≈ DB-IP<br>
       中国大陆 IPv6 地址: BiliBili Live > GeoCN > IP2Region > Maxmind GEOLite2 City ≈ DB-IP > 纯真社区库<br>
-      境外及港澳台地址: BiliBili Live > Maxmind GEOLite2 City ≈ DB-IP > IP2Region > 纯真社区库<br>
-      美团属于VPN溯源接口，主要用于查询你的代理IP是否被美团收集并与地理位置绑定&nbsp;<span class="spoiler">美团你干点人事吧</span><br>
+      境外及港澳台地址: Maxmind GEOLite2 City ≈ DB-IP > BiliBili Live >  > IP2Region > 纯真社区库<br>
+      
       手机默认开启 IPv6，宽带开启 IPv6 请自行搜索<br>
       访客IP: {{UserIP}}，<p v-if="isIPv4(UserIP)">您的网络IPv4优先</p><p v-else-if="isIPv6(UserIP)">您的网络IPv6优先</p>
     </blockquote>
