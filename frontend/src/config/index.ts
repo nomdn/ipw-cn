@@ -8,13 +8,13 @@ const config = {
     v6OnlyAPI: "https://6.wsmdn.dpdns.org/",
     DualStackAPI: "https://test.wsmdn.dpdns.org/",
     // 后端API地址
-    apiBaseUrl: 'https:://api-ipw.wsmdn.dpdns.org/',
+    apiBaseUrl: 'https://api-ipw.wsmdn.dpdns.org/',
     TCPing:{
         DualStack: [
 
             {
                 label: "中国 江苏 移动",
-                url:"https:://api-ipw.wsmdn.dpdns.org/"
+                url:"https://api-ipw.wsmdn.dpdns.org/"
             },
         ],
         IPv4: [
@@ -38,7 +38,7 @@ const config = {
 
             {
                 label: "中国 江苏 移动",
-                url:"https:://api-ipw.wsmdn.dpdns.org/"
+                url:"https://api-ipw.wsmdn.dpdns.org/"
             },
         ],
         IPv4: [
@@ -59,7 +59,7 @@ const config = {
     NSLookup:[
         {
             label: "中国 江苏 移动",
-            url:"https:://api-ipw.wsmdn.dpdns.org/"
+            url:"https://api-ipw.wsmdn.dpdns.org/"
         },
         {
             label: "中国 广州 腾讯云",

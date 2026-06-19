@@ -13,6 +13,13 @@ var (
 	dnsServer = "119.28.28.28:53"
 )
 
+// SetDNSServer 设置DNS服务器地址（格式: "ip:port"）
+func SetDNSServer(server string) {
+	if server != "" {
+		dnsServer = server
+	}
+}
+
 // DNSResult 统一的DNS查询结果格式
 type DNSResult struct {
 	Domain   string   `json:"domain"`

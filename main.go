@@ -46,6 +46,7 @@ var (
 	LOG_LEVEL    string
 	websiteCache sync.Map
 	SINGLE_STACK string
+	DNS_SERVER   string
 	sslCache     sync.Map
 	pingCache    sync.Map
 	speedCache   sync.Map
@@ -852,8 +853,9 @@ func readConfig() {
 	// SINGLE_STACK can be "ipv4", "ipv6", or empty for both
 	// 如果当前测速节点机器是单栈网络，建议设置 SINGLE_STACK 环境变量来跳过另一个协议的测试，以避免不必要的错误日志和延迟
 	SINGLE_STACK = os.Getenv("SINGLE_STACK")
+	DNS_SERVER = os.Getenv("DNS_SERVER")
 
-	if PORTS == "" || GH_PROXY == "" || SINGLE_STACK == "" {
+	if PORTS == "" || GH_PROXY == "" || SINGLE_STACK == "" || DNS_SERVER == "" {
 		viper.SetConfigName("setting")
 		viper.SetConfigType("json")
 		viper.AddConfigPath(".")
@@ -869,6 +871,9 @@ func readConfig() {
 		if SINGLE_STACK == "" {
 			SINGLE_STACK = viper.GetString("single-stack")
 		}
+		if DNS_SERVER == "" {
+			DNS_SERVER = viper.GetString("dns-server")
+		}
 	}
 
 	if PORTS == "" {
@@ -878,7 +883,8 @@ func readConfig() {
 
 func main() {
 	readConfig()
-	slog.Info("Starting server", "port", PORTS, "gh_proxy", GH_PROXY, "single_stack", SINGLE_STACK)
+	webtest.SetDNSServer(DNS_SERVER)
+	slog.Info("Starting server", "port", PORTS, "gh_proxy", GH_PROXY, "single_stack", SINGLE_STACK, "dns_server", DNS_SERVER)
 	ipdb.Init(GH_PROXY)
 
 	r := gin.Default()

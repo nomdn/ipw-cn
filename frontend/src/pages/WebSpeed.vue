@@ -25,6 +25,7 @@ function getStatusCodeClass(code: number): string {
   return 'status-error'
 }
 function formatTime(ms: number): string {
+  if (ms == null) return '-'
   if (ms < 1000) {
     return `${ms} ms`
   }
@@ -32,10 +33,12 @@ function formatTime(ms: number): string {
 }
 
 function formatSpeed(speed: number): string {
+  if (speed == null) return '-'
   return `${speed.toFixed(2)} KB/s`
 }
 
 function formatSize(bytes: number): string {
+  if (bytes == null) return '-'
   if (bytes < 1024) {
     return `${bytes} B`
   }
@@ -47,17 +50,16 @@ function formatSize(bytes: number): string {
 
 
 
-async function SpeedTest(){ 
+async function SpeedTest(){
     domain.value = tmpDomain.value
+    loading.value = true
+    result.value = []
+    error.value = ''
     let PromiseArray = []
     for (let i = 0; i < config.NSLookup.length; i++){
         PromiseArray.push(axios.get(
             config.NSLookup[i].url +'v1/speed/v6/' +domain.value)
-            .then(function (response) { 
-                result.value.push({
-                    server: config.NSLookup[i].label,
-                    data: response.data
-                })
+            .then(function (response) {
                 return {
                     server: config.NSLookup[i].label,
                     data: response.data
@@ -66,7 +68,7 @@ async function SpeedTest(){
                 function (err) {
                     return {
                         server: config.NSLookup[i].label,
-                        error: err
+                        error: err.response?.data?.error || err.message || '请求失败'
                     }
                 }
             )
@@ -75,7 +77,8 @@ async function SpeedTest(){
     const PeomiseResults = await Promise.all(PromiseArray)
     console.log(PeomiseResults)
     result.value = PeomiseResults
-    
+    loading.value = false
+
     return PeomiseResults
 }
 onMounted(() => {
@@ -129,20 +132,25 @@ onMounted(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="data in result">
+          <template v-for="data in result" :key="data.server">
+          <tr v-if="data.error">
+            <td class="table-value">{{ data.server }}</td>
+            <td class="table-value" colspan="8">
+              <span class="status-code status-error">{{ data.error }}</span>
+            </td>
+          </tr>
+          <tr v-else>
             <td class="table-value">{{ data.server }}</td>
             <td class="table-value">{{ data.data?.host_record }}</td>
             <td class="table-value">
                 <span class="status-code" :class="getStatusCodeClass(data.data?.http_status_code)">
                     {{ data.data?.http_status_code }}
                 </span>
-                
             </td>
             <td class="table-value">
                 <span class="status-code" :class="getStatusCodeClass(data.data?.https_status_code)">
                     {{ data.data?.https_status_code }}
                 </span>
-                
             </td>
             <td class="table-value">{{ formatTime(data.data?.total_time) }}</td>
             <td class="table-value">{{ formatTime(data.data?.dns_lookup_time) }}</td>
@@ -150,6 +158,7 @@ onMounted(() => {
             <td class="table-value">{{ formatSize(data.data?.page_size) }}</td>
             <td class="table-value">{{ formatSpeed(data.data?.download_speed) }}</td>
           </tr>
+          </template>
         </tbody>
         </table>
     </div>

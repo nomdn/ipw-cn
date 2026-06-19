@@ -1,5 +1,6 @@
 {
     "port": 8080,
     "gh-proxy": "https://fastgit.cc/",
-    "single-stack": ""
+    "single-stack": "",
+    "dns-server": ""
 }
