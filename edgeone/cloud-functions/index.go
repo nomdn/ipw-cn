@@ -4,14 +4,17 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"edgeone-cloud-functions/webtest"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptrace"
+	"net/http/httputil"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +48,9 @@ var (
 	websiteCache sync.Map
 	SINGLE_STACK string
 	sslCache     sync.Map
+	pingCache    sync.Map
+	speedCache   sync.Map
+	defaultPort  = fmt.Sprintf("%d", 5<<4)
 )
 
 type websiteCacheEntry struct {
@@ -55,6 +61,38 @@ type websiteCacheEntry struct {
 type sslCacheEntry struct {
 	result    *SSLCheckResult
 	timestamp time.Time
+}
+
+type pingCacheEntry struct {
+	result    *TCPingResult
+	timestamp time.Time
+}
+
+type speedCacheEntry struct {
+	result    *WebsiteSpeedTestResult
+	timestamp time.Time
+}
+
+type TCPingResult struct {
+	IPv4 *webtest.TCPingStats `json:"ipv4"`
+	IPv6 *webtest.TCPingStats `json:"ipv6"`
+}
+
+type WebsiteSpeedTestResult struct {
+	Version          string  `json:"version"`
+	HostRecord       string  `json:"host_record"`
+	HTTPStatusCode   int     `json:"http_status_code"`
+	HTTPSSStatusCode int     `json:"https_status_code"`
+	DNSLookupTime    float64 `json:"dns_lookup_time"`
+	TCPConnectTime   float64 `json:"tcp_connect_time"`
+	HTTPConnectTime  float64 `json:"http_connect_time"`
+	FirstByteTime    float64 `json:"first_byte_time"`
+	TotalTime        float64 `json:"total_time"`
+	PageSize         int64   `json:"page_size"`
+	DownloadSpeed    float64 `json:"download_speed"`
+	Message          string  `json:"message"`
+	Headers          string  `json:"headers"`
+	IsReachable      bool    `json:"is_reachable"`
 }
 
 type WebsiteCheckResult struct {
@@ -133,6 +171,59 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 	downloadSpeed := float64(len(body)) / 1024.0 / (totalTime / 1000.0)
 
 	result := &WebsiteCheckDetail{
+		HostRecord:       hostRecord,
+		HTTPStatusCode:   resp.StatusCode(),
+		HTTPSSStatusCode: resp.StatusCode(),
+		DNSLookupTime:    float64(trace.DNSLookup.Milliseconds()),
+		TCPConnectTime:   float64(trace.TCPConnTime.Milliseconds()),
+		HTTPConnectTime:  float64(trace.ConnTime.Milliseconds()),
+		FirstByteTime:    float64(trace.ServerTime.Milliseconds()),
+		TotalTime:        totalTime,
+		PageSize:         int64(len(body)),
+		DownloadSpeed:    downloadSpeed,
+		IsReachable:      true,
+	}
+
+	return result, nil
+}
+
+func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
+	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+
+	var network string
+	if version == "v6" {
+		network = "tcp6"
+	} else {
+		network = "tcp4"
+	}
+
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, net, addr string) (net.Conn, error) {
+			return dialer.DialContext(ctx, network, addr)
+		},
+	}
+
+	client := resty.New().SetTransport(transport).SetTimeout(10 * time.Second)
+
+	startTime := time.Now()
+	resp, err := client.R().EnableTrace().Get(url)
+
+	if err != nil {
+		return nil, err
+	}
+	endTime := time.Now()
+
+	body := resp.Bytes()
+	trace := resp.Request.TraceInfo()
+
+	hostRecord := cleanHostRecord(trace.RemoteAddr)
+
+	totalTime := float64(endTime.Sub(startTime).Milliseconds())
+	downloadSpeed := float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+	dumpBytes, _ := httputil.DumpResponse(resp.RawResponse, false)
+	result := &WebsiteSpeedTestResult{
+		Version:          version,
+		Headers:          string(dumpBytes),
 		HostRecord:       hostRecord,
 		HTTPStatusCode:   resp.StatusCode(),
 		HTTPSSStatusCode: resp.StatusCode(),
@@ -483,6 +574,251 @@ func sslCheckHandler(c *gin.Context) {
 	c.JSON(200, result)
 }
 
+func websiteSpeedTestHandler(c *gin.Context) {
+	testUrl := c.Param("url")
+	version := c.Param("version")
+	if testUrl == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "URL parameter is required",
+		})
+		return
+	}
+	url := normalizeURL(testUrl)
+
+	switch SINGLE_STACK {
+	case "ipv4":
+		version = "v4"
+	case "ipv6":
+		version = "v6"
+	}
+
+	cacheKey := fmt.Sprintf("%s:%s", url, version)
+
+	if cached, ok := speedCache.Load(cacheKey); ok {
+		entry := cached.(speedCacheEntry)
+		if time.Since(entry.timestamp) < 1*time.Minute {
+			c.JSON(200, entry.result)
+			return
+		}
+		speedCache.Delete(cacheKey)
+	}
+
+	var result *WebsiteSpeedTestResult
+	var err error
+
+	switch version {
+	case "v6":
+		result, err = websiteSpeed(url, "v6")
+	case "v4":
+		result, err = websiteSpeed(url, "v4")
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid version",
+		})
+		return
+	}
+
+	if err != nil {
+		errorResult := &WebsiteSpeedTestResult{
+			HostRecord: "Error: " + err.Error(),
+		}
+		speedCache.Store(cacheKey, speedCacheEntry{result: errorResult, timestamp: time.Now()})
+		c.JSON(http.StatusInternalServerError, errorResult)
+		return
+	}
+
+	speedCache.Store(cacheKey, speedCacheEntry{result: result, timestamp: time.Now()})
+	c.JSON(200, result)
+}
+
+func dnsQueryHandler(c *gin.Context) {
+	domain := c.Param("domain")
+	url, _ := parseURL(domain)
+	domain = url.Host
+	recodeType := c.Param("type")
+	switch recodeType {
+	case "a":
+		result, err := webtest.QueryA(domain)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	case "aaaa":
+		result, err := webtest.ResolveAAAARecord(domain)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	case "cname":
+		result, err := webtest.ResolveCNAMERecord(domain)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	case "mx":
+		result, err := webtest.ResolveMXRecord(domain)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	case "ns":
+		result, err := webtest.ResolveNSRecord(domain)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	case "ptr":
+		result, err := webtest.ResolvePTRRecord(domain)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	case "srv":
+		result, err := webtest.ResolveSRVRecord(domain)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	case "txt":
+		result, err := webtest.ResolveTXTRecord(domain)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	case "caa":
+		result, err := webtest.ResolveCAARecord(domain)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid record type",
+		})
+		return
+	}
+}
+
+func pingHandler(c *gin.Context) {
+	host := c.Param("ip")
+	port := c.Query("port")
+	if host == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "IP or hostname parameter is required",
+		})
+		return
+	}
+	if port == "" {
+		port = defaultPort
+	}
+
+	count := 4
+	if countStr := c.Query("count"); countStr != "" {
+		n, err := strconv.Atoi(countStr)
+		if err != nil || n < 1 || n > 20 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "count must be an integer between 1 and 20",
+			})
+			return
+		}
+		count = n
+	}
+
+	cacheKey := fmt.Sprintf("%s:%s:%d", host, port, count)
+	if cached, ok := pingCache.Load(cacheKey); ok {
+		entry := cached.(pingCacheEntry)
+		if time.Since(entry.timestamp) < 1*time.Minute {
+			c.JSON(200, entry.result)
+			return
+		}
+		pingCache.Delete(cacheKey)
+	}
+
+	result := &TCPingResult{}
+
+	switch SINGLE_STACK {
+	case "ipv4":
+		ipv4, errV4 := webtest.TCPingRun(host, port, count, "v4", 10*time.Second, 100*time.Millisecond)
+		if errV4 != nil {
+			ipv4 = &webtest.TCPingStats{
+				IP: "Error: " + errV4.Error(),
+			}
+		}
+		result.IPv4 = ipv4
+		result.IPv6 = &webtest.TCPingStats{
+			IP: "Skipped due to SINGLE_STACK=ipv4",
+		}
+	case "ipv6":
+		ipv6, errV6 := webtest.TCPingRun(host, port, count, "v6", 10*time.Second, 100*time.Millisecond)
+		if errV6 != nil {
+			ipv6 = &webtest.TCPingStats{
+				IP: "Error: " + errV6.Error(),
+			}
+		}
+		result.IPv6 = ipv6
+		result.IPv4 = &webtest.TCPingStats{
+			IP: "Skipped due to SINGLE_STACK=ipv6",
+		}
+	default:
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			ipv6, errV6 := webtest.TCPingRun(host, port, count, "v6", 10*time.Second, 100*time.Millisecond)
+			if errV6 != nil {
+				ipv6 = &webtest.TCPingStats{
+					IP: "Error: " + errV6.Error(),
+				}
+			}
+			result.IPv6 = ipv6
+		}()
+
+		go func() {
+			defer wg.Done()
+			ipv4, errV4 := webtest.TCPingRun(host, port, count, "v4", 10*time.Second, 100*time.Millisecond)
+			if errV4 != nil {
+				ipv4 = &webtest.TCPingStats{
+					IP: "Error: " + errV4.Error(),
+				}
+			}
+			result.IPv4 = ipv4
+		}()
+
+		wg.Wait()
+	}
+
+	pingCache.Store(cacheKey, pingCacheEntry{result: result, timestamp: time.Now()})
+	c.JSON(200, result)
+}
+
 func healchCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "ok",
@@ -504,6 +840,9 @@ func main() {
 
 	r.GET("/v1/detail/*url", checkWebsiteHandler)
 	r.GET("/v1/ssl/*url", sslCheckHandler)
+	r.GET("/v1/tcping/:ip", pingHandler)
+	r.GET("/v1/dns/:type/*domain", dnsQueryHandler)
+	r.GET("/v1/speed/:version/*url", websiteSpeedTestHandler)
 	r.GET("/", healchCheck)
 
 	if err := r.Run(":" + PORTS); err != nil {
