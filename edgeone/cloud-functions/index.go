@@ -488,6 +488,15 @@ func checkWebsiteHandler(c *gin.Context) {
 		wg.Wait()
 	}
 	websiteCache.Store(testUrl, websiteCacheEntry{result: result, timestamp: time.Now()})
+
+	// 如果 IPv4 和 IPv6 都失败，只缓存30秒
+	if (result.IPv4 != nil && !result.IPv4.IsReachable) && (result.IPv6 != nil && !result.IPv6.IsReachable) {
+		go func() {
+			time.Sleep(30 * time.Second)
+			websiteCache.Delete(testUrl)
+		}()
+	}
+
 	c.JSON(200, result)
 }
 
@@ -572,6 +581,15 @@ func sslCheckHandler(c *gin.Context) {
 	}
 
 	sslCache.Store(testUrl, sslCacheEntry{result: result, timestamp: time.Now()})
+
+	// 如果 IPv4 和 IPv6 都失败，只缓存30秒
+	if (result.IPv4 != nil && !result.IPv4.IsReachable) && (result.IPv6 != nil && !result.IPv6.IsReachable) {
+		go func() {
+			time.Sleep(30 * time.Second)
+			sslCache.Delete(testUrl)
+		}()
+	}
+
 	c.JSON(200, result)
 }
 
@@ -623,7 +641,12 @@ func websiteSpeedTestHandler(c *gin.Context) {
 		errorResult := &WebsiteSpeedTestResult{
 			HostRecord: "Error: " + err.Error(),
 		}
+		// 错误结果只缓存30秒
 		speedCache.Store(cacheKey, speedCacheEntry{result: errorResult, timestamp: time.Now()})
+		go func() {
+			time.Sleep(30 * time.Second)
+			speedCache.Delete(cacheKey)
+		}()
 		c.JSON(http.StatusInternalServerError, errorResult)
 		return
 	}
@@ -817,6 +840,17 @@ func pingHandler(c *gin.Context) {
 	}
 
 	pingCache.Store(cacheKey, pingCacheEntry{result: result, timestamp: time.Now()})
+
+	// 如果 IPv4 和 IPv6 都失败，只缓存30秒
+	ipv4Failed := result.IPv4 != nil && strings.HasPrefix(result.IPv4.IP, "Error:")
+	ipv6Failed := result.IPv6 != nil && strings.HasPrefix(result.IPv6.IP, "Error:")
+	if ipv4Failed && ipv6Failed {
+		go func() {
+			time.Sleep(30 * time.Second)
+			pingCache.Delete(cacheKey)
+		}()
+	}
+
 	c.JSON(200, result)
 }
 
