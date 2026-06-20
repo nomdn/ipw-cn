@@ -50,6 +50,7 @@ var (
 	sslCache     sync.Map
 	pingCache    sync.Map
 	speedCache   sync.Map
+	DNS_SERVER   string
 	defaultPort  = fmt.Sprintf("%d", 5<<4)
 )
 
@@ -827,6 +828,7 @@ func healchCheck(c *gin.Context) {
 func readConfig() {
 	PORTS = os.Getenv("PORTS")
 	SINGLE_STACK = os.Getenv("SINGLE_STACK")
+	DNS_SERVER = os.Getenv("DNS_SERVER")
 	if PORTS == "" {
 		PORTS = "8080"
 	}
@@ -834,6 +836,7 @@ func readConfig() {
 
 func main() {
 	readConfig()
+	webtest.SetDNSServer(DNS_SERVER)
 	slog.Info("Starting server", "port", PORTS, "single_stack", SINGLE_STACK)
 	r := gin.Default()
 	r.Use(cors.Default())
