@@ -97,9 +97,9 @@ type SSLCheckDetail struct {
 	CertEndTime        time.Time `json:"cert_end_time"`
 	HTTPVersion        string    `json:"http_version"`
 	HostRecord         string    `json:"host_record"`
-	HTTPSSStatusCode   int     `json:"https_status_code"`
-	TotalTime          float64 `json:"total_time"`
-	DownloadSpeed      float64 `json:"download_speed"`
+	HTTPSSStatusCode   int       `json:"https_status_code"`
+	TotalTime          float64   `json:"total_time"`
+	DownloadSpeed      float64   `json:"download_speed"`
 	Domain             string    `json:"domain"`
 	IssuerOrganization []string  `json:"issuer_organization"`
 	IssuerCommonName   string    `json:"issuer_common_name"`
@@ -518,11 +518,24 @@ func websiteSpeedTestHandler(c *gin.Context) {
 	}
 	url := normalizeURL(testUrl)
 
+	// 检查请求版本是否与 SINGLE_STACK 配置匹配
 	switch SINGLE_STACK {
 	case "ipv4":
-		version = "v4"
+		if version != "v4" {
+			c.JSON(http.StatusBadRequest, &WebsiteSpeedTestResult{
+				Version:    "v4",
+				HostRecord: "Skipped due to SINGLE_STACK=ipv4",
+			})
+			return
+		}
 	case "ipv6":
-		version = "v6"
+		if version != "v6" {
+			c.JSON(http.StatusBadRequest, &WebsiteSpeedTestResult{
+				Version:    "v6",
+				HostRecord: "Skipped due to SINGLE_STACK=ipv6",
+			})
+			return
+		}
 	}
 
 	// 缓存键：URL + 版本

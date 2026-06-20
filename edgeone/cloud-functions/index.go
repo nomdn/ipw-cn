@@ -596,6 +596,8 @@ func sslCheckHandler(c *gin.Context) {
 func websiteSpeedTestHandler(c *gin.Context) {
 	testUrl := c.Param("url")
 	version := c.Param("version")
+	var result *WebsiteSpeedTestResult
+	var err error
 	if testUrl == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "URL parameter is required",
@@ -606,9 +608,21 @@ func websiteSpeedTestHandler(c *gin.Context) {
 
 	switch SINGLE_STACK {
 	case "ipv4":
-		version = "v4"
+		if version != "v4" {
+			c.JSON(http.StatusBadRequest, &WebsiteSpeedTestResult{
+				Version:    "v4",
+				HostRecord: "Skipped due to SINGLE_STACK=ipv4",
+			})
+			return
+		}
 	case "ipv6":
-		version = "v6"
+		if version != "v6" {
+			c.JSON(http.StatusBadRequest, &WebsiteSpeedTestResult{
+				Version:    "v6",
+				HostRecord: "Skipped due to SINGLE_STACK=ipv6",
+			})
+			return
+		}
 	}
 
 	cacheKey := fmt.Sprintf("%s:%s", url, version)
@@ -621,9 +635,6 @@ func websiteSpeedTestHandler(c *gin.Context) {
 		}
 		speedCache.Delete(cacheKey)
 	}
-
-	var result *WebsiteSpeedTestResult
-	var err error
 
 	switch version {
 	case "v6":
