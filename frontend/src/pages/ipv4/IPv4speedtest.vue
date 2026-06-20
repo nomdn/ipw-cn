@@ -55,13 +55,19 @@ async function SpeedTest(){
     loading.value = true
     result.value = []
     error.value = ''
+    
+    // 删除协议头，只保留 host:port/path 格式
+    let cleanDomain = domain.value
+        .replace(/^https?:\/\//, '')
+        .trim()
+    
     let PromiseArray = []
-    for (let i = 0; i < config.NSLookup.length; i++){
+    for (let i = 0; i < config.SpeedTest.DualStack.length; i++){
         PromiseArray.push(axios.get(
-            config.NSLookup[i].url +'v1/speed/v4/' +domain.value)
+            config.NSLookup[i].url +'v1/speed/v4/' + cleanDomain)
             .then(function (response) {
                 return {
-                    server: config.NSLookup[i].label,
+                    server: config.SpeedTest.DualStack[i].label,
                     data: response.data
                 }
             }).catch(
@@ -74,6 +80,25 @@ async function SpeedTest(){
             )
         )
     }
+    for (let i = 0; i < config.SpeedTest.IPv4.length; i++){
+        PromiseArray.push(axios.get(
+            config.NSLookup[i].url +'v1/speed/v4/' + cleanDomain)
+            .then(function (response) {
+                return {
+                    server: config.SpeedTest.IPv4[i].label,
+                    data: response.data
+                }
+            }).catch(
+                function (err) {
+                    return {
+                        server: config.NSLookup[i].label,
+                        error: err.response?.data?.error || err.message || '请求失败'
+                    }
+                }
+            )
+        )
+    }
+    
     const PeomiseResults = await Promise.all(PromiseArray)
     console.log(PeomiseResults)
     result.value = PeomiseResults
