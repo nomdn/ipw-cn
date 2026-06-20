@@ -20,9 +20,13 @@ const config = {
         IPv4: [
             
             {
-                label: "中国 广州 腾讯云",
+                label: "中国 广东 广州 腾讯云",
                 url :"https://cn-guangzhou.api-ipw.wsmdn.top/",
-            }
+            },
+            {
+                label: "新加坡 腾讯云",
+                url :"https://sg-1.api-ipw.wsmdn.top/",
+            },
         ],
         IPv6: [
             
@@ -44,9 +48,13 @@ const config = {
         IPv4: [
             
             {
-                label: "中国 广州 腾讯云",
+                label: "中国 广东 广州 腾讯云",
                 url :"https://cn-guangzhou.api-ipw.wsmdn.top/",
-            }
+            },
+            {
+                label: "新加坡 腾讯云",
+                url :"https://sg-1.api-ipw.wsmdn.top/",
+            },
         ],
         IPv6: [
             
@@ -64,6 +72,10 @@ const config = {
         {
             label: "中国 广州 腾讯云",
             url :"https://cn-guangzhou.api-ipw.wsmdn.top/",
+        },
+        {
+            label: "新加坡 腾讯云",
+            url :"https://sg-1.api-ipw.wsmdn.top/",
         },
             
         {
