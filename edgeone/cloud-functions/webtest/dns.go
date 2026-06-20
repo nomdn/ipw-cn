@@ -10,7 +10,8 @@ import (
 )
 
 var (
-	dnsServer = "221.131.143.69:53"
+	// ⭐️ 建议更换为稳定的公共 DNS，避免特定运营商 DNS 在云环境中不可达
+	dnsServer = "119.29.29.29:53"
 )
 
 type DNSResult struct {
@@ -20,27 +21,45 @@ type DNSResult struct {
 	Duration float64  `json:"duration"`
 }
 
-func QueryA(domain string) (DNSResult, error) {
-	start := time.Now()
+// ==========================================
+// ⭐️ 核心重构：提取通用的底层 DNS 查询函数
+// ==========================================
+func executeQuery(domain string, qtype uint16) (*dns.Msg, float64, error) {
 	msg := new(dns.Msg)
 	client := new(dns.Client)
-	msg.SetQuestion(dns.Fqdn(domain), dns.TypeA)
-	result := DNSResult{Domain: domain}
 
+	// ⭐️ 核心修复：强制使用 TCP，并设置超时
+	client.Net = "tcp"
+	client.Timeout = 3 * time.Second
+
+	msg.SetQuestion(dns.Fqdn(domain), qtype)
+
+	start := time.Now()
 	response, _, err := client.Exchange(msg, dnsServer)
 	duration := time.Since(start).Seconds() * 1000
+
+	if err != nil {
+		return nil, duration, err
+	}
+	if response.Rcode != dns.RcodeSuccess {
+		return nil, duration, fmt.Errorf("DNS query failed with Rcode %d", response.Rcode)
+	}
+
+	return response, duration, nil
+}
+
+// ==========================================
+// 业务层：各种记录类型的解析（代码大幅精简）
+// ==========================================
+
+func QueryA(domain string) (DNSResult, error) {
+	result := DNSResult{Domain: domain, Record: []string{}}
+	response, duration, err := executeQuery(domain, dns.TypeA)
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query DNS for %s: %v\n", domain, err)
-		result.Record = []string{}
+		slog.Warn("Failed to query A for %s: %v", domain, err)
 		return result, err
 	}
-
-	if response.Rcode != dns.RcodeSuccess {
-		slog.Warn("DNS query failed with Rcode", "rcode", response.Rcode)
-		return result, fmt.Errorf("DNS query failed with Rcode %d", response.Rcode)
-	}
-
 	for _, ans := range response.Answer {
 		if aRecord, ok := ans.(*dns.A); ok {
 			result.Record = append(result.Record, aRecord.A.String())
@@ -53,27 +72,13 @@ func QueryA(domain string) (DNSResult, error) {
 }
 
 func ResolveAAAARecord(domain string) (DNSResult, error) {
-	start := time.Now()
-	msg := new(dns.Msg)
-	client := new(dns.Client)
-	msg.SetQuestion(dns.Fqdn(domain), dns.TypeAAAA)
-
-	result := DNSResult{Domain: domain}
-
-	response, _, err := client.Exchange(msg, dnsServer)
-	duration := time.Since(start).Seconds() * 1000
+	result := DNSResult{Domain: domain, Record: []string{}}
+	response, duration, err := executeQuery(domain, dns.TypeAAAA)
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query DNS for %s: %v\n", domain, err)
-		result.Record = []string{}
+		slog.Warn("Failed to query AAAA for %s: %v", domain, err)
 		return result, err
 	}
-
-	if response.Rcode != dns.RcodeSuccess {
-		slog.Warn("DNS query failed with Rcode", "rcode", response.Rcode)
-		return result, fmt.Errorf("DNS query failed with Rcode %d", response.Rcode)
-	}
-
 	for _, ans := range response.Answer {
 		if aRecord, ok := ans.(*dns.AAAA); ok {
 			result.Record = append(result.Record, aRecord.AAAA.String())
@@ -86,34 +91,18 @@ func ResolveAAAARecord(domain string) (DNSResult, error) {
 }
 
 func ResolveTXTRecord(domain string) (DNSResult, error) {
-	start := time.Now()
-	msg := new(dns.Msg)
-	client := new(dns.Client)
-	msg.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
-
-	result := DNSResult{Domain: domain}
-
-	response, _, err := client.Exchange(msg, dnsServer)
-	duration := time.Since(start).Seconds() * 1000
+	result := DNSResult{Domain: domain, Record: []string{}}
+	response, duration, err := executeQuery(domain, dns.TypeTXT)
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query DNS for %s: %v\n", domain, err)
-		result.Record = []string{}
+		slog.Warn("Failed to query TXT for %s: %v", domain, err)
 		return result, err
 	}
-
-	if response.Rcode != dns.RcodeSuccess {
-		slog.Warn("DNS query failed with Rcode", "rcode", response.Rcode)
-		return result, fmt.Errorf("DNS query failed with Rcode %d", response.Rcode)
-	}
-
 	for _, ans := range response.Answer {
-		if aRecord, ok := ans.(*dns.TXT); ok {
-			for _, txt := range aRecord.Txt {
-				result.Record = append(result.Record, txt)
-			}
+		if txtRecord, ok := ans.(*dns.TXT); ok {
+			result.Record = append(result.Record, txtRecord.Txt...)
 			if result.TTL == 0 {
-				result.TTL = aRecord.Header().Ttl
+				result.TTL = txtRecord.Header().Ttl
 			}
 		}
 	}
@@ -121,32 +110,18 @@ func ResolveTXTRecord(domain string) (DNSResult, error) {
 }
 
 func ResolveNSRecord(domain string) (DNSResult, error) {
-	start := time.Now()
-	msg := new(dns.Msg)
-	client := new(dns.Client)
-	msg.SetQuestion(dns.Fqdn(domain), dns.TypeNS)
-
-	result := DNSResult{Domain: domain}
-
-	response, _, err := client.Exchange(msg, dnsServer)
-	duration := time.Since(start).Seconds() * 1000
+	result := DNSResult{Domain: domain, Record: []string{}}
+	response, duration, err := executeQuery(domain, dns.TypeNS)
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query DNS for %s: %v\n", domain, err)
-		result.Record = []string{}
+		slog.Warn("Failed to query NS for %s: %v", domain, err)
 		return result, err
 	}
-
-	if response.Rcode != dns.RcodeSuccess {
-		slog.Warn("DNS query failed with Rcode", "rcode", response.Rcode)
-		return result, fmt.Errorf("DNS query failed with Rcode %d", response.Rcode)
-	}
-
 	for _, ans := range response.Answer {
-		if aRecord, ok := ans.(*dns.NS); ok {
-			result.Record = append(result.Record, aRecord.Ns)
+		if nsRecord, ok := ans.(*dns.NS); ok {
+			result.Record = append(result.Record, nsRecord.Ns)
 			if result.TTL == 0 {
-				result.TTL = aRecord.Header().Ttl
+				result.TTL = nsRecord.Header().Ttl
 			}
 		}
 	}
@@ -154,27 +129,13 @@ func ResolveNSRecord(domain string) (DNSResult, error) {
 }
 
 func ResolveCNAMERecord(domain string) (DNSResult, error) {
-	start := time.Now()
-	msg := new(dns.Msg)
-	client := new(dns.Client)
-	msg.SetQuestion(dns.Fqdn(domain), dns.TypeCNAME)
-
-	result := DNSResult{Domain: domain}
-
-	response, _, err := client.Exchange(msg, dnsServer)
-	duration := time.Since(start).Seconds() * 1000
+	result := DNSResult{Domain: domain, Record: []string{}}
+	response, duration, err := executeQuery(domain, dns.TypeCNAME)
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query CNAME for %s: %v\n", domain, err)
-		result.Record = []string{}
+		slog.Warn("Failed to query CNAME for %s: %v", domain, err)
 		return result, err
 	}
-
-	if response.Rcode != dns.RcodeSuccess {
-		slog.Warn("CNAME query failed with Rcode", "rcode", response.Rcode)
-		return result, fmt.Errorf("CNAME query failed with Rcode %d", response.Rcode)
-	}
-
 	for _, ans := range response.Answer {
 		if cnameRecord, ok := ans.(*dns.CNAME); ok {
 			result.Record = append(result.Record, cnameRecord.Target)
@@ -187,27 +148,13 @@ func ResolveCNAMERecord(domain string) (DNSResult, error) {
 }
 
 func ResolveMXRecord(domain string) (DNSResult, error) {
-	start := time.Now()
-	msg := new(dns.Msg)
-	client := new(dns.Client)
-	msg.SetQuestion(dns.Fqdn(domain), dns.TypeMX)
-
-	result := DNSResult{Domain: domain}
-
-	response, _, err := client.Exchange(msg, dnsServer)
-	duration := time.Since(start).Seconds() * 1000
+	result := DNSResult{Domain: domain, Record: []string{}}
+	response, duration, err := executeQuery(domain, dns.TypeMX)
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query MX for %s: %v\n", domain, err)
-		result.Record = []string{}
+		slog.Warn("Failed to query MX for %s: %v", domain, err)
 		return result, err
 	}
-
-	if response.Rcode != dns.RcodeSuccess {
-		slog.Warn("MX query failed with Rcode", "rcode", response.Rcode)
-		return result, fmt.Errorf("MX query failed with Rcode %d", response.Rcode)
-	}
-
 	for _, ans := range response.Answer {
 		if mxRecord, ok := ans.(*dns.MX); ok {
 			result.Record = append(result.Record, mxRecord.Mx)
@@ -220,27 +167,13 @@ func ResolveMXRecord(domain string) (DNSResult, error) {
 }
 
 func ResolveSRVRecord(domain string) (DNSResult, error) {
-	start := time.Now()
-	msg := new(dns.Msg)
-	client := new(dns.Client)
-	msg.SetQuestion(dns.Fqdn(domain), dns.TypeSRV)
-
-	result := DNSResult{Domain: domain}
-
-	response, _, err := client.Exchange(msg, dnsServer)
-	duration := time.Since(start).Seconds() * 1000
+	result := DNSResult{Domain: domain, Record: []string{}}
+	response, duration, err := executeQuery(domain, dns.TypeSRV)
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query SRV for %s: %v\n", domain, err)
-		result.Record = []string{}
+		slog.Warn("Failed to query SRV for %s: %v", domain, err)
 		return result, err
 	}
-
-	if response.Rcode != dns.RcodeSuccess {
-		slog.Warn("SRV query failed with Rcode", "rcode", response.Rcode)
-		return result, fmt.Errorf("SRV query failed with Rcode %d", response.Rcode)
-	}
-
 	for _, ans := range response.Answer {
 		if srvRecord, ok := ans.(*dns.SRV); ok {
 			result.Record = append(result.Record, srvRecord.Target)
@@ -253,34 +186,19 @@ func ResolveSRVRecord(domain string) (DNSResult, error) {
 }
 
 func ResolvePTRRecord(ip string) (DNSResult, error) {
-	start := time.Now()
+	result := DNSResult{Domain: ip, Record: []string{}}
 	ptrName, err := dns.ReverseAddr(ip)
 	if err != nil {
-		slog.Warn("Invalid IP address for PTR query: %s, error: %v", ip, err)
-		result := DNSResult{Domain: ip, Record: []string{}}
 		return result, fmt.Errorf("invalid IP address: %v", err)
 	}
 
-	msg := new(dns.Msg)
-	client := new(dns.Client)
-	msg.SetQuestion(ptrName, dns.TypePTR)
-
-	result := DNSResult{Domain: ip}
-
-	response, _, err := client.Exchange(msg, dnsServer)
-	duration := time.Since(start).Seconds() * 1000
+	// PTR 查询特殊处理：直接调用 executeQuery，但 domain 参数传 ptrName
+	response, duration, err := executeQuery(ptrName, dns.TypePTR)
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query PTR for %s: %v\n", ip, err)
-		result.Record = []string{}
+		slog.Warn("Failed to query PTR for %s: %v", ip, err)
 		return result, err
 	}
-
-	if response.Rcode != dns.RcodeSuccess {
-		slog.Warn("PTR query failed with Rcode", "rcode", response.Rcode)
-		return result, fmt.Errorf("PTR query failed with Rcode %d", response.Rcode)
-	}
-
 	for _, ans := range response.Answer {
 		if ptrRecord, ok := ans.(*dns.PTR); ok {
 			result.Record = append(result.Record, ptrRecord.Ptr)
@@ -293,27 +211,13 @@ func ResolvePTRRecord(ip string) (DNSResult, error) {
 }
 
 func ResolveCAARecord(domain string) (DNSResult, error) {
-	start := time.Now()
-	msg := new(dns.Msg)
-	client := new(dns.Client)
-	msg.SetQuestion(dns.Fqdn(domain), dns.TypeCAA)
-
-	result := DNSResult{Domain: domain}
-
-	response, _, err := client.Exchange(msg, dnsServer)
-	duration := time.Since(start).Seconds() * 1000
+	result := DNSResult{Domain: domain, Record: []string{}}
+	response, duration, err := executeQuery(domain, dns.TypeCAA)
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query CAA for %s: %v\n", domain, err)
-		result.Record = []string{}
+		slog.Warn("Failed to query CAA for %s: %v", domain, err)
 		return result, err
 	}
-
-	if response.Rcode != dns.RcodeSuccess {
-		slog.Warn("CAA query failed with Rcode", "rcode", response.Rcode)
-		return result, fmt.Errorf("CAA query failed with Rcode %d", response.Rcode)
-	}
-
 	for _, ans := range response.Answer {
 		if caaRecord, ok := ans.(*dns.CAA); ok {
 			result.Record = append(result.Record, caaRecord.Value)
@@ -324,6 +228,10 @@ func ResolveCAARecord(domain string) (DNSResult, error) {
 	}
 	return result, nil
 }
+
+// ==========================================
+// 并发查询所有记录
+// ==========================================
 
 type DNSFullResult struct {
 	Domain string    `json:"domain"`
@@ -343,47 +251,15 @@ func QueryAllDNSRecords(domain string) DNSFullResult {
 	var wg sync.WaitGroup
 	wg.Add(8)
 
-	go func() {
-		defer wg.Done()
-		result.A, _ = QueryA(domain)
-	}()
-
-	go func() {
-		defer wg.Done()
-		result.AAAA, _ = ResolveAAAARecord(domain)
-	}()
-
-	go func() {
-		defer wg.Done()
-		result.CNAME, _ = ResolveCNAMERecord(domain)
-	}()
-
-	go func() {
-		defer wg.Done()
-		result.MX, _ = ResolveMXRecord(domain)
-	}()
-
-	go func() {
-		defer wg.Done()
-		result.NS, _ = ResolveNSRecord(domain)
-	}()
-
-	go func() {
-		defer wg.Done()
-		result.TXT, _ = ResolveTXTRecord(domain)
-	}()
-
-	go func() {
-		defer wg.Done()
-		result.SRV, _ = ResolveSRVRecord(domain)
-	}()
-
-	go func() {
-		defer wg.Done()
-		result.CAA, _ = ResolveCAARecord(domain)
-	}()
+	go func() { defer wg.Done(); result.A, _ = QueryA(domain) }()
+	go func() { defer wg.Done(); result.AAAA, _ = ResolveAAAARecord(domain) }()
+	go func() { defer wg.Done(); result.CNAME, _ = ResolveCNAMERecord(domain) }()
+	go func() { defer wg.Done(); result.MX, _ = ResolveMXRecord(domain) }()
+	go func() { defer wg.Done(); result.NS, _ = ResolveNSRecord(domain) }()
+	go func() { defer wg.Done(); result.TXT, _ = ResolveTXTRecord(domain) }()
+	go func() { defer wg.Done(); result.SRV, _ = ResolveSRVRecord(domain) }()
+	go func() { defer wg.Done(); result.CAA, _ = ResolveCAARecord(domain) }()
 
 	wg.Wait()
-
 	return result
 }
