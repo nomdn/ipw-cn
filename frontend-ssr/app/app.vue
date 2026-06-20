@@ -30,6 +30,13 @@ onMounted(() => {
 
 useHead({
   title: '柠檬味ipw.cn | ipw替代品 | 在线ip查询',
+  script:[
+    { 
+      defer: true,
+      src:"https://umami.wsmdn.top/zako.js",
+      "data-website-id": "69a91329-b110-4cf7-a04a-be4360b1a8d3"
+    },
+  ],
   meta: [
     { 
      name: 'description', 
