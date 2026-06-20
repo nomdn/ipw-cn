@@ -23,6 +23,7 @@ const recordType = ref('a')
 const loading = ref(false)
 const results = ref<any>([])
 const isloading = ref(false)
+const nowRecordType = ref('')
 
 function formatTime(ms: number): string {
   if (ms < 1000) {
@@ -82,6 +83,7 @@ async function queryDNS() {
   console.log(promiseResults)
   results.value = promiseResults
   isloading.value = false
+  nowRecordType.value = recordType.value
   return promiseResults
 }
 
@@ -150,7 +152,7 @@ onMounted(() => {
         <tbody>
           <tr v-for="(result) in results" :key="result.server">
             <td class="table-label">{{result.server}}</td>
-            <td class="table-value">{{recordType}}</td>
+            <td class="table-value">{{nowRecordType || --}}</td>
             
             <td class="table-value" style="text-align: center;">
               <template v-if="result && result.data?.record">
@@ -159,8 +161,11 @@ onMounted(() => {
                 </div>
               </template>
 
-              <span v-else class="status-code" style="color: #F56C6C; background: #fef0f0;">
+              <span v-else-if="!isloading" class="status-code" style="color: #F56C6C; background: #fef0f0;">
                 失败
+              </span>
+              <span v-else-if="isloading" class="status-code" style="color: #909399; background: #f4f4f5;">
+                加载中
               </span>
             </td>
             
