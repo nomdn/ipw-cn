@@ -152,7 +152,7 @@ onMounted(() => {
         <tbody>
           <tr v-for="(result) in results" :key="result.server">
             <td class="table-label">{{result.server}}</td>
-            <td class="table-value">{{nowRecordType || --}}</td>
+            <td class="table-value">{{nowRecordType || '--'}}</td>
             
             <td class="table-value" style="text-align: center;">
               <template v-if="result && result.data?.record">
