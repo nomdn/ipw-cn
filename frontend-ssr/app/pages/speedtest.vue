@@ -191,7 +191,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-@import "../../style.css";
+@import "../style.css";
 .el-menu--horizontal > .el-menu-item:nth-child(1) {
   margin-right: auto;
 }
