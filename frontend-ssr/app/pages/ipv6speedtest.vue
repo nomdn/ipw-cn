@@ -53,6 +53,13 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`
 }
 
+function extractHost(url: string): string {
+  const regex = /^(?:[a-zA-Z][a-zA-Z\d+.-]*:\/\/)?(?:[^\s@/]+@)?(?<host>(?:\[(?:[0-9a-fA-F:]+)\]|(?:\d{1,3}(?:\.\d{1,3}){3})|(?:[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?(?:\.[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?)*)))(?::\d{1,5})?(?:[/?#][^\s]*)?$/u;
+  
+  const match = url.trim().match(regex);
+  return match?.groups?.host ?? url;
+}
+
 const dualStackFetches = config.SpeedTest.DualStack.map((server) => {
   const url = computed(() => server.url + 'v1/speed/v6/' + domain.value);
   const { data, error: fetchError, execute } = useFetch(url, {
@@ -72,7 +79,7 @@ const ipv6Fetches = config.SpeedTest.IPv6.map((server) => {
 });
 
 async function SpeedTest() {
-  domain.value = tmpDomain.value
+  domain.value = extractHost(tmpDomain.value)
   loading.value = true
   result.value = []
   error.value = ''
