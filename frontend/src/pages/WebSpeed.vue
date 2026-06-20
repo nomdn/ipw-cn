@@ -66,32 +66,39 @@ async function SpeedTest(){
         PromiseArray.push(axios.get(
             config.NSLookup[i].url +'v1/speed/v6/' + cleanDomain)
             .then(function (response) {
+                result.value.push({server: config.SpeedTest.DualStack[i].label, data: response.data})
                 return {
                     server: config.SpeedTest.DualStack[i].label,
                     data: response.data
                 }
             }).catch(
                 function (err) {
+                  
+                    result.value.push({server: config.SpeedTest.DualStack[i].label, data: {},error: err.response?.data?.error || err.message || '请求失败'})
                     return {
                         server: config.NSLookup[i].label,
+                        data: {},
                         error: err.response?.data?.error || err.message || '请求失败'
                     }
                 }
             )
         )
     }
-    for (let i = 0; i < config.SpeedTest.IPv4.length; i++){
+    for (let i = 0; i < config.SpeedTest.IPv6.length; i++){
         PromiseArray.push(axios.get(
             config.NSLookup[i].url +'v1/speed/v6/' + cleanDomain)
             .then(function (response) {
+              result.value.push({server: config.SpeedTest.IPv6[i].label, data: response.data,})
                 return {
-                    server: config.SpeedTest.IPv4[i].label,
+                    server: config.SpeedTest.IPv6[i].label,
                     data: response.data
                 }
             }).catch(
                 function (err) {
+                  result.value.push({server: config.SpeedTest.IPv6[i].label, data: {},error: err.response?.data?.error || err.message || '请求失败'})
                     return {
                         server: config.NSLookup[i].label,
+                        data: {},
                         error: err.response?.data?.error || err.message || '请求失败'
                     }
                 }

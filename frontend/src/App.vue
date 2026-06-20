@@ -58,7 +58,7 @@ onMounted(() => {
       <el-icon v-if="isNarrow" @click="drawer = !drawer"><Expand /></el-icon>
       <router-link to="/">
         <img
-          src="/hyw.webp"
+          src="/favicon.svg"
           alt="IPW logo"
         />
         <h2 style="display: inline-block; margin-left: 10px">柠檬味ipw.cn</h2>
