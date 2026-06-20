@@ -8,6 +8,7 @@ import TCPing from './pages/TCPing.vue'
 import DNSQuery from './pages/DNSQuery.vue'
 import SpeedTest from './pages/WebSpeed.vue'
 import IPv4SpeedTest from './pages/ipv4/IPv4speedtest.vue'
+import IPv4TCPing from './pages/ipv4/IPv4TCPing.vue'
 const routes=[
     {path:'/',component:IPQuery},
     {path:'/ssl',component:SSLTest},
@@ -16,7 +17,8 @@ const routes=[
     {path:'/ipv6tcping',component:TCPing},
     {path:'/dns',component:DNSQuery},
     {path:'/ipv6speedtest',component:SpeedTest},
-    {path:'/speedtest',component:IPv4SpeedTest}
+    {path:'/speedtest',component:IPv4SpeedTest},
+    {path:'/tcping',component:IPv4TCPing}
 
 ]
 

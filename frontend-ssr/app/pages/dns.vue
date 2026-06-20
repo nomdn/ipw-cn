@@ -1,14 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import axios from 'axios'
-import { config } from '../config/index';
+import { config } from '../../config/index';
 
 const route = useRoute()
 
-
-
-
+useHead({
+  title: 'DNS查询 | 柠檬味ipw.cn',
+  meta: [
+    { name: 'description', content: 'DNS查询 | 多节点 DNS 查询，检测域名解析记录' },
+    { name: 'keywords', content: 'dns,dns查询,dns解析,a记录,aaaa记录,cname记录,mx记录,ns记录' },
+    { property: 'og:title', content: 'DNS查询 | 柠檬味ipw.cn' },
+    { property: 'og:description', content: 'DNS查询 | 多节点 DNS 查询，检测域名解析记录' },
+    { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
+    { property: 'og:type', content: 'website' },
+  ]
+});
 
 const tmpDomain = ref('')
 const domain = ref('')
@@ -16,12 +23,14 @@ const recordType = ref('a')
 const loading = ref(false)
 const results = ref<any>([])
 const isloading = ref(false)
+
 function formatTime(ms: number): string {
   if (ms < 1000) {
     return `${ms} ms`
   }
   return `${(ms / 1000).toFixed(2)} s`
 }
+
 const recordTypes = [
   { value: 'a', label: 'A 记录' },
   { value: 'aaaa', label: 'AAAA 记录' },
@@ -33,34 +42,47 @@ const recordTypes = [
   { value: 'caa', label: 'CAA 记录' },
   { value: 'ptr', label: 'PTR 记录' }
 ]
-async function queryDNS(){ 
-    isloading.value = true
-    domain.value = tmpDomain.value
-    let PromiseArray = []
-    for (let i = 0; i < config.NSLookup.length; i++){
-        PromiseArray.push(axios.get(
-            config.NSLookup[i].url +'v1/dns/' + recordType.value + "/"+domain.value)
-            .then(function (response) { 
-                return {
-                    server: config.NSLookup[i].label,
-                    data: response.data
-                }
-            }).catch(
-                function (err) {
-                    return {
-                        server: config.NSLookup[i].label,
-                        error: err
-                    }
-                }
-            )
-        )
+
+const dnsServerFetches = config.NSLookup.map((server) => {
+  const url = computed(() => server.url + 'v1/dns/' + recordType.value + "/" + domain.value);
+  const { data, error, execute } = useFetch(url, {
+    immediate: false,
+    watch: false,
+  });
+  return { label: server.label, data, error, execute };
+});
+
+async function queryDNS() {
+  isloading.value = true
+  domain.value = tmpDomain.value
+  await nextTick()
+  results.value = dnsServerFetches.map(fetch => ({
+    server: fetch.label,
+    loading: true,
+    data: null,
+    error: null
+  }));
+
+  const promises = dnsServerFetches.map(async (fetch) => {
+    try {
+      await fetch.execute();
+      return {
+        server: fetch.label,
+        data: fetch.data.value
+      };
+    } catch (err) {
+      return {
+        server: fetch.label,
+        error: err
+      };
     }
-    const PeomiseResults = await Promise.all(PromiseArray)
-    console.log(PeomiseResults)
-    results.value = PeomiseResults
-    isloading.value = false
-    
-    return PeomiseResults
+  });
+
+  const promiseResults = await Promise.all(promises)
+  console.log(promiseResults)
+  results.value = promiseResults
+  isloading.value = false
+  return promiseResults
 }
 
 
@@ -120,7 +142,7 @@ onMounted(() => {
             <th class="table-header">类型</th>
             <th class="table-header">记录</th>
             <th class="table-header">记录数</th>
-            <th class="table-header">耗时 (S)</th>
+            <th class="table-header">耗时</th>
             <th class="table-header">TTL (S)</th>
             
           </tr>

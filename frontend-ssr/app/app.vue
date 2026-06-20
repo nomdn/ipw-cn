@@ -2,6 +2,7 @@
 import { onMounted, onBeforeUnmount, ref } from 'vue';
 import { useDark, useToggle } from '@vueuse/core'
 import { Moon, Sunny,Expand } from '@element-plus/icons-vue'
+import { config } from '../config/index'
 
 
 const isNarrow = ref(false);
@@ -11,27 +12,68 @@ const drawer = ref(false);
 const isDark = useDark()
 const toggleDark = useToggle(isDark)
 
-
 onMounted(() => {
   mediaQueryList = window.matchMedia('(max-width: 768px)');
   isNarrow.value = mediaQueryList.matches;
   
-  // 监听窗口大小变化（可选，增强体验）
   const handler = (e:any) => {
     isNarrow.value = e.matches;
   };
   mediaQueryList.addEventListener('change', handler);
 
-  // 清理监听器
   onBeforeUnmount(() => {
     mediaQueryList.removeEventListener('change', handler);
   });
 
   console.log("当前设备是否是窄屏：" + isNarrow.value);
 });
+
+useHead({
+  title: '柠檬味ipw.cn | ipw替代品 | 在线ip查询',
+  meta: [
+    { 
+     name: 'description', 
+     content: '柠檬味ipw.cn | ipw替代品 | 在线ip查询' 
+    },
+
+    { name: 'keywords',
+      content: 'ipv6,ipv4,ip,ip查询,ipv6查询,ipv4查询,ipv6地址查询,ipv4地址查询,ipv6网站检测,ipv4网站检测,ipv6网站测速,ipv4网站测速'
+    },
+    {
+      name: 'author',
+      content: 'IPW Team, nomdn'
+    },
+    {
+      name: 'robots',
+      content: 'index, follow'
+    },
+    {
+      name: 'theme-color',
+      content: '#3EAF7C'
+    },
+    {
+      property: 'og:title',
+      content: 'IPW - ipw替代品 | 在线ip查询'
+    },
+    {
+      property: 'og:description',
+      content: '柠檬味ipw.cn | ipw替代品 | 在线ip查询'
+    },
+    {
+      property: 'og:image',
+      content: config.siteUrl + 'favicon.svg'
+    },
+    {
+      property: 'og:type',
+      content: 'website'
+    },
+    
+  ]
+});
 </script>
 
 <template>
+  
   <el-drawer v-model="drawer" direction="ltr" style="height: 100%;" size="50%">
       <router-link to="/ipv6webcheck" style="font-size: 1em;">
         <p style="display: inline-block; margin-left: 10px">IPv6 网站检测</p>
@@ -48,7 +90,7 @@ onMounted(() => {
       </router-link>
       <a href="/ipv6speedtest" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 网站测速</p></a>
       <a href="/speedtest" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 网站测速</p></a>
-      <router-link to="/tcping" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 TCPing</p></router-link>
+      <a href="/tcping" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 TCPing</p></a>
   </el-drawer>
   <el-menu
       mode="horizontal"
@@ -111,7 +153,8 @@ onMounted(() => {
 
   </el-menu>
   
-  <router-view />
+  
+  <NuxtPage />
 
   <footer>
     <div class="one-line">
@@ -127,6 +170,7 @@ onMounted(() => {
 
 </template>
 <style scoped>
+@import "~/style.css";
 .el-menu--horizontal > .el-menu-item:nth-child(1) {
   margin-right: auto;
 }
