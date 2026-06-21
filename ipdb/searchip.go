@@ -25,9 +25,10 @@ var (
 	qqwryMu       sync.RWMutex
 	mmdbDBs       map[string]*maxminddb.Reader
 	mmdbMu        sync.RWMutex
-	divisionFull  map[int]string
-	divisionShort map[int]string
-	bilibiliCache sync.Map
+	divisionFull   map[int]string
+	divisionShort  map[int]string
+	divisionMu     sync.RWMutex
+	bilibiliCache  sync.Map
 )
 
 type bilibiliCacheEntry struct {
@@ -109,6 +110,9 @@ func resolveDivision(code int) (province, city, district string) {
 	provinceCode := (code / 10000) * 10000
 	cityCode := (code / 100) * 100
 
+	divisionMu.RLock()
+	defer divisionMu.RUnlock()
+
 	if v, ok := divisionFull[provinceCode]; ok {
 		province = v
 	}
@@ -126,18 +130,23 @@ func resolveDivision(code int) (province, city, district string) {
 }
 
 func loadDivisionData() error {
-	var err error
-	divisionFull, err = loadDivisionCode("full.txt", "\t")
+	newFull, err := loadDivisionCode("full.txt", "\t")
 	if err != nil {
 		slog.Error("failed to load full.txt", "error", err)
 		return err
 	}
-	divisionShort, err = loadDivisionCode("short.txt", "  ")
+	newShort, err := loadDivisionCode("short.txt", "  ")
 	if err != nil {
 		slog.Error("failed to load short.txt", "error", err)
 		return err
 	}
-	slog.Info("division data loaded", "full", len(divisionFull), "short", len(divisionShort))
+
+	divisionMu.Lock()
+	divisionFull = newFull
+	divisionShort = newShort
+	divisionMu.Unlock()
+
+	slog.Info("division data loaded", "full", len(newFull), "short", len(newShort))
 	return nil
 }
 
@@ -444,7 +453,7 @@ func searchBilibili(ip string) (*BilibiliResult, error) {
 
 	client := resty.New()
 	defer client.Close()
-	resp, err := client.R().SetQueryParam("ip", ip).SetResult(&BilibiliIPQueryResponse{}).Get("https://api.live.bilibili.com/ip_service/v1/ip_service/get_ip_addr?ip=" + ip)
+	resp, err := client.R().SetResult(&BilibiliIPQueryResponse{}).Get("https://api.live.bilibili.com/ip_service/v1/ip_service/get_ip_addr?ip=" + ip)
 	if err != nil {
 		return nil, err
 	}

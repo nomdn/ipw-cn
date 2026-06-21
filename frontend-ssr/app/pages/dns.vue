@@ -26,6 +26,7 @@ const isloading = ref(false)
 const nowRecordType = ref('')
 
 function formatTime(ms: number): string {
+  if (ms == null) return '-'
   if (ms < 1000) {
     return `${ms} ms`
   }
@@ -98,9 +99,7 @@ onMounted(() => {
     recordType.value = typeParam
   }
   if (domainParam) {
-    results.value = queryDNS().then(res => {
-      results.value = res
-    })
+    queryDNS()
   }
 })
 </script>

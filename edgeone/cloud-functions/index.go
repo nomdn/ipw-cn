@@ -169,7 +169,10 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 	hostRecord := cleanHostRecord(trace.RemoteAddr)
 
 	totalTime := float64(endTime.Sub(startTime).Milliseconds())
-	downloadSpeed := float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+	var downloadSpeed float64
+	if totalTime > 0 {
+		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+	}
 
 	result := &WebsiteCheckDetail{
 		HostRecord:       hostRecord,
@@ -220,7 +223,10 @@ func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
 	hostRecord := cleanHostRecord(trace.RemoteAddr)
 
 	totalTime := float64(endTime.Sub(startTime).Milliseconds())
-	downloadSpeed := float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+	var downloadSpeed float64
+	if totalTime > 0 {
+		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+	}
 	dumpBytes, _ := httputil.DumpResponse(resp.RawResponse, false)
 	result := &WebsiteSpeedTestResult{
 		Version:          version,
@@ -291,7 +297,10 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 	}
 
 	totalTime := float64(endTime.Sub(startTime).Milliseconds())
-	downloadSpeed := float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+	var downloadSpeed float64
+	if totalTime > 0 {
+		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+	}
 
 	var cert *x509.Certificate
 	var remainingDays int

@@ -79,6 +79,7 @@ function formatDate(dateString: string): string {
 }
 
 function formatTime(ms: number): string {
+  if (ms == null) return '-'
   if (ms < 1000) {
     return `${ms} ms`
   }
@@ -96,7 +97,7 @@ function getStatusCodeClass(code: number): string {
 }
 
 function checkSSL() {
-  testDomain.value = tmpDomain.value
+  testDomain.value = extractHost(tmpDomain.value)
   loading.value = true
   error.value = ''
   result.value = null

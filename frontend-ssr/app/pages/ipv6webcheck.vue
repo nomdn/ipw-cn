@@ -72,6 +72,7 @@ function extractHost(url: string): string {
 }
 
 function formatTime(ms: number): string {
+  if (ms == null) return '-'
   if (ms < 1000) {
     return `${ms} ms`
   }

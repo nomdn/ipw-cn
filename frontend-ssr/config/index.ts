@@ -4,6 +4,9 @@
 */
 const config = {
     siteUrl: "https://ipw.wsmdn.top/",
+    // Umami 统计
+    umamiSrc: "https://umami.wsmdn.top/zako.js",
+    umamiWebsiteId: "69a91329-b110-4cf7-a04a-be4360b1a8d3",
     // Woeker IP查询接口
     v4OnlyAPI: "https://4.wsmdn.dpdns.org/",
     v6OnlyAPI: "https://6.wsmdn.dpdns.org/",

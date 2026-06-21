@@ -47,6 +47,7 @@ function locateIP(IP: string){
   ).catch(
     function(error) {
       console.error('Error fetching IP address:', error);
+      loading.value = false;
     }
   );
 }

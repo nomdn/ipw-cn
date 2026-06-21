@@ -165,7 +165,10 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 	hostRecord := cleanHostRecord(trace.RemoteAddr)
 
 	totalTime := float64(endTime.Sub(startTime).Milliseconds())
-	downloadSpeed := float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+	var downloadSpeed float64
+	if totalTime > 0 {
+		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+	}
 
 	result := &WebsiteCheckDetail{
 		HostRecord:       hostRecord,
@@ -215,7 +218,10 @@ func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
 	hostRecord := cleanHostRecord(trace.RemoteAddr)
 
 	totalTime := float64(endTime.Sub(startTime).Milliseconds())
-	downloadSpeed := float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+	var downloadSpeed float64
+	if totalTime > 0 {
+		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+	}
 	dumpBytes, _ := httputil.DumpResponse(resp.RawResponse, false)
 	result := &WebsiteSpeedTestResult{
 		Version:          version,
@@ -316,7 +322,10 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 
 	body := resp.Bytes()
 	totalTime := float64(endTime.Sub(startTime).Milliseconds())
-	downloadSpeed := float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+	var downloadSpeed float64
+	if totalTime > 0 {
+		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+	}
 
 	hostRecord := resp.Request.TraceInfo().RemoteAddr
 	hostRecord = cleanHostRecord(hostRecord)
@@ -795,6 +804,13 @@ func pingHandler(c *gin.Context) {
 	}
 	if port == "" {
 		port = "80"
+	}
+	portNum, err := strconv.Atoi(port)
+	if err != nil || portNum < 1 || portNum > 65535 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid port number",
+		})
+		return
 	}
 
 	count := 4
