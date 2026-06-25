@@ -11,8 +11,16 @@ const drawer = ref(false);
 
 const isDark = useDark()
 const toggleDark = useToggle(isDark)
-
+function Announcement(){
+  ElMessage({
+    showClose: true,
+    message: '您好,这里是LEMONIPW开发团队,我们很重视您对本项目的意见,诚邀您加入官方交流群进行讨论,欢迎您的加入!QQ:<a href="https://qm.qq.com/q/E1CGjkqgG6" target="_blank">点我</a>',
+    duration: 5000,
+    dangerouslyUseHTMLString: true,
+  })
+}
 onMounted(() => {
+  Announcement()
   mediaQueryList = window.matchMedia('(max-width: 768px)');
   isNarrow.value = mediaQueryList.matches;
 
