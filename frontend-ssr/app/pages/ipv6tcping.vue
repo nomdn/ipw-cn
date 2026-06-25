@@ -46,7 +46,7 @@ interface ServerResult {
   ipv6?: TCPingStats
 }
 
-const tmpDomain = ref('')
+const tmpDomain = ref('www.zakoflare.com')
 const port = ref('80')
 const loading = ref(false)
 const serverResults = ref<ServerResult[]>([])

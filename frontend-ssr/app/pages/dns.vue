@@ -17,7 +17,7 @@ useHead({
   ]
 });
 
-const tmpDomain = ref('')
+const tmpDomain = ref('www.zakoflare.com')
 const domain = ref('')
 const recordType = ref('a')
 const loading = ref(false)
@@ -90,6 +90,7 @@ async function queryDNS() {
 
 
 onMounted(() => {
+  
   const domainParam = route.query.domain as string
   const typeParam = route.query.type as string
   if (domainParam) {
