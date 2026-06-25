@@ -33,6 +33,7 @@ const recordTypes = [
   { value: 'caa', label: 'CAA 记录' },
   { value: 'ptr', label: 'PTR 记录' }
 ]
+
 async function queryDNS(){ 
     isloading.value = true
     domain.value = tmpDomain.value
@@ -138,7 +139,7 @@ onMounted(() => {
               </template>
 
               <span v-else class="status-code" style="color: #F56C6C; background: #fef0f0;">
-                失败
+                失败 {{ result.error }}
               </span>
             </td>
             

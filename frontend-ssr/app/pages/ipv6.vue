@@ -42,7 +42,7 @@ curl 6.wsmdn.dpdns.org
 curl test.wsmdn.dpdns.org
 `
 const html = ref('');
-const remoteAPI = ref(config.apiBaseUrl);
+const remoteAPI = ref(config.IPLocationAPI);
 const ipAddress = ref('');
 const IPLocation = ref<IPLocationType>({});
 const UserIP = ref('');

@@ -3,18 +3,23 @@
     前端的一系列配置
 */
 const config = {
-    // Woeker IP查询接口
+    siteUrl: "https://ipw.wsmdn.top/",
+    // Umami 统计
+    umamiSrc: "https://umami.wsmdn.top/zako.js",
+    umamiWebsiteId: "69a91329-b110-4cf7-a04a-be4360b1a8d3",
+    // Worker IP查询接口
     v4OnlyAPI: "https://4.wsmdn.dpdns.org/",
     v6OnlyAPI: "https://6.wsmdn.dpdns.org/",
     DualStackAPI: "https://test.wsmdn.dpdns.org/",
     // 后端API地址
-    apiBaseUrl: 'https://api-ipw.wsmdn.dpdns.org/',
+    apiBaseUrl: 'https://anycast-cloudflare.wsmdn.dpdns.org/',
+    IPLocationAPI : "https://cn2-sichuan.api-ipw.wsmdn.top/",
     TCPing:{
         DualStack: [
 
             {
-                label: "中国 江苏 移动",
-                url:"https://api-ipw.wsmdn.dpdns.org/"
+                label: "中国 上海 Anycast/cloudflare",
+                url:"https://anycast-cloudflare.wsmdn.dpdns.org/"
             },
         ],
         IPv4: [
@@ -41,8 +46,8 @@ const config = {
         DualStack: [
 
             {
-                label: "中国 江苏 移动",
-                url:"https://api-ipw.wsmdn.dpdns.org/"
+                label: "中国 上海 Anycast/cloudflare",
+                url:"https://anycast-cloudflare.wsmdn.dpdns.org/"
             },
         ],
         IPv4: [
@@ -66,8 +71,8 @@ const config = {
     },
     NSLookup:[
         {
-            label: "中国 江苏 移动",
-            url:"https://api-ipw.wsmdn.dpdns.org/"
+            label: "中国 上海 Anycast/cloudflare",
+            url:"https://anycast-cloudflare.wsmdn.dpdns.org/"
         },
         {
             label: "中国 广州 腾讯云",

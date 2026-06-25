@@ -161,14 +161,14 @@ onMounted(() => {
         </thead>
         <tbody>
           <template v-for="(server, index) in serverResults" :key="index">
-            <tr v-if="server.ipv4">
+            <tr v-if="server.ipv6">
               <td class="table-label">{{ server.label }}</td>
               <td class="table-value">{{ server.ipv6?.ip || '-' }}</td>
               <td class="table-value">{{ server.ipv6?.sent }}</td>
               <td class="table-value">{{ server.ipv6?.success }}</td>
               <td class="table-value">
-                <span :class="server.ipv4.loss_rate > 0 ? 'loss-warning' : 'loss-ok'">
-                  {{ server.ipv4.loss_rate.toFixed(1) }}
+                <span :class="server.ipv6.loss_rate > 0 ? 'loss-warning' : 'loss-ok'">
+                  {{ server.ipv6.loss_rate.toFixed(1) }}
                 </span>
               </td>
               <td class="table-value">{{ server.ipv6?.max_rtt.toFixed(2) }}</td>

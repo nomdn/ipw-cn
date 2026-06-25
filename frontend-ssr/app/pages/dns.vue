@@ -161,7 +161,7 @@ onMounted(() => {
               </template>
 
               <span v-else-if="!isloading" class="status-code" style="color: #F56C6C; background: #fef0f0;">
-                失败
+                失败 {{ result.error }}
               </span>
               <span v-else-if="isloading" class="status-code" style="color: #909399; background: #f4f4f5;">
                 加载中
