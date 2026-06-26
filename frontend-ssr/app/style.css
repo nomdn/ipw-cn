@@ -1,7 +1,7 @@
 body{
     display: flex;
     flex-direction: column;
-    margin: 0  auto;
+    margin: 0 	auto;
 
 }
 .title{
@@ -92,6 +92,20 @@ footer {
     flex-direction: column;
     align-items: center;
     margin-top: 60px;
+}
+@media (max-width: 768px) {
+    footer .one-line {
+        font-size: 0.75em;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    footer .one-line a {
+        font-size: 0.75em;
+    }
+    footer .one-line img {
+        height: 2em;
+        vertical-align: middle;
+    }
 }
 html.dark {
   /* 在暗色模式下，覆盖根元素的文字颜色和背景色 */

@@ -20,7 +20,7 @@ function Announcement(){
   })
 }
 onMounted(() => {
-  Announcement()
+  
   mediaQueryList = window.matchMedia('(max-width: 768px)');
   isNarrow.value = mediaQueryList.matches;
 
@@ -174,7 +174,7 @@ useHead({
       Copyright © nomdn & IP 查询 2026  | <img src="/ipv6-s1.svg"/> | <img src="/ssl-s1.svg" /> | All right reserved
     </div>
     <div class="one-line">
-      <a href="https://www.china-ipv6.cn/">国家IPv6发展监测平台</a> | 请遵守中国法律法规
+      <a href="https://beian.miit.gov.cn/" target="_blank">苏ICP备2026012471号</a>&nbsp;|&nbsp;<a href="https://www.china-ipv6.cn/">国家IPv6发展监测平台</a>&nbsp;|&nbsp;请遵守中国法律法规&nbsp;|&nbsp;<a href="https://github.com/nomdn/ipw-cn">Github</a>&nbsp;|&nbsp;<a href="https://qm.qq.com/q/E1CGjkqgG6" target="_blank">QQ用户交流群</a>
    </div>
    <div class="one-line">
       致力于普及IPv6，推进IPv6规模部署和应用，以全面推进IPv6技术创新与融合应用为主线，以提升应用广度深度为主攻方向
