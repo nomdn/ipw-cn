@@ -159,20 +159,6 @@ onMounted(() => {
         </thead>
         <tbody>
           <tr>
-            <td class="table-label">是否可达</td>
-            <td class="table-value">
-              <span :class="result.ipv4!.is_reachable ? 'valid' : 'expired'">
-                {{ result.ipv4!.is_reachable ? '可达' : '不可达' }}
-              </span>
-            </td>
-            <td class="table-value">
-              <span v-if="result.ipv6" :class="result.ipv6.is_reachable ? 'valid' : 'expired'">
-                {{ result.ipv6.is_reachable ? '可达' : '不可达' }}
-              </span>
-              <span v-else>-</span>
-            </td>
-          </tr>
-          <tr>
             <td class="table-label">证书状态</td>
             <td class="table-value">
               <template v-if="result.ipv4!.is_reachable">
