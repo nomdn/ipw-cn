@@ -147,6 +147,7 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 		DialContext: func(ctx context.Context, net, addr string) (net.Conn, error) {
 			return dialer.DialContext(ctx, network, addr)
 		},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
 	client := resty.New().SetTransport(transport).SetTimeout(10 * time.Second)
@@ -291,7 +292,7 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 			IssuerOrganization: []string{},
 			IssuerCommonName:   "TLS Handshake Failed",
 			SubjectCommonName:  host,
-			IsReachable:        true,
+			IsReachable:        false,
 		}, nil
 	}
 
@@ -417,6 +418,9 @@ func testWebTools(url, versions string) string {
 				return dialer.DialContext(ctx, "tcp6", addr)
 			}
 			return dialer.DialContext(ctx, "tcp4", addr)
+		},
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
 		},
 	}
 	client := resty.New().SetTransport(transport)
@@ -624,27 +628,31 @@ func sslCheckHandler(c *gin.Context) {
 		ipv4, errV4 := checkSSL(testUrl, "v4")
 		if errV4 != nil {
 			ipv4 = &SSLCheckDetail{
-				HostRecord: "Error: " + errV4.Error(),
-				IsExpired:  true,
+				HostRecord:  "Error: " + errV4.Error(),
+				IsExpired:   true,
+				IsReachable: false,
 			}
 		}
 		result.IPv4 = ipv4
 		result.IPv6 = &SSLCheckDetail{
-			HostRecord: "Skipped due to SINGLE_STACK=ipv4",
-			IsExpired:  true,
+			HostRecord:  "Skipped due to SINGLE_STACK=ipv4",
+			IsExpired:   true,
+			IsReachable: false,
 		}
 	case "ipv6":
 		ipv6, errV6 := checkSSL(testUrl, "v6")
 		if errV6 != nil {
 			ipv6 = &SSLCheckDetail{
-				HostRecord: "Error: " + errV6.Error(),
-				IsExpired:  true,
+				HostRecord:  "Error: " + errV6.Error(),
+				IsExpired:   true,
+				IsReachable: false,
 			}
 		}
 		result.IPv6 = ipv6
 		result.IPv4 = &SSLCheckDetail{
-			HostRecord: "Skipped due to SINGLE_STACK=ipv6",
-			IsExpired:  true,
+			HostRecord:  "Skipped due to SINGLE_STACK=ipv6",
+			IsExpired:   true,
+			IsReachable: false,
 		}
 	default:
 		var wg sync.WaitGroup
@@ -655,8 +663,9 @@ func sslCheckHandler(c *gin.Context) {
 			ipv6, errV6 := checkSSL(testUrl, "v6")
 			if errV6 != nil {
 				ipv6 = &SSLCheckDetail{
-					HostRecord: "Error: " + errV6.Error(),
-					IsExpired:  true,
+					HostRecord:  "Error: " + errV6.Error(),
+					IsExpired:   true,
+					IsReachable: false,
 				}
 			}
 			result.IPv6 = ipv6
@@ -667,8 +676,9 @@ func sslCheckHandler(c *gin.Context) {
 			ipv4, errV4 := checkSSL(testUrl, "v4")
 			if errV4 != nil {
 				ipv4 = &SSLCheckDetail{
-					HostRecord: "Error: " + errV4.Error(),
-					IsExpired:  true,
+					HostRecord:  "Error: " + errV4.Error(),
+					IsExpired:   true,
+					IsReachable: false,
 				}
 			}
 			result.IPv4 = ipv4

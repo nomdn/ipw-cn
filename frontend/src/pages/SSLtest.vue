@@ -67,7 +67,7 @@ function getStatusCodeClass(code: number): string {
 }
 
 function checkSSL() {
-  testDomain.value = tmpDomain.value
+  testDomain.value = extractHost(tmpDomain.value)
   loading.value = true
   error.value = ''
   result.value = null
@@ -173,7 +173,7 @@ onMounted(() => {
           <tr>
             <td class="table-label">常用名称</td>
             <td class="table-value">
-              <template v-if="result.ipv4!.is_reachable">{{ result.ipv4!.subject_common_name || '-' }}</template>
+              <template v-if="result.ipv4!.is_reachable">{{ result.ipv4!.subject_common_name || '-'}}</template>
               <span v-else>-</span>
             </td>
             <td class="table-value">
@@ -184,7 +184,7 @@ onMounted(() => {
           <tr>
             <td class="table-label">签发者</td>
             <td class="table-value">
-              <template v-if="result.ipv4!.is_reachable">{{ result.ipv4!.issuer_organization?.join(', ') || '-' }}</template>
+              <template v-if="result.ipv4!.is_reachable">{{ result.ipv4!.issuer_organization?.join(', ')|| '-' }}</template>
               <span v-else>-</span>
             </td>
             <td class="table-value">
@@ -194,12 +194,12 @@ onMounted(() => {
           </tr>
           <tr v-if="result.ipv6 && result.ipv6.is_reachable && result.ipv4!.is_reachable && result.ipv6.cert_validity_days > 0 && result.ipv4.cert_validity_days > 0">
             <td class="table-label">证书有效期 (天)</td>
-            <td class="table-value">{{ result.ipv4!.cert_validity_days }} 天</td>
-            <td class="table-value">{{ result.ipv6.cert_validity_days }} 天</td>
+            <td class="table-value">{{ result.ipv4!.cert_validity_days || '-'}} 天</td>
+            <td class="table-value">{{ result.ipv6?.cert_validity_days || '-' }} 天</td>
           </tr>
           <tr v-else-if="result.ipv6 && result.ipv6.is_reachable && result.ipv4!.is_reachable && result.ipv6.cert_validity_days <= 0 && result.ipv4.cert_validity_days <= 0">
             <td class="table-label">证书已过期（天）</td>
-            <td class="table-value">{{ Math.abs(result.ipv4.cert_validity_days) || '-' }}</td>
+            <td class="table-value">{{ Math.abs(result.ipv4.cert_validity_days) || '-'}}</td>
             <td class="table-value">{{ Math.abs(result.ipv6.cert_validity_days) || '-' }}</td>
           </tr>
           <tr v-else-if="result.ipv4!.is_reachable && result.ipv4.cert_validity_days > 0 && (!result.ipv6 || !result.ipv6.is_reachable)">
@@ -209,9 +209,10 @@ onMounted(() => {
           </tr>
           <tr v-else-if="result.ipv4!.is_reachable && result.ipv4.cert_validity_days <= 0 && (!result.ipv6 || !result.ipv6.is_reachable)">
             <td class="table-label">证书已过期（天）</td>
-            <td class="table-value">{{ Math.abs(result.ipv4.cert_validity_days) || '-' }}</td>
+            <td class="table-value">{{ Math.abs(result.ipv4.cert_validity_days) || '-'}}</td>
             <td class="table-value">-</td>
           </tr>
+
           <tr>
             <td class="table-label">证书开始时间</td>
             <td class="table-value">
@@ -237,7 +238,7 @@ onMounted(() => {
           <tr>
             <td class="table-label">HTTP 版本</td>
             <td class="table-value">
-              <template v-if="result.ipv4!.is_reachable">{{ result.ipv4!.http_version || '-' }}</template>
+              <template v-if="result.ipv4!.is_reachable">{{ result.ipv4!.http_version || '-'}}</template>
               <span v-else>-</span>
             </td>
             <td class="table-value">
@@ -248,7 +249,7 @@ onMounted(() => {
           <tr>
             <td class="table-label">主机记录</td>
             <td class="table-value">
-              <template v-if="result.ipv4!.is_reachable">{{ result.ipv4!.host_record || '-' }}</template>
+              <template v-if="result.ipv4!.is_reachable">{{ result.ipv4!.host_record || '-'}}</template>
               <span v-else>-</span>
             </td>
             <td class="table-value">
@@ -405,6 +406,7 @@ html.dark .result-table {
 }
 html.dark .result-table thead tr {
     background: #2e2d2d;
+
 }
 
 .result-table .table-header {
