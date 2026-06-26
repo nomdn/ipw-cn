@@ -310,6 +310,9 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 		DialContext: func(ctx context.Context, net, addr string) (net.Conn, error) {
 			return dialer2.DialContext(ctx, network, addr)
 		},
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
 	}
 	client := resty.New().SetTransport(transport).SetTimeout(10 * time.Second)
 

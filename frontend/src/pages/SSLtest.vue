@@ -48,6 +48,7 @@ function formatDate(dateString: string): string {
 }
 
 function formatTime(ms: number): string {
+  if (ms == null || ms <= 0) return '-'
   if (ms < 1000) {
     return `${ms} ms`
   }
@@ -55,6 +56,7 @@ function formatTime(ms: number): string {
 }
 
 function formatSpeed(speed: number): string {
+  if (speed == null || speed <= 0) return '-'
   return `${speed.toFixed(2)} KB/s`
 }
 
@@ -136,82 +138,169 @@ onMounted(() => {
         </thead>
         <tbody>
           <tr>
-            <td class="table-label">证书状态</td>
+            <td class="table-label">是否可达</td>
             <td class="table-value">
-              <span :class="result.ipv4!.is_expired ? 'expired' : 'valid'">
-                {{ result.ipv4!.is_expired ? '已过期' : '有效' }}
+              <span :class="result.ipv4!.is_reachable ? 'valid' : 'expired'">
+                {{ result.ipv4!.is_reachable ? '可达' : '不可达' }}
               </span>
             </td>
             <td class="table-value">
-              <span v-if="result.ipv6" :class="result.ipv6.is_expired ? 'expired' : 'valid'">
-                {{ result.ipv6.is_expired ? '已过期' : '有效' }}
+              <span v-if="result.ipv6" :class="result.ipv6.is_reachable ? 'valid' : 'expired'">
+                {{ result.ipv6.is_reachable ? '可达' : '不可达' }}
               </span>
+              <span v-else>-</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="table-label">证书状态</td>
+            <td class="table-value">
+              <template v-if="result.ipv4!.is_reachable">
+                <span :class="result.ipv4!.is_expired ? 'expired' : 'valid'">
+                  {{ result.ipv4!.is_expired ? '已过期' : '有效' }}
+                </span>
+              </template>
+              <span v-else>-</span>
+            </td>
+            <td class="table-value">
+              <template v-if="result.ipv6 && result.ipv6.is_reachable">
+                <span :class="result.ipv6.is_expired ? 'expired' : 'valid'">
+                  {{ result.ipv6.is_expired ? '已过期' : '有效' }}
+                </span>
+              </template>
               <span v-else>-</span>
             </td>
           </tr>
           <tr>
             <td class="table-label">常用名称</td>
-            <td class="table-value">{{ result.ipv4!.subject_common_name }}</td>
-            <td class="table-value">{{ result.ipv6?.subject_common_name || '-' }}</td>
+            <td class="table-value">
+              <template v-if="result.ipv4!.is_reachable">{{ result.ipv4!.subject_common_name || '-' }}</template>
+              <span v-else>-</span>
+            </td>
+            <td class="table-value">
+              <template v-if="result.ipv6 && result.ipv6.is_reachable">{{ result.ipv6.subject_common_name || '-' }}</template>
+              <span v-else>-</span>
+            </td>
           </tr>
           <tr>
             <td class="table-label">签发者</td>
-            <td class="table-value">{{ result.ipv4!.issuer_organization?.join(', ')|| '-' }}</td>
-            <td class="table-value">{{ result.ipv6?.issuer_organization?.join(', ') || '-' }}</td>
+            <td class="table-value">
+              <template v-if="result.ipv4!.is_reachable">{{ result.ipv4!.issuer_organization?.join(', ') || '-' }}</template>
+              <span v-else>-</span>
+            </td>
+            <td class="table-value">
+              <template v-if="result.ipv6 && result.ipv6.is_reachable">{{ result.ipv6.issuer_organization?.join(', ') || '-' }}</template>
+              <span v-else>-</span>
+            </td>
           </tr>
-          <tr>
+          <tr v-if="result.ipv6 && result.ipv6.is_reachable && result.ipv4!.is_reachable && result.ipv6.cert_validity_days > 0 && result.ipv4.cert_validity_days > 0">
             <td class="table-label">证书有效期 (天)</td>
             <td class="table-value">{{ result.ipv4!.cert_validity_days }} 天</td>
-            <td class="table-value">{{ result.ipv6?.cert_validity_days || '-' }} 天</td>
+            <td class="table-value">{{ result.ipv6.cert_validity_days }} 天</td>
+          </tr>
+          <tr v-else-if="result.ipv6 && result.ipv6.is_reachable && result.ipv4!.is_reachable && result.ipv6.cert_validity_days <= 0 && result.ipv4.cert_validity_days <= 0">
+            <td class="table-label">证书已过期（天）</td>
+            <td class="table-value">{{ Math.abs(result.ipv4.cert_validity_days) || '-' }}</td>
+            <td class="table-value">{{ Math.abs(result.ipv6.cert_validity_days) || '-' }}</td>
+          </tr>
+          <tr v-else-if="result.ipv4!.is_reachable && result.ipv4.cert_validity_days > 0 && (!result.ipv6 || !result.ipv6.is_reachable)">
+            <td class="table-label">证书有效期 (天)</td>
+            <td class="table-value">{{ result.ipv4!.cert_validity_days }} 天</td>
+            <td class="table-value">-</td>
+          </tr>
+          <tr v-else-if="result.ipv4!.is_reachable && result.ipv4.cert_validity_days <= 0 && (!result.ipv6 || !result.ipv6.is_reachable)">
+            <td class="table-label">证书已过期（天）</td>
+            <td class="table-value">{{ Math.abs(result.ipv4.cert_validity_days) || '-' }}</td>
+            <td class="table-value">-</td>
           </tr>
           <tr>
             <td class="table-label">证书开始时间</td>
-            <td class="table-value">{{ formatDate(result.ipv4!.cert_start_time) }}</td>
-            <td class="table-value">{{ result.ipv6?.cert_start_time ? formatDate(result.ipv6.cert_start_time) : '-' }}</td>
+            <td class="table-value">
+              <template v-if="result.ipv4!.is_reachable && result.ipv4!.cert_start_time">{{ formatDate(result.ipv4!.cert_start_time) }}</template>
+              <span v-else>-</span>
+            </td>
+            <td class="table-value">
+              <template v-if="result.ipv6 && result.ipv6.is_reachable && result.ipv6.cert_start_time">{{ formatDate(result.ipv6.cert_start_time) }}</template>
+              <span v-else>-</span>
+            </td>
           </tr>
           <tr>
             <td class="table-label">证书结束时间</td>
-            <td class="table-value">{{ formatDate(result.ipv4!.cert_end_time) }}</td>
-            <td class="table-value">{{ result.ipv6?.cert_end_time ? formatDate(result.ipv6.cert_end_time) : '-' }}</td>
+            <td class="table-value">
+              <template v-if="result.ipv4!.is_reachable && result.ipv4!.cert_end_time">{{ formatDate(result.ipv4!.cert_end_time) }}</template>
+              <span v-else>-</span>
+            </td>
+            <td class="table-value">
+              <template v-if="result.ipv6 && result.ipv6.is_reachable && result.ipv6.cert_end_time">{{ formatDate(result.ipv6.cert_end_time) }}</template>
+              <span v-else>-</span>
+            </td>
           </tr>
           <tr>
             <td class="table-label">HTTP 版本</td>
-            <td class="table-value">{{ result.ipv4!.http_version }}</td>
-            <td class="table-value">{{ result.ipv6?.http_version || '-' }}</td>
+            <td class="table-value">
+              <template v-if="result.ipv4!.is_reachable">{{ result.ipv4!.http_version || '-' }}</template>
+              <span v-else>-</span>
+            </td>
+            <td class="table-value">
+              <template v-if="result.ipv6 && result.ipv6.is_reachable">{{ result.ipv6.http_version || '-' }}</template>
+              <span v-else>-</span>
+            </td>
           </tr>
           <tr>
             <td class="table-label">主机记录</td>
-            <td class="table-value">{{ result.ipv4!.host_record }}</td>
-            <td class="table-value">{{ result.ipv6?.host_record || '-' }}</td>
+            <td class="table-value">
+              <template v-if="result.ipv4!.is_reachable">{{ result.ipv4!.host_record || '-' }}</template>
+              <span v-else>-</span>
+            </td>
+            <td class="table-value">
+              <template v-if="result.ipv6 && result.ipv6.is_reachable">{{ result.ipv6.host_record || '-' }}</template>
+              <span v-else>-</span>
+            </td>
           </tr>
           <tr>
             <td class="table-label">HTTPS 访问返回码</td>
             <td class="table-value">
-              <span :class="getStatusCodeClass(result.ipv4!.https_status_code)" class="status-code">
-                {{ result.ipv4!.https_status_code }}
-              </span>
+              <template v-if="result.ipv4!.is_reachable">
+                <span :class="getStatusCodeClass(result.ipv4!.https_status_code)" class="status-code">
+                  {{ result.ipv4!.https_status_code }}
+                </span>
+              </template>
+              <span v-else>-</span>
             </td>
             <td class="table-value">
-              <span v-if="result.ipv6" :class="getStatusCodeClass(result.ipv6.https_status_code)" class="status-code">
-                {{ result.ipv6.https_status_code }}
-              </span>
+              <template v-if="result.ipv6 && result.ipv6.is_reachable">
+                <span :class="getStatusCodeClass(result.ipv6.https_status_code)" class="status-code">
+                  {{ result.ipv6.https_status_code }}
+                </span>
+              </template>
               <span v-else>-</span>
             </td>
           </tr>
           <tr>
             <td class="table-label">总耗时</td>
-            <td class="table-value">{{ formatTime(result.ipv4!.total_time) }}</td>
-            <td class="table-value">{{ result.ipv6?.total_time ? formatTime(result.ipv6.total_time) : '-' }}</td>
+            <td class="table-value">
+              <template v-if="result.ipv4!.is_reachable">{{ formatTime(result.ipv4.total_time) }}</template>
+              <span v-else>-</span>
+            </td>
+            <td class="table-value">
+              <template v-if="result.ipv6 && result.ipv6.is_reachable">{{ formatTime(result.ipv6.total_time) }}</template>
+              <span v-else>-</span>
+            </td>
           </tr>
           <tr>
             <td class="table-label">下载速度</td>
-            <td class="table-value">{{ formatSpeed(result.ipv4!.download_speed) }}</td>
-            <td class="table-value">{{ result.ipv6?.download_speed ? formatSpeed(result.ipv6.download_speed) : '-' }}</td>
+            <td class="table-value">
+              <template v-if="result.ipv4!.is_reachable">{{ formatSpeed(result.ipv4!.download_speed) }}</template>
+              <span v-else>-</span>
+            </td>
+            <td class="table-value">
+              <template v-if="result.ipv6 && result.ipv6.is_reachable">{{ formatSpeed(result.ipv6.download_speed) }}</template>
+              <span v-else>-</span>
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
-    <div v-if="result && result.ipv4 && !result.ipv4.is_expired &&  !result.ipv6.is_expired && result.ipv4.is_reachable && result.ipv6.is_reachable">
+    <div v-if="result && result.ipv4 && result.ipv4.is_reachable && !result.ipv4.is_expired && (!result.ipv6 || (!result.ipv6.is_expired && result.ipv6.is_reachable))">
       <h3>结论：<el-icon><CircleCheckFilled style="color: lightgreen;"/></el-icon>网站{{ extractHost(testDomain) }} 证书有效 </h3>
       <p><el-icon><InfoFilled style="color: lightgreen;"/></el-icon>请把下方代码贴到网站底部，把这个好消息告诉你的用户，以便用户核验。</p>
         <img src="/ssl-s1.svg"/>
@@ -228,7 +317,7 @@ onMounted(() => {
         <pre><code>&lt;a href="https://ipw.wsmdn.dpdns.org/ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="https://ipw.wsmdn.dpdns.org/ssl-s6.svg"&gt;&lt;/a&gt;</code></pre>
 
     </div>
-    <div v-if="result && result.ipv4 && !result.ipv4.is_expired &&  result.ipv6.is_expired && result.ipv4.is_reachable && !result.ipv6.is_reachable">
+    <div v-if="result && result.ipv4 && result.ipv4.is_reachable && !result.ipv4.is_expired && result.ipv6 && result.ipv6.is_reachable && result.ipv6.is_expired">
       <h3>结论：<el-icon><CircleCheckFilled style="color: lightgreen;"/></el-icon>网站{{ extractHost(testDomain) }} 证书有效,但不支持IPv6访问 </h3>
       <p><el-icon><InfoFilled style="color: lightgreen;"/></el-icon>请把下方代码贴到网站底部，把这个好消息告诉你的用户，以便用户核验。</p>
         <img src="/ssl-s1.svg"/>
@@ -245,12 +334,12 @@ onMounted(() => {
         <pre><code>&lt;a href="https://ipw.wsmdn.dpdns.org/ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="https://ipw.wsmdn.dpdns.org/ssl-s6.svg"&gt;&lt;/a&gt;</code></pre>
 
     </div>
-    <div v-else-if="result && result.ipv4 && result.ipv4.is_expired && result.ipv4.is_reachable">
+    <div v-else-if="result && result.ipv4 && result.ipv4.is_reachable && result.ipv4.is_expired">
       <h3>结论：<CircleCloseFilled style="width: 1.3em;color: red;"/>网站{{ testDomain }} 证书无效 </h3>
       <h2>都没有证书了这网站还活啥</h2>
       <el-image src="/jingya.jpg"></el-image>
     </div>
-    <div v-else-if="result && result.ipv4 && result.ipv6 && !result.ipv4.is_reachable && !result.ipv6.is_reachable">
+    <div v-else-if="result && result.ipv4 && !result.ipv4.is_reachable && result.ipv6 && !result.ipv6.is_reachable">
       <h3>结论：<CircleCloseFilled style="width: 1.3em;color: red;"/>网站{{ testDomain }} 不可达 </h3>
       <h2>...</h2>
       <el-image src="/jingya.jpg"></el-image>

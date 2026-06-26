@@ -20,11 +20,6 @@ const config = {
             {
                 label: "中国 上海 Anycast/cloudflare",
                 url:"https://anycast-cloudflare.wsmdn.dpdns.org/"
-
-            },
-            {
-                label: "中国 江苏 移动",
-                url :"https://api-ipw.wsmdn.dpdns.org/",
             },
         ],
         IPv4: [
@@ -54,10 +49,6 @@ const config = {
                 label: "中国 上海 Anycast/cloudflare",
                 url:"https://anycast-cloudflare.wsmdn.dpdns.org/"
             },
-            {
-                label: "中国 江苏 移动",
-                url :"https://api-ipw.wsmdn.dpdns.org/",
-            },
         ],
         IPv4: [
             
@@ -82,10 +73,6 @@ const config = {
         {
             label: "中国 上海 Anycast/cloudflare",
             url:"https://anycast-cloudflare.wsmdn.dpdns.org/"
-        },
-        {
-            label: "中国 江苏 移动",
-            url :"https://api-ipw.wsmdn.dpdns.org/",
         },
         {
             label: "中国 广州 腾讯云",

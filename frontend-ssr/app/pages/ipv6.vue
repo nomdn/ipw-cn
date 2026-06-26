@@ -156,7 +156,7 @@ onMounted(async () => {
                 <td class="table-value">{{ IPLocation.geocn?.administrative_area }}&nbsp;{{ IPLocation.geocn?.city }}&nbsp;{{ IPLocation.geocn?.district }}</td>
                 <td class="table-value">{{ IPLocation.geocn?.isp }}</td>
               </tr>
-              <tr v-if="IPLocation.maxmind_city && IPLocation.maxmind_asn && (IPLocation.maxmind_city.administrative_area || IPLocation.maxmind_city.city)">
+              <tr v-if="IPLocation.maxmind_city && IPLocation.maxmind_asn && (IPLocation.maxmind_city.country || IPLocation.maxmind_city.city)">
                 <td class="table-label">Maxmind GEOLite2 City</td>
                 <td class="table-value">{{ IPLocation.maxmind_city?.country }}&nbsp;{{ IPLocation.maxmind_city?.administrative_area }}&nbsp;{{ IPLocation.maxmind_city?.city }}</td>
                 <td class="table-value">{{ IPLocation.maxmind_asn?.org }}</td>
