@@ -201,6 +201,7 @@ func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
 		DialContext: func(ctx context.Context, net, addr string) (net.Conn, error) {
 			return dialer.DialContext(ctx, network, addr)
 		},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
 	client := resty.New().SetTransport(transport).SetTimeout(10 * time.Second)
