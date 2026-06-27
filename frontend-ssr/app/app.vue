@@ -1,87 +1,49 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref } from 'vue';
-import { useDark, useToggle } from '@vueuse/core'
-import { Moon, Sunny,Expand } from '@element-plus/icons-vue'
-import { config } from '../config/index'
-
+import { useDark, useToggle } from '@vueuse/core';
+import { Moon, Sunny, Expand } from '@element-plus/icons-vue';
+import { config } from '../config/index';
 
 const isNarrow = ref(false);
-let mediaQueryList:any = null;
+let mediaQueryList: MediaQueryList | null = null;
 const drawer = ref(false);
 
-const isDark = useDark()
-const toggleDark = useToggle(isDark)
-function Announcement(){
+const isDark = useDark();
+const toggleDark = useToggle(isDark);
+
+function Announcement() {
   ElMessage({
     showClose: true,
     message: '您好,这里是LEMONIPW开发团队,我们很重视您对本项目的意见,诚邀您加入官方交流群进行讨论,欢迎您的加入!QQ:<a href="https://qm.qq.com/q/E1CGjkqgG6" target="_blank">点我</a>',
     duration: 3000,
     dangerouslyUseHTMLString: true,
-  })
+  });
 }
+
 onMounted(() => {
-  
   mediaQueryList = window.matchMedia('(max-width: 768px)');
   isNarrow.value = mediaQueryList.matches;
 
-  const handler = (e:any) => {
+  const handler = (e: MediaQueryListEvent) => {
     isNarrow.value = e.matches;
   };
+
   mediaQueryList.addEventListener('change', handler);
 
   onBeforeUnmount(() => {
-    mediaQueryList.removeEventListener('change', handler);
+    mediaQueryList?.removeEventListener('change', handler);
   });
 });
 
 useHead({
-  title: '柠檬味ipw.cn | ipw替代品 | 在线ip查询',
-  script:[
+  // 在 HTML 解析前同步执行，防止明暗切换和页面闪烁
+  script: [
     {
       defer: true,
       src: config.umamiSrc,
-      "data-website-id": config.umamiWebsiteId,
+      'data-website-id': config.umamiWebsiteId,
     },
   ],
-  meta: [
-    { 
-     name: 'description', 
-     content: '柠檬味ipw.cn | ipw替代品 | 在线ip查询' 
-    },
-
-    { name: 'keywords',
-      content: 'ipv6,ipv4,ip,ip查询,ipv6查询,ipv4查询,ipv6地址查询,ipv4地址查询,ipv6网站检测,ipv4网站检测,ipv6网站测速,ipv4网站测速'
-    },
-    {
-      name: 'author',
-      content: 'IPW Team, nomdn'
-    },
-    {
-      name: 'robots',
-      content: 'index, follow'
-    },
-    {
-      name: 'theme-color',
-      content: '#3EAF7C'
-    },
-    {
-      property: 'og:title',
-      content: 'IPW - ipw替代品 | 在线ip查询'
-    },
-    {
-      property: 'og:description',
-      content: '柠檬味ipw.cn | ipw替代品 | 在线ip查询'
-    },
-    {
-      property: 'og:image',
-      content: config.siteUrl + 'favicon.svg'
-    },
-    {
-      property: 'og:type',
-      content: 'website'
-    },
-    
-  ]
 });
 </script>
 
@@ -116,6 +78,10 @@ useHead({
         <img
           src="/favicon.svg"
           alt="IPW logo"
+          width="48"
+          height="48"
+          loading="eager"
+          decoding="async"
         />
         <h2 style="display: inline-block; margin-left: 10px">柠檬味ipw.cn</h2>
       </router-link>
@@ -167,11 +133,13 @@ useHead({
   </el-menu>
   
   
-  <NuxtPage />
+  <main id="main-content" role="main">
+    <NuxtPage />
+  </main>
 
   <footer>
     <div class="one-line">
-      Copyright © nomdn & IP 查询 2026  | <img src="/ipv6-s1.svg"/> | <img src="/ssl-s1.svg" /> | All right reserved
+      Copyright © nomdn & IP 查询 2026  | <img src="/ipv6-s1.svg" alt="IPv6 相关标识"/> | <img src="/ssl-s1.svg" alt="SSL 相关标识"/> | All right reserved
     </div>
     <div class="one-line">
       <a href="https://beian.miit.gov.cn/" target="_blank">苏ICP备2026012471号</a>&nbsp;|&nbsp;<a href="https://www.china-ipv6.cn/">国家IPv6发展监测平台</a>&nbsp;|&nbsp;请遵守中国法律法规&nbsp;|&nbsp;<a href="https://github.com/nomdn/ipw-cn">Github</a>&nbsp;|&nbsp;<a href="https://qm.qq.com/q/E1CGjkqgG6" target="_blank">QQ用户交流群</a>
@@ -215,4 +183,20 @@ html.dark {
   --el-color-primary: #3EAF7C;
 }
 
+/* 防止窄屏设备在 Vue 水合前出现宽屏布局闪烁 */
+html.is-narrow .el-drawer__container {
+  display: none !important;
+}
+html.is-narrow .el-menu--horizontal > .el-divider {
+  display: none !important;
+}
+html.is-narrow .el-menu--horizontal > .el-menu-item[index="1"],
+html.is-narrow .el-menu--horizontal > .el-menu-item[index="2"],
+html.is-narrow .el-menu--horizontal > .el-menu-item[index="3"],
+html.is-narrow .el-menu--horizontal > .el-menu-item[index="4"],
+html.is-narrow .el-menu--horizontal > .el-menu-item[index="5"],
+html.is-narrow .el-menu--horizontal > .el-menu-item[index="6"],
+html.is-narrow .el-menu--horizontal > .el-sub-menu[index="7"] {
+  display: none !important;
+}
 </style>

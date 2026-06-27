@@ -158,4 +158,20 @@ html.dark {
   --el-color-primary: #3EAF7C;
 }
 
+/* 防止窄屏设备在 Vue 水合前出现宽屏布局闪烁 */
+html.is-narrow .el-drawer__container {
+  display: none !important;
+}
+html.is-narrow .el-menu--horizontal > .el-divider {
+  display: none !important;
+}
+html.is-narrow .el-menu--horizontal > .el-menu-item[index="1"],
+html.is-narrow .el-menu--horizontal > .el-menu-item[index="2"],
+html.is-narrow .el-menu--horizontal > .el-menu-item[index="3"],
+html.is-narrow .el-menu--horizontal > .el-menu-item[index="4"],
+html.is-narrow .el-menu--horizontal > .el-menu-item[index="5"],
+html.is-narrow .el-menu--horizontal > .el-menu-item[index="6"],
+html.is-narrow .el-menu--horizontal > .el-sub-menu[index="7"] {
+  display: none !important;
+}
 </style>

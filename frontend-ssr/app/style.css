@@ -93,6 +93,7 @@ footer {
     align-items: center;
     margin-top: 60px;
 }
+
 @media (max-width: 768px) {
     footer .one-line {
         font-size: 0.75em;
@@ -123,7 +124,7 @@ html.dark blockquote {
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace !important;
 }
 :deep(.shiki){
-  padding: 20px;
+  padding: 1rem;
   border-radius: 10px;
   overflow: auto
 }

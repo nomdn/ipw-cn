@@ -1,19 +1,27 @@
 <script setup lang="ts">
-import { ref,onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { isIPv6 } from 'is-ip';
 import { config } from '../../config/index';
-import { codeToHtml } from 'shiki'
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue';
+
+const route = useRoute();
+const canonicalUrl = computed(() => new URL(route.path, config.siteUrl).toString());
 
 useHead({
   title: '柠檬味ipw.cn | ipw替代品 | 在线ip查询',
+  titleTemplate: '%s',
+  link: [
+    { rel: 'canonical', href: canonicalUrl.value }
+  ],
   meta: [
     { name: 'description', content: '柠檬味ipw.cn | ipw替代品 | 在线ip查询' },
     { name: 'keywords', content: 'ipv6,ipv4,ip,ip查询,ipv6查询,ipv4查询,ipv6地址查询,ipv4地址查询' },
     { property: 'og:title', content: 'IPW - ipw替代品 | 在线ip查询' },
     { property: 'og:description', content: '柠檬味ipw.cn | ipw替代品 | 在线ip查询' },
-    { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
+    { property: 'og:image', content: `${config.siteUrl}favicon.svg` },
     { property: 'og:type', content: 'website' },
+    { property: 'og:url', content: canonicalUrl.value },
+    { name: 'twitter:card', content: 'summary_large_image' },
   ]
 });
 
@@ -25,49 +33,42 @@ curl 4.wsmdn.dpdns.org
 # 查询本机外网 IPv6 地址
 curl 6.wsmdn.dpdns.org
 
-# 测试网络是 IPv4 还是 IPv6 访问优先 
+# 测试网络是 IPv4 还是 IPv6 访问优先
 # (访问 IPv4/IPv6 双栈站点，如果返回 IPv6 地址，则 IPv6 访问优先)
 curl test.wsmdn.dpdns.org
-`
-const html = ref('');
-
+`;
+const highlightedCode = ref('');
 
 const ipAddress = ref('');
 const yourIPv4 = ref('');
 const yourIPv6 = ref('');
 
 onMounted(async () => {
-  html.value = await codeToHtml(code, {
-    lang: 'bash',
-    theme: 'github-dark'
-  })
-  $fetch<string>(config.DualStackAPI).then(
-    function(response: string) {
-      ipAddress.value = response;
-    }
-  ).catch(
-    function(error) {
-      console.error('Error fetching IP address:', error);
-    }
-  );
-  $fetch<string>(config.v4OnlyAPI).then(
-    function(response: string) {
-      yourIPv4.value = response;
-    }
-  ).catch(
-    function(error) {
-      console.error('Error fetching IP address:', error);
-    }
-  );
-  $fetch<string>(config.v6OnlyAPI).then(
-    function(response: string) {
-      yourIPv6.value = response;
-    }
-  ).catch(
-    function(error) {
-      console.error('Error fetching IP address:', error);
-    }
-  );
+  try {
+    const { codeToHtml } = await import('shiki');
+    highlightedCode.value = await codeToHtml(code, {
+      lang: 'bash',
+      theme: 'github-dark'
+    });
+  } catch {
+    highlightedCode.value = '';
+  }
+
+  const [dualStack, ipV4, ipV6] = await Promise.allSettled([
+    $fetch<string>(config.DualStackAPI),
+    $fetch<string>(config.v4OnlyAPI),
+    $fetch<string>(config.v6OnlyAPI)
+  ]);
+
+  if (dualStack.status === 'fulfilled') {
+    ipAddress.value = dualStack.value;
+  }
+  if (ipV4.status === 'fulfilled') {
+    yourIPv4.value = ipV4.value;
+  }
+  if (ipV6.status === 'fulfilled') {
+    yourIPv6.value = ipV6.value;
+  }
 });
 
 function isIPv4(ip: string): boolean {
@@ -100,7 +101,8 @@ function isIPv4(ip: string): boolean {
       手机默认开启 IPv6，宽带开启 IPv6 请自行搜索 (我们没有文档)
     </blockquote>
 
-    <div v-html="html"></div>
+    <div v-if="highlightedCode" v-html="highlightedCode" class="code-block"></div>
+    <pre v-else class="code-block code-block--fallback">{{ code }}</pre>
   </div>
 
 </template>
@@ -110,7 +112,21 @@ function isIPv4(ip: string): boolean {
   margin-right: auto;
 }
 
+.code-block {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
+.code-block--fallback {
+  background: rgb(48, 46, 46);
+  border: 1px solid rgba(62, 175, 124, 0.18);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace !important;
+  color: rgb(255, 255, 255);
+}
 
 </style>
 <style>

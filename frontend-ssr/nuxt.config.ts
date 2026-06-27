@@ -24,6 +24,20 @@ export default defineNuxtConfig({
   ],
   app:{
     head: {
+      script: [
+        {
+          // 必须 innerHTML，不能 src（否则异步加载）
+          innerHTML: `
+            (function() {
+              var stored = localStorage.getItem('vueuse-color-scheme');
+              var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+              var dark = stored === 'dark' || (!stored && prefersDark);
+              if (dark) document.documentElement.classList.add('dark');
+            })();
+          `,
+          // 关键：不加 async/defer，确保同步阻塞执行
+        }
+      ],
       link: [
         { rel: 'icon', type: 'image/x-icon', href: '/favicon.svg' }
       ]
