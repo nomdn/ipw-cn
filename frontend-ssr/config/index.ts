@@ -12,7 +12,7 @@ const config = {
     v6OnlyAPI: "https://6.wsmdn.dpdns.org/",
     DualStackAPI: "https://test.wsmdn.dpdns.org/",
     // 后端API地址
-    apiBaseUrl: 'https://anycast-cloudflare.wsmdn.dpdns.org/',
+    apiBaseUrl: 'https://api-ipw.wsmdn.dpdns.org/',
     IPLocationAPI : "https://cn2-sichuan.api-ipw.wsmdn.top/",
     TCPing:{
         DualStack: [
