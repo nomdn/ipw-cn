@@ -16,12 +16,6 @@ const config = {
     IPLocationAPI : "https://cn2-sichuan.api-ipw.wsmdn.top/",
     TCPing:{
         DualStack: [
-
-            {
-                label: "中国 上海 Anycast/cloudflare",
-                url:"https://anycast-cloudflare.wsmdn.dpdns.org/"
-
-            },
             {
                 label: "中国 江苏 移动",
                 url :"https://api-ipw.wsmdn.dpdns.org/",
@@ -49,11 +43,6 @@ const config = {
     },
     SpeedTest:{
         DualStack: [
-
-            {
-                label: "中国 上海 Anycast/cloudflare",
-                url:"https://anycast-cloudflare.wsmdn.dpdns.org/"
-            },
             {
                 label: "中国 江苏 移动",
                 url :"https://api-ipw.wsmdn.dpdns.org/",
@@ -79,10 +68,6 @@ const config = {
         ]
     },
     NSLookup:[
-        {
-            label: "中国 上海 Anycast/cloudflare",
-            url:"https://anycast-cloudflare.wsmdn.dpdns.org/"
-        },
         {
             label: "中国 江苏 移动",
             url :"https://api-ipw.wsmdn.dpdns.org/",
