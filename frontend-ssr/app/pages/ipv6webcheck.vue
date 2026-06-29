@@ -7,14 +7,37 @@ import { CircleCheckFilled, CircleCloseFilled,InfoFilled,Position } from '@eleme
 const route = useRoute()
 
 useHead({
-  title: 'IPv6网站检测 | 柠檬味ipw.cn',
+  title: 'IPv6网站检测工具 | IPv6访问支持检查 | 柠檬味ipw.cn',
   meta: [
-    { name: 'description', content: 'IPv6网站检测 | 检查网站是否开启 IPv6 访问，致力于普及IPv6' },
-    { name: 'keywords', content: 'ipv6,网站检测,ipv6检测,ipv6网站,ipv6访问检测' },
-    { property: 'og:title', content: 'IPv6网站检测 | 柠檬味ipw.cn' },
-    { property: 'og:description', content: 'IPv6网站检测 | 检查网站是否开启 IPv6 访问，致力于普及IPv6' },
+    { name: 'description', content: '专业的IPv6网站检测工具,全面检查网站是否支持IPv6访问,提供IPv4和IPv6双栈HTTP/HTTPS状态码、DNS解析时间、TCP连接时间、下载速度等详细对比数据,帮助网站管理员确认IPv6部署状态,提供IPv6徽标认证,推进IPv6规模部署和应用' },
+    { name: 'keywords', content: 'ipv6网站检测,ipv6访问检测,ipv6支持检查,ipv6双栈检测,ipv6 http检测,ipv6 https检测,ipv6网站认证,ipv6徽标,ipv6部署' },
+    { property: 'og:title', content: 'IPv6网站检测 - IPv6访问支持状态检查与认证' },
+    { property: 'og:description', content: '全面检测网站IPv6访问支持情况,提供详细性能对比与IPv6徽标认证' },
     { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
     { property: 'og:type', content: 'website' },
+  ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebApplication',
+        name: 'IPv6网站访问支持检测',
+        description: '专业的IPv6网站检测工具，检查网站是否支持IPv6访问，提供IPv4和IPv6双栈HTTP/HTTPS状态码、DNS解析时间、TCP连接时间等详细对比数据，提供IPv6徽标认证。',
+        url: config.siteUrl + 'ipv6webcheck',
+        applicationCategory: 'DeveloperApplication',
+        operatingSystem: 'Web',
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'CNY'
+        },
+        provider: {
+          '@type': 'Organization',
+          name: '柠檬味ipw.cn'
+        }
+      })
+    }
   ]
 });
 
@@ -121,7 +144,7 @@ onMounted(() => {
 <template>
   <div class="title">
     <header>
-      <h1>IPv6网站检测</h1>
+      <h1>IPv6网站访问支持检测</h1>
       <p>检查网站是否开启 IPv6 访问，致力于普及IPv6</p>
     </header>
   </div>
@@ -277,6 +300,7 @@ onMounted(() => {
       2. 网站所在服务器已开启 IPv6，但防火墙未对源地址是 IPv6 地址(::/0)的 443（HTTPS）端口开放访问<br/>
       3. 网站所在服务器已开启 IPv6，但未开启SSL证书，请参考 Nginx 开启 IPv6 SSL<br/>
     </blockquote>
+
   </div>
 </template>
 

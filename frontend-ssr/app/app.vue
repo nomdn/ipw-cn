@@ -4,6 +4,7 @@ import { useDark, useToggle } from '@vueuse/core';
 import { Moon, Sunny, Expand } from '@element-plus/icons-vue';
 import { config } from '../config/index';
 
+
 const isNarrow = ref(false);
 let mediaQueryList: MediaQueryList | null = null;
 const drawer = ref(false);
@@ -125,8 +126,10 @@ useHead({
       </el-menu-item>
     </el-sub-menu>
     <el-menu-item index="9">
+      <ClientOnly>
       <el-icon @click="toggleDark()" v-if="isDark" style="cursor: pointer;"><Moon style="height: 20px; width: 20px;"/></el-icon>
       <el-icon @click="toggleDark()" v-else style="cursor: pointer;"><Sunny style="height: 20px; width: 20px;"/></el-icon>
+      </ClientOnly>
     </el-menu-item>
 
 

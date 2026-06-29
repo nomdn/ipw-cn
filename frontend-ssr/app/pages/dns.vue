@@ -6,14 +6,37 @@ import { config } from '../../config/index';
 const route = useRoute()
 
 useHead({
-  title: 'DNS查询 | 柠檬味ipw.cn',
+  title: 'DNS查询工具 | 多节点域名解析检测 | 柠檬味ipw.cn',
   meta: [
-    { name: 'description', content: 'DNS查询 | 多节点 DNS 查询，检测域名解析记录' },
-    { name: 'keywords', content: 'dns,dns查询,dns解析,a记录,aaaa记录,cname记录,mx记录,ns记录' },
-    { property: 'og:title', content: 'DNS查询 | 柠檬味ipw.cn' },
-    { property: 'og:description', content: 'DNS查询 | 多节点 DNS 查询，检测域名解析记录' },
+    { name: 'description', content: '专业的多节点DNS查询工具,支持A记录、AAAA记录、CNAME记录、MX记录、NS记录、TXT记录、SRV记录、CAA记录等多种DNS解析记录查询,提供全国多节点并发检测,快速返回DNS解析结果,助力域名解析问题排查与优化' },
+    { name: 'keywords', content: 'dns查询,dns解析,域名解析,a记录查询,aaaa记录,cname记录,mx记录,ns记录,txt记录,srv记录,dns服务器,域名dns检测' },
+    { property: 'og:title', content: 'DNS查询工具 - 多节点域名解析记录检测' },
+    { property: 'og:description', content: '多节点DNS查询工具,支持多种DNS记录类型查询,快速检测域名解析状态' },
     { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
     { property: 'og:type', content: 'website' },
+  ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebApplication',
+        name: 'DNS查询与解析检测工具',
+        description: '专业的多节点DNS查询工具，支持A、AAAA、CNAME、MX、NS、TXT、SRV、CAA等多种记录类型，全国多节点并发检测。',
+        url: config.siteUrl + 'dns',
+        applicationCategory: 'DeveloperApplication',
+        operatingSystem: 'Web',
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'CNY'
+        },
+        provider: {
+          '@type': 'Organization',
+          name: '柠檬味ipw.cn'
+        }
+      })
+    }
   ]
 });
 
@@ -108,7 +131,7 @@ onMounted(() => {
 <template>
   <div class="title">
     <header>
-      <h1>DNS 查询</h1>
+      <h1>DNS查询</h1>
       <p>多节点 DNS 查询，检测域名解析记录</p>
     </header>
   </div>
@@ -157,7 +180,7 @@ onMounted(() => {
             <td class="table-value" style="text-align: center;">
               <template v-if="result && result.data?.record">
                 <div v-for="(ip, index) in result.data.record.slice(0, 5)" :key="index" class="ip-address">
-                  {{ ip }}
+                  <span class="quate">{{ ip }}</span>
                 </div>
               </template>
 
@@ -177,6 +200,25 @@ onMounted(() => {
         
         </table>
     </div>
+    <blockquote>
+        <span class="quate">A</span> 将域名指向一个 IPv4 地址，如 <span class="quate">106.55.75.123</span>。 A记录归属地是柠檬超绝大杂烩免费接口，随便用。<br/>
+
+        <span class="quate">AAAA</span> 将域名指向一个 IPv6 地址，如 <span class="quate">2402:4e00:1013:e500:0:9671:f018:4947</span>。同一个主机名可以同时解析到 IPv4(A记录)地址 和 IPv6(AAAA 记录)地址上，当只有IPv4 地址的用户会解析到 IPv4 地址，一般情况下有 IPv6 地址的用户会优先解析到 IPv6 地址。<br/>
+
+       <span class="quate">CNAME</span> 将域名指向另一个域名地址，与其保持相同解析，如 ipw.wsmdn.top 别名到 ipw.wsmdn.top.eo.dnse1.com.<br/>
+
+        <span class="quate">MX</span> 用于邮件服务器，一般由邮件注册商提供，如 mxbiz1.qq.com。如果邮箱格式为 test@wsmdn.top 则输入 wsmdn.top 查询。如果邮箱格式为 test@mail.wsmdn.top则输入mail.wsmdn.top查询。推荐2个免费的企业邮箱：腾讯企业邮、网易免费企业邮。<br/>
+
+        <span class="quate">TXT</span> 附加文本信息，常用于域名所有权验证，如在申请 HTTPS 证书时需要增加记录、<br/>
+
+        <span class="quate">PTR</span> IP 的反向解析记录，例如 159.75.190.197 反解析到 wsmdn.top，一般用于提升自建域名邮件服务器的可信度，可提单找云服务商添加。<br/>
+
+        <span class="quate">NS</span> 域名的 DNS 服务器地址，例如 ns3.dnsv2.com，推荐 华为云DNS.<br/>
+
+        网站开启IPv6检测 网站开启IPv6检测 | SSL证书在线检查<br/>
+
+        访客IP: 207.241.237.136，您的网络 IPv6 访问优先<br/>
+    </blockquote>
     </div>
 
 </template>
@@ -202,11 +244,9 @@ onMounted(() => {
   height: 50px !important;
   min-height: 50px !important;
   padding-top: 0 !important;
-  padding-bottom: 0 !important;
-  /* 保持原有的边框样式 */
-  box-shadow: 0 0 0 1px var(--el-border-color) inset !important;
-  border-radius: var(--el-border-radius-base) !important;
 }
+
+
 
 /* 让选中的文字垂直居中 */
 :deep(.el-select__selected-item) {

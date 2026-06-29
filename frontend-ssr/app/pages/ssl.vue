@@ -6,14 +6,37 @@ import { config } from '../../config/index';
 const route = useRoute()
 
 useHead({
-  title: 'SSL证书检查 | 柠檬味ipw.cn',
+  title: 'SSL证书检测工具 | IPv4/IPv6证书检查 | 柠檬味ipw.cn',
   meta: [
-    { name: 'description', content: 'SSL证书检查 | 检查网站是否开启 IPv4 和 IPv6 SSL 证书' },
-    { name: 'keywords', content: 'ssl,ssl检查,ssl证书,https,ipv6 ssl,ipv4 ssl' },
-    { property: 'og:title', content: 'SSL证书检查 | 柠檬味ipw.cn' },
-    { property: 'og:description', content: 'SSL证书检查 | 检查网站是否开启 IPv4 和 IPv6 SSL 证书' },
+    { name: 'description', content: '专业的SSL证书检测工具,全面检查网站的IPv4和IPv6 SSL证书状态、有效期、签发机构、HTTP版本等信息,支持HTTPS状态码检测、下载速度测试,帮助网站管理员及时发现证书问题,确保网站安全访问' },
+    { name: 'keywords', content: 'ssl证书检测,ssl检查,https证书,ipv6 ssl,ipv4 ssl,证书有效期,ssl状态,https检测,网站安全,证书签发机构' },
+    { property: 'og:title', content: 'SSL证书检测 - IPv4/IPv6双栈证书状态检查工具' },
+    { property: 'og:description', content: '全面检测网站SSL证书状态,支持IPv4和IPv6双栈检测,提供证书有效期、签发机构等详细信息' },
     { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
     { property: 'og:type', content: 'website' },
+  ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebApplication',
+        name: 'SSL证书检测工具',
+        description: '专业的SSL证书检测工具，支持IPv4和IPv6 SSL证书状态、有效期、签发机构、HTTP版本等检测，提供HTTPS状态码检测、下载速度测试。',
+        url: config.siteUrl + 'ssl',
+        applicationCategory: 'DeveloperApplication',
+        operatingSystem: 'Web',
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'CNY'
+        },
+        provider: {
+          '@type': 'Organization',
+          name: '柠檬味ipw.cn'
+        }
+      })
+    }
   ]
 });
 
@@ -125,7 +148,7 @@ onMounted(() => {
 <template>
   <div class="title">
     <header>
-      <h1>SSL 证书检查</h1>
+      <h1>SSL证书检测工具</h1>
       <p>检查网站是否开启 IPv4 和 IPv6 SSL 证书</p>
     </header>
   </div>
@@ -359,6 +382,7 @@ onMounted(() => {
       2. 网站所在服务器已开启 IPv6，但防火墙未对源地址是 IPv6 地址(::/0)的 443（HTTPS）端口开放访问<br/>
       3. 网站所在服务器已开启 IPv6，但未开启SSL证书，请参考 Nginx 开启 IPv6 SSL<br/>
     </blockquote>
+
   </div>
 
   

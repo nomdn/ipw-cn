@@ -57,15 +57,24 @@ blockquote p{
     color: #999999;
 }
 blockquote {
-  background: #f9f9f9;
-  border-left: 10px solid #ccc;
-  margin: 1.5em 10px;
-  padding: 0.5em 10px;
-  quotes: "\201C""\201D""\2018""\2019";
+    background: #f9f9f9;
+    border-left: 10px solid #ccc;
+    margin: 1.5em 10px;
+    padding: 0.5em 10px;
+    quotes: "\201C""\201D""\2018""\2019";
+        /* 设置字间距：让文字看起来更透气 */
+    letter-spacing: 0.5px; 
+    
+    /* 设置行间距：提升多行文本的阅读体验 */
+    line-height: 2; 
+    
+    /* (可选) 设置单词间距，针对英文内容 */
+    word-spacing: 1px; 
 }
 
 blockquote p {
-  display: inline;
+    display: inline;
+    margin: 0.5em;
 }
 a {
     color: #3EAF7C;
@@ -144,4 +153,10 @@ html.dark blockquote {
     background-color: inherit; /* 悬停时使用父元素的背景色 */
     color: inherit; /* 悬停时显示原色 */
     filter: blur(0); /* 悬停消除模糊效果 */
+}
+.quate{
+    background-color: #F3F4F5;
+    color: #4E6E8E;
+    border-radius: 5px;
+    padding: 3px ;
 }

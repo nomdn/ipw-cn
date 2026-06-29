@@ -2,18 +2,41 @@
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
-
+import { isIPv6 } from 'is-ip';
 const route = useRoute()
 
 useHead({
-  title: 'TCPing测试 | 柠檬味ipw.cn',
+  title: 'IPv6 TCPing测试工具 | IPv6服务器连通性检测 | 柠檬味ipw.cn',
   meta: [
-    { name: 'description', content: 'TCPing测试 | 多节点 TCPing 测试，检测服务器连通性和延迟' },
-    { name: 'keywords', content: 'tcping,tcp,tcp测试,延迟测试,连通性测试,服务器测试' },
-    { property: 'og:title', content: 'TCPing测试 | 柠檬味ipw.cn' },
-    { property: 'og:description', content: 'TCPing测试 | 多节点 TCPing 测试，检测服务器连通性和延迟' },
+    { name: 'description', content: '专业的IPv6 TCPing测试工具,提供多节点IPv6 TCP连通性检测服务,支持自定义端口测试,实时检测IPv6服务器丢包率、平均延迟、最大最小响应时间,助力IPv6网络质量诊断与优化,推进IPv6规模部署和应用' },
+    { name: 'keywords', content: 'ipv6 tcping测试,ipv6连通性检测,ipv6服务器延迟,ipv6丢包率,ipv6端口测试,ipv6网络质量,ipv6服务器测试,ipv6网络诊断' },
+    { property: 'og:title', content: 'IPv6 TCPing测试 - IPv6服务器连通性与延迟检测' },
+    { property: 'og:description', content: '多节点IPv6 TCPing测试,检测服务器连通性、丢包率与响应延迟' },
     { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
     { property: 'og:type', content: 'website' },
+  ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebApplication',
+        name: 'IPv6 TCPing连通性测试工具',
+        description: '专业的IPv6 TCPing测试工具，多节点检测IPv6服务器连通性和延迟，支持自定义端口测试，提供丢包率、平均延迟、最大最小响应时间等数据。',
+        url: config.siteUrl + 'ipv6tcping',
+        applicationCategory: 'DeveloperApplication',
+        operatingSystem: 'Web',
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'CNY'
+        },
+        provider: {
+          '@type': 'Organization',
+          name: '柠檬味ipw.cn'
+        }
+      })
+    }
   ]
 });
 
@@ -48,6 +71,7 @@ interface ServerResult {
 
 const tmpDomain = ref('www.zakoflare.com')
 const port = ref('80')
+const userIP = ref('')
 const loading = ref(false)
 const serverResults = ref<ServerResult[]>([])
 
@@ -133,8 +157,16 @@ function TCPingAll() {
     loading.value = false
   })
 }
-
+async function getUserIP(){
+  
+  await $fetch<string>(config.DualStackAPI).then(
+  function (data){
+    userIP.value = data
+  })
+  return userIP.value
+}
 onMounted(() => {
+  getUserIP()
   initServerResults()
   const urlParam = route.query.site as string
   if (urlParam) {
@@ -147,7 +179,7 @@ onMounted(() => {
 <template>
   <div class="title">
     <header>
-      <h1>TCPing 测试</h1>
+      <h1>IPv6 TCPing连通性测试工具</h1>
       <p>多节点 TCPing 测试，检测服务器连通性和延迟</p>
     </header>
   </div>
@@ -216,7 +248,24 @@ onMounted(() => {
           </template>
         </tbody>
       </table>
+
     </div>
+      <blockquote>
+        <a href="https://ipw-docs.wsmdn.top/user/ipv6_ping.html" target="_blank">IPv6 Ping 原理介绍</a><br/>
+        <strong>注意本页是TCPing，不是ICMPv6 Ping，下列文本仅供参考</strong><br/>
+        #1. 本地 IPv6 方式<br/>
+        Windows: ping -6 ipw.wsmdn.top<br/>
+
+        macOS 或 Linux: ping6 ipw.wsmdn.top<br/>
+
+        #2. 服务器 IPv6 Ping 失败可能原因：<br/>
+        服务器已开启 IPv6，但防火墙（又名安全组）未对源地址是 IPv6 地址(::/0)的 ICMPv6协议 开放访问，<br/>
+        服务器未开启 IPv6，请参考 服务器开启 IPv6<br/>
+        <a href="/tcping" target="_blank">IPv4 TCPing 测试</a> | <a href="/ipv6speedtest" target="_blank">IPv6 网站测速</a> | <a href="/ipv6webcheck">网站开启IPv6检测</a> | <a href="/dns">DNS解析查询</a> <br/>
+
+        访客IP: {{ userIP }}，您的网络{{ isIPv6(userIP) ? 'IPv6' : 'IPv4'}}访问优先
+      </blockquote>
+
   </div>
 </template>
 

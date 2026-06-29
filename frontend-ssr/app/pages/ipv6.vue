@@ -9,14 +9,37 @@ const route = useRoute();
 const loading = ref(false);
 
 useHead({
-  title: 'IPv6地址查询 | 柠檬味ipw.cn',
+  title: 'IPv6地址查询工具 | IP归属地定位 | 柠檬味ipw.cn',
   meta: [
-    { name: 'description', content: 'IP归属地查询 | 极简的IPv6地址查询工具，致力于普及 IPv6' },
-    { name: 'keywords', content: 'ipv6,ipv6查询,ipv6地址查询,ip归属地,ip地理位置' },
-    { property: 'og:title', content: 'IPv6地址查询 | 柠檬味ipw.cn' },
-    { property: 'og:description', content: 'IP归属地查询 | 极简的IPv6地址查询工具，致力于普及 IPv6' },
+    { name: 'description', content: '专业的IPv6地址查询工具,支持IPv4和IPv6地址归属地查询,提供BiliBili Live、GeoCN、IP2Region、Maxmind等多种数据源对比,精确定位IP地理位置、运营商信息,支持中国大陆及境外地址查询,助力IPv6普及与应用' },
+    { name: 'keywords', content: 'ipv6地址查询,ipv4地址查询,ip归属地,ip地理位置,ip定位,运营商查询,ipv6归属地,ipv4归属地,maxmind,ip2region,geocn' },
+    { property: 'og:title', content: 'IPv6/IPv4地址归属地查询工具 - 柠檬味ipw.cn' },
+    { property: 'og:description', content: '多数据源IP地址归属地查询,支持IPv4和IPv6,提供地理位置、运营商等详细信息' },
     { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
     { property: 'og:type', content: 'website' },
+  ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebApplication',
+        name: 'IPv6/IPv4地址归属地查询工具',
+        description: '专业的IPv6/IPv4地址归属地查询工具，支持BiliBili Live、GeoCN、IP2Region、Maxmind、纯真社区库等多数据源对比，精确定位IP地理位置、运营商信息。',
+        url: config.siteUrl + 'ipv6',
+        applicationCategory: 'DeveloperApplication',
+        operatingSystem: 'Web',
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'CNY'
+        },
+        provider: {
+          '@type': 'Organization',
+          name: '柠檬味ipw.cn'
+        }
+      })
+    }
   ]
 });
 interface IPLocationType {
@@ -107,7 +130,7 @@ onMounted(async () => {
 <template>
   <div class="title">
     <header>
-      <h1>IPv6地址查询</h1>
+      <h1>IPv6/IPv4地址归属地查询</h1>
       <p>极简的IPv6地址查询工具，致力于普及 IPv6</p>
     </header>
   </div>
@@ -190,6 +213,7 @@ onMounted(async () => {
     </blockquote>
 
     <div v-html="html"></div>
+
     </div>
 
 
@@ -216,6 +240,7 @@ onMounted(async () => {
   padding: 20px;
   border-radius: 10px;
 }
+
 
 </style>
 <style>
