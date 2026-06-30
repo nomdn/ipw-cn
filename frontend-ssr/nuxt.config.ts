@@ -49,4 +49,13 @@ export default defineNuxtConfig({
       siteUrl: config.siteUrl,
     },
   },
+  nitro: {
+    preset: 'cloudflare_pages',
+  },
+  content: {
+    database: {
+      type: 'd1',
+      bindingName: 'DB', // 跟 Cloudflare Dashboard 里设置的绑定名保持一致
+    },
+  },
 })
