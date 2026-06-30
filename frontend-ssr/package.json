@@ -18,7 +18,6 @@
     "@shikijs/markdown-it": "^4.3.0",
     "@vueuse/core": "^14.3.0",
     "@vueuse/nuxt": "^14.3.0",
-    "better-sqlite3": "^12.11.1",
     "element-plus": "^2.14.2",
     "is-ip": "^5.0.1",
     "markdown-it": "^14.2.0",
@@ -30,5 +29,4 @@
     "@types/markdown-it": "^14.1.2",
     "shiki": "^4.2.0"
   }
-  
 }
