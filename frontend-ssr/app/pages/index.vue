@@ -73,7 +73,7 @@ curl 6.wsmdn.dpdns.org
 # 测试网络是 IPv4 还是 IPv6 访问优先
 # (访问 IPv4/IPv6 双栈站点，如果返回 IPv6 地址，则 IPv6 访问优先)
 curl test.wsmdn.dpdns.org
-`;
+`.trim(); // 关键：去掉首尾多余的空行
 const highlightedCode = ref('');
 
 const ipAddress = ref('');
@@ -138,7 +138,7 @@ function isIPv4(ip: string): boolean {
     </blockquote>
 
     <div v-if="highlightedCode" v-html="highlightedCode" class="code-block"></div>
-    <pre v-else class="code-block code-block--fallback">{{ code }}</pre>
+    <div v-else class="code-block code-block--fallback">{{ code }}</div>
   </div>
 
 </template>

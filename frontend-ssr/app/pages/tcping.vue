@@ -170,7 +170,7 @@ onMounted(() => {
 <template>
   <div class="title">
     <header>
-      <h1>IPv4 TCPing连通性测试工具</h1>
+      <h1>IPv4 TCPing 测试</h1>
       <p>多节点 TCPing 测试，检测服务器连通性和延迟</p>
     </header>
   </div>

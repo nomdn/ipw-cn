@@ -148,7 +148,7 @@ onMounted(() => {
 <template>
   <div class="title">
     <header>
-      <h1>IPv4网站性能测速工具</h1>
+      <h1>IPv4 网站测速</h1>
       <p>全国并发测速，1s 内快速返回测速结果</p>
     </header>
   </div>

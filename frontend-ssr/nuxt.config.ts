@@ -3,7 +3,7 @@ import {config} from "./config/index";
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
-  modules: ['@element-plus/nuxt', '@nuxtjs/sitemap', '@nuxtjs/robots', '@vueuse/nuxt'],
+  modules: ['@element-plus/nuxt', '@nuxtjs/sitemap', '@nuxtjs/robots', '@vueuse/nuxt', '@nuxt/content'],
   vite: {
     optimizeDeps: {
       include: [
@@ -42,5 +42,11 @@ export default defineNuxtConfig({
         { rel: 'icon', type: 'image/x-icon', href: '/favicon.svg' }
       ]
     }
-  }
+  },
+  runtimeConfig: {
+    indexnowKey: '',
+    public: {
+      siteUrl: config.siteUrl,
+    },
+  },
 })

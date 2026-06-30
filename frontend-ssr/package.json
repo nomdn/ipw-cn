@@ -12,17 +12,22 @@
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
     "@element-plus/nuxt": "^1.1.5",
+    "@nuxt/content": "3.14.0",
     "@nuxtjs/robots": "^6.1.1",
     "@nuxtjs/sitemap": "^8.2.1",
+    "@shikijs/markdown-it": "^4.3.0",
     "@vueuse/core": "^14.3.0",
     "@vueuse/nuxt": "^14.3.0",
+    "better-sqlite3": "^12.11.1",
     "element-plus": "^2.14.2",
     "is-ip": "^5.0.1",
+    "markdown-it": "^14.2.0",
     "nuxt": "^4.4.8",
     "vue": "^3.5.35",
     "vue-router": "^5.1.0"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
     "shiki": "^4.2.0"
   }
 }

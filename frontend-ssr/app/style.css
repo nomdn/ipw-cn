@@ -76,6 +76,12 @@ blockquote p {
     display: inline;
     margin: 0.5em;
 }
+blockquote a{
+    color: #3EAF7C;
+    font-size: 1em;
+    text-decoration: none
+
+}
 a {
     color: #3EAF7C;
     font-size: 1.3em;
@@ -159,4 +165,8 @@ html.dark blockquote {
     color: #4E6E8E;
     border-radius: 5px;
     padding: 3px ;
+}
+html.dark .quate{
+    background-color: #2b313a;
+    color: #8e9eb0;
 }

@@ -148,7 +148,7 @@ onMounted(() => {
 <template>
   <div class="title">
     <header>
-      <h1>SSL证书检测工具</h1>
+      <h1>SSL证书检查</h1>
       <p>检查网站是否开启 IPv4 和 IPv6 SSL 证书</p>
     </header>
   </div>
@@ -378,9 +378,9 @@ onMounted(() => {
     <blockquote>
       网站不支持 IPv6 SSL 可能原因：<br/>
       <br/>
-      1. 网站所在服务器未开启 IPv6，请参考 网站开启 IPv6 的三种方式<br/>
-      2. 网站所在服务器已开启 IPv6，但防火墙未对源地址是 IPv6 地址(::/0)的 443（HTTPS）端口开放访问<br/>
-      3. 网站所在服务器已开启 IPv6，但未开启SSL证书，请参考 Nginx 开启 IPv6 SSL<br/>
+      1. 网站所在服务器未开启 IPv6，请参考 <a href="https://ipw-docs.wsmdn.top/server/website_enable_ipv6.html" target="_blank">网站开启 IPv6 的三种方式</a><br/>
+      2. 网站所在服务器已开启 IPv6，但防火墙未对源地址是 IPv6 地址(::/0)的 443（HTTPS）<a href="https://ipw-docs.wsmdn.top/server/website_enable_ipv6.html" target="_blank">端口开放访问</a><br/>
+      3. 网站所在服务器已开启 IPv6，但未开启SSL证书，请参考 <a href="https://ipw-docs.wsmdn.top/server/nginx_ipv6.html" target="_blank">Nginx 开启 IPv6 SSL</a><br/>
     </blockquote>
 
   </div>

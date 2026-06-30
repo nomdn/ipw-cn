@@ -179,7 +179,7 @@ onMounted(() => {
 <template>
   <div class="title">
     <header>
-      <h1>IPv6 TCPing连通性测试工具</h1>
+      <h1>IPv6 Ping 测试</h1>
       <p>多节点 TCPing 测试，检测服务器连通性和延迟</p>
     </header>
   </div>
@@ -253,12 +253,11 @@ onMounted(() => {
       <blockquote>
         <a href="https://ipw-docs.wsmdn.top/user/ipv6_ping.html" target="_blank">IPv6 Ping 原理介绍</a><br/>
         <strong>注意本页是TCPing，不是ICMPv6 Ping，下列文本仅供参考</strong><br/>
-        #1. 本地 IPv6 方式<br/>
+        <strong>1. 本地 IPv6 方式</strong><br/>
         Windows: ping -6 ipw.wsmdn.top<br/>
 
         macOS 或 Linux: ping6 ipw.wsmdn.top<br/>
-
-        #2. 服务器 IPv6 Ping 失败可能原因：<br/>
+        <strong>2. 服务器 IPv6 Ping 失败可能原因：</strong><br/>
         服务器已开启 IPv6，但防火墙（又名安全组）未对源地址是 IPv6 地址(::/0)的 ICMPv6协议 开放访问，<br/>
         服务器未开启 IPv6，请参考 服务器开启 IPv6<br/>
         <a href="/tcping" target="_blank">IPv4 TCPing 测试</a> | <a href="/ipv6speedtest" target="_blank">IPv6 网站测速</a> | <a href="/ipv6webcheck">网站开启IPv6检测</a> | <a href="/dns">DNS解析查询</a> <br/>

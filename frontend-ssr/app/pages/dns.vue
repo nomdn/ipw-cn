@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
-
+import { isIPv6 } from 'is-ip';
 const route = useRoute()
 
 useHead({
@@ -47,6 +47,16 @@ const loading = ref(false)
 const results = ref<any>([])
 const isloading = ref(false)
 const nowRecordType = ref('')
+const userIP = ref('')
+
+async function getUserIP(){
+  
+  await $fetch<string>(config.DualStackAPI).then(
+  function (data){
+    userIP.value = data
+  })
+  return userIP.value
+}
 
 function formatTime(ms: number): string {
   if (ms == null) return '-'
@@ -81,6 +91,8 @@ async function queryDNS() {
   isloading.value = true
   domain.value = tmpDomain.value
   await nextTick()
+  
+  // 初始化结果数组，保持响应式结构
   results.value = dnsServerFetches.map(fetch => ({
     server: fetch.label,
     loading: true,
@@ -88,14 +100,31 @@ async function queryDNS() {
     error: null
   }));
 
-  const promises = dnsServerFetches.map(async (fetch) => {
+  const promises = dnsServerFetches.map(async (fetch, index) => {
     try {
       await fetch.execute();
+      
+      //  直接更新对应索引的结果，保持响应式
+      results.value[index] = {
+        server: fetch.label,
+        loading: false,
+        data: fetch.data.value,
+        error: null
+      };
+      
       return {
         server: fetch.label,
         data: fetch.data.value
       };
     } catch (err) {
+      //  错误时也更新对应索引
+      results.value[index] = {
+        server: fetch.label,
+        loading: false,
+        data: null,
+        error: err
+      };
+      
       return {
         server: fetch.label,
         error: err
@@ -105,7 +134,6 @@ async function queryDNS() {
 
   const promiseResults = await Promise.all(promises)
   console.log(promiseResults)
-  results.value = promiseResults
   isloading.value = false
   nowRecordType.value = recordType.value
   return promiseResults
@@ -125,7 +153,11 @@ onMounted(() => {
   if (domainParam) {
     queryDNS()
   }
+  getUserIP()
 })
+const { data: page } = await useAsyncData('dns', () =>
+  queryCollection('content').path('/dns').first()
+);
 </script>
 
 <template>
@@ -180,7 +212,7 @@ onMounted(() => {
             <td class="table-value" style="text-align: center;">
               <template v-if="result && result.data?.record">
                 <div v-for="(ip, index) in result.data.record.slice(0, 5)" :key="index" class="ip-address">
-                  <span class="quate">{{ ip }}</span>
+                  <span>{{ ip }}</span>
                 </div>
               </template>
 
@@ -205,20 +237,23 @@ onMounted(() => {
 
         <span class="quate">AAAA</span> 将域名指向一个 IPv6 地址，如 <span class="quate">2402:4e00:1013:e500:0:9671:f018:4947</span>。同一个主机名可以同时解析到 IPv4(A记录)地址 和 IPv6(AAAA 记录)地址上，当只有IPv4 地址的用户会解析到 IPv4 地址，一般情况下有 IPv6 地址的用户会优先解析到 IPv6 地址。<br/>
 
-       <span class="quate">CNAME</span> 将域名指向另一个域名地址，与其保持相同解析，如 ipw.wsmdn.top 别名到 ipw.wsmdn.top.eo.dnse1.com.<br/>
+       <span class="quate">CNAME</span> 将域名指向另一个域名地址，与其保持相同解析，如 <span class="quate">ipw.wsmdn.top</span> 别名到 <span class="quate">ipw.wsmdn.top.eo.dnse1.com</span>.<br/>
 
-        <span class="quate">MX</span> 用于邮件服务器，一般由邮件注册商提供，如 mxbiz1.qq.com。如果邮箱格式为 test@wsmdn.top 则输入 wsmdn.top 查询。如果邮箱格式为 test@mail.wsmdn.top则输入mail.wsmdn.top查询。推荐2个免费的企业邮箱：腾讯企业邮、网易免费企业邮。<br/>
+        <span class="quate">MX</span> 用于邮件服务器，一般由邮件注册商提供，如 <span class="quate">mxbiz1.qq.com</span>。如果邮箱格式为 test@<span class="quate">wsmdn.top</span> 则输入 <span class="quate">wsmdn.top</span> 查询。如果邮箱格式为 test@<span class="quate">mail.wsmdn.top</span>则输入<span class="quate">mail.wsmdn.top</span>查询。推荐2个免费的企业邮箱：腾讯企业邮、网易免费企业邮。<br/>
 
         <span class="quate">TXT</span> 附加文本信息，常用于域名所有权验证，如在申请 HTTPS 证书时需要增加记录、<br/>
 
-        <span class="quate">PTR</span> IP 的反向解析记录，例如 159.75.190.197 反解析到 wsmdn.top，一般用于提升自建域名邮件服务器的可信度，可提单找云服务商添加。<br/>
+        <span class="quate">PTR</span> IP 的反向解析记录，例如 <span class="quate">159.75.190.197</span> 反解析到 <span class="quate">wsmdn.top</span>，一般用于提升自建域名邮件服务器的可信度，可提单找云服务商添加。<br/>
 
-        <span class="quate">NS</span> 域名的 DNS 服务器地址，例如 ns3.dnsv2.com，推荐 华为云DNS.<br/>
+        <span class="quate">NS</span> 域名的 DNS 服务器地址，例如 <span class="quate">ns3.dnsv2.com</span>，推荐 华为云DNS.<br/>
 
         网站开启IPv6检测 网站开启IPv6检测 | SSL证书在线检查<br/>
 
-        访客IP: 207.241.237.136，您的网络 IPv6 访问优先<br/>
+        访客IP: {{userIP }}，您的网络 {{ isIPv6(userIP) ? 'IPv6' : 'IPv4'}} 访问优先<br/>
     </blockquote>
+    <div class="markdown">
+    <ContentRenderer v-if="page" :value="page" />
+    </div>
     </div>
 
 </template>
@@ -226,6 +261,11 @@ onMounted(() => {
 <style scoped>
 @import "../style.css";
 
+.markdown :deep(a) {
+    color: #3EAF7C !important;
+    font-size: 1.3em;
+    text-decoration: none
+}
 .el-input {
   width: 420px;
   height: 50px;

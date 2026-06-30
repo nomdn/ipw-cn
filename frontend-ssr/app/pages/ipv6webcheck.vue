@@ -144,7 +144,7 @@ onMounted(() => {
 <template>
   <div class="title">
     <header>
-      <h1>IPv6网站访问支持检测</h1>
+      <h1>IPv6网站检测</h1>
       <p>检查网站是否开启 IPv6 访问，致力于普及IPv6</p>
     </header>
   </div>
