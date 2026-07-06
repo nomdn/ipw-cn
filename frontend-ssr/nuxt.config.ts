@@ -8,6 +8,9 @@ export default defineNuxtConfig({
     optimizeDeps: {
       include: [
         'dayjs/plugin/*.js',
+        'dayjs',
+        'lodash-unified',
+        'shiki',
       ]
     }
   },
