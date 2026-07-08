@@ -66,15 +66,6 @@ nitro: {
     cloudflare: {
       deployConfig: true,
 
-      wrangler: {
-        d1_databases: [
-          {
-            binding: 'DB',
-            database_name: 'ipw-frontend-db',
-            database_id: 'dbf97f77-d8ef-4b21-af70-a2fe79bf53ca'
-          }
-        ]
-      },
 
       nodeCompat: true
     },

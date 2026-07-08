@@ -57,6 +57,9 @@ func QueryA(domain string) (DNSResult, error) {
 			}
 		}
 	}
+	if result.Record == nil {
+		result.Record = []string{}
+	}
 	return result, nil
 }
 
@@ -89,6 +92,9 @@ func ResolveAAAARecord(domain string) (DNSResult, error) {
 				result.TTL = aRecord.Header().Ttl
 			}
 		}
+	}
+	if result.Record == nil {
+		result.Record = []string{}
 	}
 	return result, nil
 }
@@ -125,6 +131,9 @@ func ResolveTXTRecord(domain string) (DNSResult, error) {
 			}
 		}
 	}
+	if result.Record == nil {
+		result.Record = []string{}
+	}
 	return result, nil
 }
 
@@ -157,6 +166,9 @@ func ResolveNSRecord(domain string) (DNSResult, error) {
 				result.TTL = aRecord.Header().Ttl
 			}
 		}
+	}
+	if result.Record == nil {
+		result.Record = []string{}
 	}
 	return result, nil
 }
@@ -191,6 +203,9 @@ func ResolveCNAMERecord(domain string) (DNSResult, error) {
 			}
 		}
 	}
+	if result.Record == nil {
+		result.Record = []string{}
+	}
 	return result, nil
 }
 
@@ -224,6 +239,9 @@ func ResolveMXRecord(domain string) (DNSResult, error) {
 			}
 		}
 	}
+	if result.Record == nil {
+		result.Record = []string{}
+	}
 	return result, nil
 }
 
@@ -256,6 +274,9 @@ func ResolveSRVRecord(domain string) (DNSResult, error) {
 				result.TTL = srvRecord.Header().Ttl
 			}
 		}
+	}
+	if result.Record == nil {
+		result.Record = []string{}
 	}
 	return result, nil
 }
@@ -297,6 +318,9 @@ func ResolvePTRRecord(ip string) (DNSResult, error) {
 			}
 		}
 	}
+	if result.Record == nil {
+		result.Record = []string{}
+	}
 	return result, nil
 }
 
@@ -329,6 +353,9 @@ func ResolveCAARecord(domain string) (DNSResult, error) {
 				result.TTL = caaRecord.Header().Ttl
 			}
 		}
+	}
+	if result.Record == nil {
+		result.Record = []string{}
 	}
 	return result, nil
 }
