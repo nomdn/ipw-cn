@@ -6,8 +6,10 @@
     "build": "nuxt build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
-    "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "preview": "pnpm run build && wrangler dev",
+    "postinstall": "nuxt prepare",
+    "deploy": "pnpm run build && wrangler deploy",
+    "cf-typegen": "wrangler types"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
@@ -23,13 +25,15 @@
     "is-ip": "^5.0.1",
     "markdown-it": "^14.2.0",
     "nuxt": "^4.4.8",
+    "nuxt-security": "2.6.0",
     "vue": "^3.5.35",
-    "vue-router": "^5.1.0",
-    "wrangler": "^4.107.0"
+    "vue-router": "^5.1.0"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
-    "shiki": "^4.2.0"
+    "nitro-cloudflare-dev": "^0.2.2",
+    "shiki": "^4.2.0",
+    "wrangler": "^4.107.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

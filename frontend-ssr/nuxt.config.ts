@@ -1,9 +1,18 @@
 import {config} from "./config/index";
 // https://nuxt.com/docs/api/configuration/nuxt-config
+const extractDomains = (obj: any): string[] => {
+  // 将对象转为 JSON 字符串，用正则匹配所有 https:// 开头的域名部分
+  const urls = JSON.stringify(obj).match(/https?:\/\/[^"\/\\\s]+/g) || [];
+  // 提取域名 (Origin) 并去重
+  const domains = [...new Set(urls.map(url => new URL(url).origin))];
+  return domains;
+};
+
+const allowedDomains = extractDomains(config);
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
-  modules: ['@element-plus/nuxt', '@nuxtjs/sitemap', '@nuxtjs/robots', '@vueuse/nuxt', '@nuxt/content'],
+  modules: ["nitro-cloudflare-dev",'@element-plus/nuxt', '@nuxtjs/sitemap', '@nuxtjs/robots', '@vueuse/nuxt', '@nuxt/content',"nuxt-security"],
   vite: {
     optimizeDeps: {
       include: [
@@ -52,13 +61,44 @@ export default defineNuxtConfig({
       siteUrl: config.siteUrl,
     },
   },
-  nitro: {
-    preset: 'cloudflare_module',
-  },
-  content: {
-    database: {
-      type: 'd1',
-      bindingName: 'DB', // 跟 Cloudflare Dashboard 里设置的绑定名保持一致
+nitro: {
+    preset: "cloudflare_module",
+    cloudflare: {
+      deployConfig: true,
+
+      wrangler: {
+        d1_databases: [
+          {
+            binding: 'DB',
+            database_name: 'ipw-frontend-db',
+            database_id: 'dbf97f77-d8ef-4b21-af70-a2fe79bf53ca'
+          }
+        ]
+      },
+
+      nodeCompat: true
     },
   },
+  security: {
+    headers: {
+      contentSecurityPolicy: {
+
+        'script-src': [
+          "'self'",
+          "'strict-dynamic'",
+          "'nonce-{{nonce}}'",
+          ...allowedDomains // 允许 Umami 发送数据
+        ],
+        
+        'connect-src': [
+          "'self'",
+          ...allowedDomains,// 允许 Umami 发送数据
+        ],
+        
+        'style-src': ["'self'", 'https:', "'unsafe-inline'"],
+        'font-src': ["'self'", 'https:', 'data:'],
+      }
+    }
+  }
+  
 })

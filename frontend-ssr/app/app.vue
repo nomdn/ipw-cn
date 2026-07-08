@@ -20,7 +20,12 @@ function Announcement() {
     dangerouslyUseHTMLString: true,
   });
 }
-
+function cleanChineseCharacters(input: string): string {
+  // 使用正则表达式匹配中文字符
+  const chineseRegex = /[\u4e00-\u9fa5]/g;
+  // 将中文字符替换为空字符串
+  return input.replace(chineseRegex, '');
+}
 onMounted(() => {
   mediaQueryList = window.matchMedia('(max-width: 768px)');
   isNarrow.value = mediaQueryList.matches;
@@ -41,7 +46,7 @@ useHead({
   script: [
     {
       defer: true,
-      src: config.umamiSrc,
+      src: config.umamiScriptUrl,
       'data-website-id': config.umamiWebsiteId,
     },
   ],
@@ -145,7 +150,15 @@ useHead({
       Copyright © nomdn & IP 查询 2026  | <img src="/ipv6-s1.svg" alt="IPv6 相关标识"/> | <img src="/ssl-s1.svg" alt="SSL 相关标识"/> | All right reserved
     </div>
     <div class="one-line">
-      <a href="https://beian.miit.gov.cn/" target="_blank">苏ICP备2026012471号</a>&nbsp;|&nbsp;<a href="https://www.china-ipv6.cn/">国家IPv6发展监测平台</a>&nbsp;|&nbsp;请遵守中国法律法规&nbsp;|&nbsp;<a href="https://github.com/nomdn/ipw-cn">Github</a>&nbsp;|&nbsp;<a href="https://qm.qq.com/q/E1CGjkqgG6" target="_blank">QQ用户交流群</a>
+      <a v-if="config.ICP" href="https://beian.miit.gov.cn/" target="_blank">{{ config.ICP }}</a>
+      <span v-if="config.ICP">&nbsp;|&nbsp;</span>
+      <el-image v-if="config.GongAn" style="height: 1em; width: 1em;" src="/备案图标.png" />
+      <a :href="'https://beian.mps.gov.cn/#/query/webSearch?code=' + cleanChineseCharacters(config.GongAn)"  rel="noreferrer" target="_blank">{{ config.GongAn }}</a>
+      <span v-if="config.GongAn">&nbsp;|&nbsp;</span>
+      <a href="https://www.china-ipv6.cn/">国家IPv6发展监测平台</a>
+      &nbsp;|&nbsp;请遵守中国法律法规&nbsp;|&nbsp;
+      <a href="https://github.com/nomdn/ipw-cn">Github</a>&nbsp;|&nbsp;
+      <a href="https://qm.qq.com/q/E1CGjkqgG6" target="_blank">QQ用户交流群</a>
    </div>
    <div class="one-line">
       致力于普及IPv6，推进IPv6规模部署和应用，以全面推进IPv6技术创新与融合应用为主线，以提升应用广度深度为主攻方向
