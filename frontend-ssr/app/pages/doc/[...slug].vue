@@ -4,7 +4,7 @@ import { getDocMeta } from '../../../config/doc'
 const route = useRoute();
 
 const path = computed(() => route.path)
-const { data: page } = await useFetch(() => `/api/markdown/${path.value}`)
+const { data: page } = await useFetch(() => `/api/markdown${path.value}`)
 const activeIndex = computed(() => route.path)
 
 const meta = computed(() => getDocMeta(route.path))
@@ -23,7 +23,7 @@ useHead({
         router
     >
             <!-- 1. 独立菜单项 -->
-            <el-menu-item index="/doc/usage_docs">
+            <el-menu-item index="/doc">
             <span>IPv6 工具箱使用文档</span>
             </el-menu-item>
 

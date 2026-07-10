@@ -1,10 +1,7 @@
 ﻿# <span style="background-color: #b95442;color: white;font-size: 0.43em;border-radius: 5px;padding: 2px 5px;">转载</span> 如何确认一个网站是否开启 IPv6
 
--   [1 域名解析到 IPv6地址](#_1-域名解析到-ipv6地址)
--   [2 通过 IPv6 网络是否可以访问成功](#_2-通过-ipv6-网络是否可以访问成功)
--   [IPv6工具箱 小程序 和 iOS App](#ipv6工具箱-小程序-和-ios-app)
-    -   [小程序](#小程序)
-    -   [苹果 iOS App](#苹果-ios-app)
+-   [1 域名解析到 IPv6地址](#1-域名解析到-ipv6地址)
+-   [2 通过 IPv6 网络是否可以访问成功](#2-通过-ipv6-网络是否可以访问成功)
 
 在 [腾讯云 cvm 开启 IPv6](/server/tencent_cloud_cvm_ipv6) 中我们介绍了服务器如何开启 IPv6，接下来我们介绍下如何检查一个网站是否开启 IPv6。
 

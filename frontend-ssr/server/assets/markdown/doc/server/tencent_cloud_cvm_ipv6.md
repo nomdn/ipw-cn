@@ -1,13 +1,13 @@
 ﻿# <span style="background-color: #b95442;color: white;font-size: 0.43em;border-radius: 5px;padding: 2px 5px;">转载</span> 腾讯云 cvm 开启 IPv6
 
 -   [前置条件](#%E5%89%8D%E7%BD%AE%E6%9D%A1%E4%BB%B6)
--   [1 为 VPC 分配 IPv6 CIDR](#_1-%E4%B8%BA-vpc-%E5%88%86%E9%85%8D-ipv6-cidr)
--   [2 为子网分配 IPv6 CIDR](#_2-%E4%B8%BA%E5%AD%90%E7%BD%91%E5%88%86%E9%85%8D-ipv6-cidr)
--   [3 CVM 配置 IPv6 地址](#_3-cvm-%E9%85%8D%E7%BD%AE-ipv6-%E5%9C%B0%E5%9D%80)
--   [4 为云服务器的 IPv6 地址开通公网](#_4-%E4%B8%BA%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%9A%84-ipv6-%E5%9C%B0%E5%9D%80%E5%BC%80%E9%80%9A%E5%85%AC%E7%BD%91)
--   [5 配置 CVM 操作系统的 IPv6](#_5-%E9%85%8D%E7%BD%AE-cvm-%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%E7%9A%84-ipv6)
--   [6 配置 IPv6 的安全组规则](#_6-%E9%85%8D%E7%BD%AE-ipv6-%E7%9A%84%E5%AE%89%E5%85%A8%E7%BB%84%E8%A7%84%E5%88%99)
--   [7 测试连通性](#_7-%E6%B5%8B%E8%AF%95%E8%BF%9E%E9%80%9A%E6%80%A7)
+-   [1 为 VPC 分配 IPv6 CIDR](#1-%E4%B8%BA-vpc-%E5%88%86%E9%85%8D-ipv6-cidr)
+-   [2 为子网分配 IPv6 CIDR](#2-%E4%B8%BA%E5%AD%90%E7%BD%91%E5%88%86%E9%85%8D-ipv6-cidr)
+-   [3 CVM 配置 IPv6 地址](#3-cvm-%E9%85%8D%E7%BD%AE-ipv6-%E5%9C%B0%E5%9D%80)
+-   [4 为云服务器的 IPv6 地址开通公网](#4-%E4%B8%BA%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%9A%84-ipv6-%E5%9C%B0%E5%9D%80%E5%BC%80%E9%80%9A%E5%85%AC%E7%BD%91)
+-   [5 配置 CVM 操作系统的 IPv6](#5-%E9%85%8D%E7%BD%AE-cvm-%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%E7%9A%84-ipv6)
+-   [6 配置 IPv6 的安全组规则](#6-%E9%85%8D%E7%BD%AE-ipv6-%E7%9A%84%E5%AE%89%E5%85%A8%E7%BB%84%E8%A7%84%E5%88%99)
+-   [7 测试连通性](#7-%E6%B5%8B%E8%AF%95%E8%BF%9E%E9%80%9A%E6%80%A7)
 -   [reference](#reference)
 
 一文看懂在腾讯云 CVM上开启 IPv6，只需 7 步。

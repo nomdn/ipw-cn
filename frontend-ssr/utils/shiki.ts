@@ -1,4 +1,6 @@
 import { createHighlighter } from 'shiki'
+import { createJavaScriptRegexEngine } from '@shikijs/engine-javascript'
+const jsEngine = createJavaScriptRegexEngine()
 export const highlighter = await createHighlighter({
   themes: [
     'github-light',
@@ -25,7 +27,8 @@ export const highlighter = await createHighlighter({
   'go',
   'cpp',
   'python'
-]
+],
+  engine: jsEngine
 })
 export async function highlightCode(code: string, lang: string) {
   try {

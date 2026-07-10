@@ -18,7 +18,7 @@
     "@nuxtjs/robots": "^6.1.1",
     "@nuxtjs/sitemap": "^8.2.1",
     "@nuxtjs/tailwindcss": "6.14.0",
-    "@shikijs/markdown-it": "^4.3.0",
+    "@shikijs/engine-javascript": "^4.3.1",
     "@sindresorhus/slugify": "^3.0.0",
     "@tailwindcss/vite": "^4.3.2",
     "@vueuse/core": "^14.3.0",
@@ -36,6 +36,7 @@
     "vue-router": "^5.1.0"
   },
   "devDependencies": {
+    "@shikijs/markdown-it": "^4.3.0",
     "@types/markdown-it": "^14.1.2",
     "nitro-cloudflare-dev": "^0.2.2",
     "shiki": "^4.2.0",

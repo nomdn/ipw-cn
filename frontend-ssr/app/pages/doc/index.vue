@@ -24,7 +24,7 @@ useHead({
         router
     >
             <!-- 1. 独立菜单项 -->
-            <el-menu-item index="/doc/usage_docs">
+            <el-menu-item index="/doc">
             <span>IPv6 工具箱使用文档</span>
             </el-menu-item>
 

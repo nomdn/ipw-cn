@@ -1,7 +1,7 @@
 # <span style="background-color: #b95442;color: white;font-size: 0.43em;border-radius: 5px;padding: 2px 5px;">转载</span> IPv6 Ping 检测原理
 
--   [1\. IPv6 Ping 地址抓包分析](#_1-ipv6-ping-%E5%9C%B0%E5%9D%80%E6%8A%93%E5%8C%85%E5%88%86%E6%9E%90)
--   [2\. 了解ICMPv6 报文格式](#_2-%E4%BA%86%E8%A7%A3icmpv6-%E6%8A%A5%E6%96%87%E6%A0%BC%E5%BC%8F)
+-   [1\. IPv6 Ping 地址抓包分析](#1-ipv6-ping-%E5%9C%B0%E5%9D%80%E6%8A%93%E5%8C%85%E5%88%86%E6%9E%90)
+-   [2\. 了解ICMPv6 报文格式](#2-%E4%BA%86%E8%A7%A3icmpv6-%E6%8A%A5%E6%96%87%E6%A0%BC%E5%BC%8F)
 
 ## 1\. IPv6 Ping 地址抓包分析
 

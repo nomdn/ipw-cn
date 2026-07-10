@@ -26,9 +26,9 @@ importers:
       '@nuxtjs/tailwindcss':
         specifier: 6.14.0
         version: 6.14.0(magicast@0.5.3)(yaml@2.9.0)
-      '@shikijs/markdown-it':
-        specifier: ^4.3.0
-        version: 4.3.0
+      '@shikijs/engine-javascript':
+        specifier: ^4.3.1
+        version: 4.3.1
       '@sindresorhus/slugify':
         specifier: ^3.0.0
         version: 3.0.0
@@ -75,6 +75,9 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(@vue/compiler-sfc@3.5.38)(vite@7.3.5(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(yaml@2.9.0))(vue@3.5.38(typescript@6.0.3))
     devDependencies:
+      '@shikijs/markdown-it':
+        specifier: ^4.3.0
+        version: 4.3.0
       '@types/markdown-it':
         specifier: ^14.1.2
         version: 14.1.2
@@ -1872,6 +1875,10 @@ packages:
     resolution: {integrity: sha512-hTv/KiFf2tpiqlACPiztGGurEARWIutB8YUhcrA1pUC7VzzwKO+g5crUocrLztrZ5ro5Z4hbXg7bYclETn3gSQ==}
     engines: {node: '>=20'}
 
+  '@shikijs/engine-javascript@4.3.1':
+    resolution: {integrity: sha512-JBItcnPuYq7jVJdZo/vMj94r+szT7XEjHFX+mvFDGSEIbVAXAGyHAHzhbWzpGOwYidCZrErJLLgn2PVeiokHnQ==}
+    engines: {node: '>=20'}
+
   '@shikijs/engine-oniguruma@4.2.0':
     resolution: {integrity: sha512-hTorK1dffPkpbMUk6Z+828PgRo7d07HbnizoP0hNPFjhxMHctj0Px/qoHeGMYafc6ju+u9iMldN4JbVzNQM++g==}
     engines: {node: '>=20'}
@@ -1923,6 +1930,10 @@ packages:
 
   '@shikijs/types@4.3.0':
     resolution: {integrity: sha512-oc8b9U2SYvofKZk8e/737nIX0qwf6eV2vHFATeObAu7r+mUVpLs8Re0BmVkIjAWAYgkmG/CzLNo7rzuBzRu/wQ==}
+    engines: {node: '>=20'}
+
+  '@shikijs/types@4.3.1':
+    resolution: {integrity: sha512-CHFxE0jztBIZRHH6gxXE7DXUCFXjReEGxZ/j0rfSLGKZuwp2xBYycEP14875DSa9KLL/6700oxIq6oO6ef9K2g==}
     engines: {node: '>=20'}
 
   '@shikijs/vscode-textmate@10.0.2':
@@ -2317,6 +2328,9 @@ packages:
 
   '@types/hast@3.0.4':
     resolution: {integrity: sha512-WPs+bbQw5aCj+x6laNGWLH3wviHtoCv/P3+otBhbOhJgG8qtpdAMlTCxLtsTWA7LH1Oh/bFCHsBn0TPS5m30EQ==}
+
+  '@types/hast@3.0.5':
+    resolution: {integrity: sha512-rp/ezSWaD1m44dPKICGhiskI13nVr7qTloFwDa/IYkhhf5nzwP+zIQcIJh3WIFSBOy/H1PzB40jPjMDksN4F+g==}
 
   '@types/jsesc@2.5.1':
     resolution: {integrity: sha512-9VN+6yxLOPLOav+7PwjZbxiID2bVaeq0ED4qSQmdQTdjnXJSaCVKTR58t15oqH1H5t8Ng2ZX1SabJVoN9Q34bw==}
@@ -7493,7 +7507,7 @@ snapshots:
     dependencies:
       '@nuxt/kit': 4.4.8(magicast@0.5.3)
       '@shikijs/core': 4.3.0
-      '@shikijs/engine-javascript': 4.3.0
+      '@shikijs/engine-javascript': 4.3.1
       '@shikijs/langs': 4.3.0
       '@shikijs/themes': 4.3.0
       '@shikijs/transformers': 4.3.0
@@ -8164,7 +8178,7 @@ snapshots:
       '@shikijs/primitive': 4.3.0
       '@shikijs/types': 4.3.0
       '@shikijs/vscode-textmate': 10.0.2
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       hast-util-to-html: 9.0.5
 
   '@shikijs/engine-javascript@4.2.0':
@@ -8176,6 +8190,12 @@ snapshots:
   '@shikijs/engine-javascript@4.3.0':
     dependencies:
       '@shikijs/types': 4.3.0
+      '@shikijs/vscode-textmate': 10.0.2
+      oniguruma-to-es: 4.3.6
+
+  '@shikijs/engine-javascript@4.3.1':
+    dependencies:
+      '@shikijs/types': 4.3.1
       '@shikijs/vscode-textmate': 10.0.2
       oniguruma-to-es: 4.3.6
 
@@ -8206,13 +8226,13 @@ snapshots:
     dependencies:
       '@shikijs/types': 4.2.0
       '@shikijs/vscode-textmate': 10.0.2
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
 
   '@shikijs/primitive@4.3.0':
     dependencies:
       '@shikijs/types': 4.3.0
       '@shikijs/vscode-textmate': 10.0.2
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
 
   '@shikijs/themes@4.2.0':
     dependencies:
@@ -8236,6 +8256,11 @@ snapshots:
     dependencies:
       '@shikijs/vscode-textmate': 10.0.2
       '@types/hast': 3.0.4
+
+  '@shikijs/types@4.3.1':
+    dependencies:
+      '@shikijs/vscode-textmate': 10.0.2
+      '@types/hast': 3.0.5
 
   '@shikijs/vscode-textmate@10.0.2': {}
 
@@ -8600,6 +8625,10 @@ snapshots:
   '@types/estree@1.0.9': {}
 
   '@types/hast@3.0.4':
+    dependencies:
+      '@types/unist': 3.0.3
+
+  '@types/hast@3.0.5':
     dependencies:
       '@types/unist': 3.0.3
 
@@ -9998,12 +10027,12 @@ snapshots:
 
   hast-util-embedded@3.0.0:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       hast-util-is-element: 3.0.0
 
   hast-util-format@1.1.0:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       hast-util-embedded: 3.0.0
       hast-util-minify-whitespace: 1.0.1
       hast-util-phrasing: 3.0.1
@@ -10013,7 +10042,7 @@ snapshots:
 
   hast-util-from-parse5@8.0.3:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       '@types/unist': 3.0.3
       devlop: 1.1.0
       hastscript: 9.0.1
@@ -10024,23 +10053,23 @@ snapshots:
 
   hast-util-has-property@3.0.0:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
 
   hast-util-heading-rank@3.0.0:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
 
   hast-util-is-body-ok-link@3.0.1:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
 
   hast-util-is-element@3.0.0:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
 
   hast-util-minify-whitespace@1.0.1:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       hast-util-embedded: 3.0.0
       hast-util-is-element: 3.0.0
       hast-util-whitespace: 3.0.0
@@ -10048,11 +10077,11 @@ snapshots:
 
   hast-util-parse-selector@4.0.0:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
 
   hast-util-phrasing@3.0.1:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       hast-util-embedded: 3.0.0
       hast-util-has-property: 3.0.0
       hast-util-is-body-ok-link: 3.0.1
@@ -10060,7 +10089,7 @@ snapshots:
 
   hast-util-raw@9.1.0:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       '@types/unist': 3.0.3
       '@ungap/structured-clone': 1.3.1
       hast-util-from-parse5: 8.0.3
@@ -10076,7 +10105,7 @@ snapshots:
 
   hast-util-to-html@9.0.5:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       '@types/unist': 3.0.3
       ccount: 2.0.1
       comma-separated-tokens: 2.0.3
@@ -10090,7 +10119,7 @@ snapshots:
 
   hast-util-to-mdast@10.1.2:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       '@types/mdast': 4.0.4
       '@ungap/structured-clone': 1.3.1
       hast-util-phrasing: 3.0.1
@@ -10107,7 +10136,7 @@ snapshots:
 
   hast-util-to-parse5@8.0.1:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       comma-separated-tokens: 2.0.3
       devlop: 1.1.0
       property-information: 7.2.0
@@ -10117,22 +10146,22 @@ snapshots:
 
   hast-util-to-string@3.0.1:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
 
   hast-util-to-text@4.0.2:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       '@types/unist': 3.0.3
       hast-util-is-element: 3.0.0
       unist-util-find-after: 5.0.0
 
   hast-util-whitespace@3.0.0:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
 
   hastscript@9.0.1:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       comma-separated-tokens: 2.0.3
       hast-util-parse-selector: 4.0.0
       property-information: 7.2.0
@@ -12221,7 +12250,7 @@ snapshots:
 
   rehype-external-links@3.0.0:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       '@ungap/structured-clone': 1.3.1
       hast-util-is-element: 3.0.0
       is-absolute-url: 4.0.1
@@ -12230,18 +12259,18 @@ snapshots:
 
   rehype-minify-whitespace@6.0.2:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       hast-util-minify-whitespace: 1.0.1
 
   rehype-raw@7.0.0:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       hast-util-raw: 9.1.0
       vfile: 6.0.3
 
   rehype-remark@10.0.1:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       '@types/mdast': 4.0.4
       hast-util-to-mdast: 10.1.2
       unified: 11.0.5
@@ -12249,7 +12278,7 @@ snapshots:
 
   rehype-slug@6.0.0:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       github-slugger: 2.0.0
       hast-util-heading-rank: 3.0.0
       hast-util-to-string: 3.0.1
@@ -12257,13 +12286,13 @@ snapshots:
 
   rehype-sort-attribute-values@5.0.1:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       hast-util-is-element: 3.0.0
       unist-util-visit: 5.1.0
 
   rehype-sort-attributes@5.0.1:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       unist-util-visit: 5.1.0
 
   reka-ui@2.9.10(vue@3.5.38(typescript@6.0.3)):
@@ -12335,7 +12364,7 @@ snapshots:
 
   remark-rehype@11.1.2:
     dependencies:
-      '@types/hast': 3.0.4
+      '@types/hast': 3.0.5
       '@types/mdast': 4.0.4
       mdast-util-to-hast: 13.2.1
       unified: 11.0.5
