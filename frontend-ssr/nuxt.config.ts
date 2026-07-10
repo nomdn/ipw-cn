@@ -89,6 +89,7 @@ nitro: {
       options: {
         target: 'es2022' // 明确告诉 Nitro 使用 es2022 进行打包
       }
+    }
   },
   security: {
     headers: {
