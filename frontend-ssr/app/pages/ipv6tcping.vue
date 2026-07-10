@@ -112,8 +112,8 @@ function initServerResults() {
 }
 
 function extractHost(url: string): string {
-  const regex = /^(?:[a-zA-Z][a-zA-Z\d+.-]*:\/\/)?(?:[^\s@/]+@)?(?<host>(?:\[(?:[0-9a-fA-F:]+)\]|(?:\d{1,3}(?:\.\d{1,3}){3})|(?:[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?(?:\.[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?)*)))(?::\d{1,5})?(?:[/?#][^\s]*)?$/u;
-  
+  const regex = /^(?:[a-zA-Z][a-zA-Z\d+.-]*:\/\/)?(?:[^\s@/]+@)?(?<host>(?:\[(?:[0-9a-fA-F:]+)\]|(?:\d{1,3}(?:\.\d{1,3}){3})|(?:[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?(?:\.[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?)*))(?::\d{1,5})?)(?:[/?#][^\s]*)?$/u;
+
   const match = url.trim().match(regex);
   return match?.groups?.host ?? url;
 }
@@ -251,7 +251,7 @@ onMounted(() => {
 
     </div>
       <blockquote>
-        <a href="https://ipw-docs.wsmdn.top/user/ipv6_ping.html" target="_blank">IPv6 Ping 原理介绍</a><br/>
+        <a href="/doc/user/ipv6_ping" target="_blank">IPv6 Ping 原理介绍</a><br/>
         <strong>注意本页是TCPing，不是ICMPv6 Ping，下列文本仅供参考</strong><br/>
         <strong>1. 本地 IPv6 方式</strong><br/>
         Windows: ping -6 ipw.wsmdn.top<br/>

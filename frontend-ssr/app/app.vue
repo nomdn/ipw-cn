@@ -15,7 +15,7 @@ const toggleDark = useToggle(isDark);
 function Announcement() {
   ElMessage({
     showClose: true,
-    message: '您好,这里是LEMONIPW开发团队,我们很重视您对本项目的意见,诚邀您加入官方交流群进行讨论,欢迎您的加入!QQ:<a href="https://qm.qq.com/q/E1CGjkqgG6" target="_blank">点我</a>',
+    message: '您好,这里是LEMONIPW开发团队,我们很重视您对本项目的意见,诚邀您加入官方交流群进行讨论,欢迎您的加入!QQ:<a href="https://qm.qq.com/q/E1CGjkqgG6" >点我</a>',
     duration: 3000,
     dangerouslyUseHTMLString: true,
   });
@@ -65,13 +65,13 @@ useHead({
       <router-link to="/ipv6tcping" style="font-size: 1em;">
         <p style="display: inline-block; margin-left: 10px">IPv6 TCPing</p>
       </router-link>
-      <router-link to="/dns" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 DNS解析</p></router-link>
+      <router-link to="/dns"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 DNS解析</p></router-link>
       <router-link to="/ssl" style="font-size: 1em;">
         <p style="display: inline-block; margin-left: 10px">IPv6 SSL检查</p>
       </router-link>
-      <a href="/ipv6speedtest" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 网站测速</p></a>
-      <a href="/speedtest" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 网站测速</p></a>
-      <a href="/tcping" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 TCPing</p></a>
+      <a href="/ipv6speedtest"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 网站测速</p></a>
+      <a href="/speedtest"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 网站测速</p></a>
+      <a href="/tcping"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 TCPing</p></a>
   </el-drawer>
   <el-menu
       mode="horizontal"
@@ -104,13 +104,13 @@ useHead({
       </router-link>
     </el-menu-item>
     <el-menu-item index="3" v-if="!isNarrow">
-      <router-link to="/ipv6tcping" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 TCPing测试</p></router-link>
+      <router-link to="/ipv6tcping"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 TCPing测试</p></router-link>
     </el-menu-item>
 
     <el-divider style="margin-top: 20px;height: 1.2em;" direction="vertical" v-if="!isNarrow"/>
 
     <el-menu-item index="4" v-if="!isNarrow">
-      <router-link to="/dns" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 DNS解析</p></router-link>
+      <router-link to="/dns"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 DNS解析</p></router-link>
     </el-menu-item>
     <el-menu-item index="5" v-if="!isNarrow">
       <router-link to="/ssl">
@@ -118,16 +118,16 @@ useHead({
       </router-link>
     </el-menu-item>
     <el-menu-item index="6" v-if="!isNarrow">
-      <router-link to="/ipv6speedtest" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 网站测速</p></router-link>
+      <router-link to="/ipv6speedtest"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 网站测速</p></router-link>
     </el-menu-item>
     <el-divider style="margin-top: 20px;height: 1.2em;" direction="vertical" v-if="!isNarrow"/>
     <el-sub-menu index="7" v-if="!isNarrow">
       <template #title>IPv4工具箱</template>
       <el-menu-item index="7-0">
-        <router-link to="/speedtest" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 网站测速</p></router-link>
+        <router-link to="/speedtest"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 网站测速</p></router-link>
       </el-menu-item>
       <el-menu-item index="7-1">
-        <router-link to="/tcping" target="_blank" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 TCPing测试</p></router-link>
+        <router-link to="/tcping"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 TCPing测试</p></router-link>
       </el-menu-item>
     </el-sub-menu>
     <el-menu-item index="9">
@@ -140,7 +140,7 @@ useHead({
 
   </el-menu>
   
-  
+  <NuxtLoadingIndicator />
   <main id="main-content" role="main">
     <NuxtPage />
   </main>
@@ -150,15 +150,15 @@ useHead({
       Copyright © nomdn & IP 查询 2026  | <img src="/ipv6-s1.svg" alt="IPv6 相关标识"/> | <img src="/ssl-s1.svg" alt="SSL 相关标识"/> | All right reserved
     </div>
     <div class="one-line">
-      <a v-if="config.ICP" href="https://beian.miit.gov.cn/" target="_blank">{{ config.ICP }}</a>
+      <a v-if="config.ICP" href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer" >{{ config.ICP }}</a>
       <span v-if="config.ICP">&nbsp;|&nbsp;</span>
       <el-image v-if="config.GongAn" style="height: 1em; width: 1em;" src="/备案图标.png" />
-      <a :href="'https://beian.mps.gov.cn/#/query/webSearch?code=' + cleanChineseCharacters(config.GongAn)"  rel="noreferrer" target="_blank">{{ config.GongAn }}</a>
+      <a :href="'https://beian.mps.gov.cn/#/query/webSearch?code=' + cleanChineseCharacters(config.GongAn)" target="_blank" rel="noreferrer" >{{ config.GongAn }}</a>
       <span v-if="config.GongAn">&nbsp;|&nbsp;</span>
-      <a href="https://www.china-ipv6.cn/">国家IPv6发展监测平台</a>
+      <a href="https://www.china-ipv6.cn/" target="_blank" rel="noreferrer" >国家IPv6发展监测平台</a>
       &nbsp;|&nbsp;请遵守中国法律法规&nbsp;|&nbsp;
-      <a href="https://github.com/nomdn/ipw-cn">Github</a>&nbsp;|&nbsp;
-      <a href="https://qm.qq.com/q/E1CGjkqgG6" target="_blank">QQ用户交流群</a>
+      <a href="https://github.com/nomdn/ipw-cn" target="_blank" rel="noreferrer" >Github</a>&nbsp;|&nbsp;
+      <a href="https://qm.qq.com/q/E1CGjkqgG6" target="_blank" rel="noreferrer" >QQ用户交流群</a>
    </div>
    <div class="one-line">
       致力于普及IPv6，推进IPv6规模部署和应用，以全面推进IPv6技术创新与融合应用为主线，以提升应用广度深度为主攻方向

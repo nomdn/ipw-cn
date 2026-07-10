@@ -130,8 +130,8 @@ function checkSSL() {
   });
 }
 function extractHost(url: string): string {
-  const regex = /^(?:[a-zA-Z][a-zA-Z\d+.-]*:\/\/)?(?:[^\s@/]+@)?(?<host>(?:\[(?:[0-9a-fA-F:]+)\]|(?:\d{1,3}(?:\.\d{1,3}){3})|(?:[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?(?:\.[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?)*)))(?::\d{1,5})?(?:[/?#][^\s]*)?$/u;
-  
+  const regex = /^(?:[a-zA-Z][a-zA-Z\d+.-]*:\/\/)?(?:[^\s@/]+@)?(?<host>(?:\[(?:[0-9a-fA-F:]+)\]|(?:\d{1,3}(?:\.\d{1,3}){3})|(?:[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?(?:\.[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?)*))(?::\d{1,5})?)(?:[/?#][^\s]*)?$/u;
+
   const match = url.trim().match(regex);
   return match?.groups?.host ?? url;
 }
@@ -378,9 +378,9 @@ onMounted(() => {
     <blockquote>
       网站不支持 IPv6 SSL 可能原因：<br/>
       <br/>
-      1. 网站所在服务器未开启 IPv6，请参考 <a href="https://ipw-docs.wsmdn.top/server/website_enable_ipv6.html" target="_blank">网站开启 IPv6 的三种方式</a><br/>
-      2. 网站所在服务器已开启 IPv6，但防火墙未对源地址是 IPv6 地址(::/0)的 443（HTTPS）<a href="https://ipw-docs.wsmdn.top/server/website_enable_ipv6.html" target="_blank">端口开放访问</a><br/>
-      3. 网站所在服务器已开启 IPv6，但未开启SSL证书，请参考 <a href="https://ipw-docs.wsmdn.top/server/nginx_ipv6.html" target="_blank">Nginx 开启 IPv6 SSL</a><br/>
+      1. 网站所在服务器未开启 IPv6，请参考 <a href="/doc/server/website_enable_ipv6" target="_blank">网站开启 IPv6 的三种方式</a><br/>
+       2. 网站所在服务器已开启 IPv6，但防火墙未对源地址是 IPv6 地址(::/0)的 443（HTTPS）<a href="/doc/server/website_enable_ipv6" target="_blank">端口开放访问</a><br/>
+       3. 网站所在服务器已开启 IPv6，但未开启SSL证书，请参考 <a href="/doc/server/nginx_ipv6" target="_blank">Nginx 开启 IPv6 SSL</a><br/>
     </blockquote>
 
   </div>

@@ -43,15 +43,32 @@ useHead({
 
 const tmpDomain = ref('https://www.zakoflare.com')
 const loading = ref(false)
-const result = ref<any[]>([]) 
+const result = ref<any[]>([])
 const error = ref('')
 const domain = ref('')
 
+/** 服务器结果接口 */
+interface ServerResult {
+  label: string
+  loading: boolean
+  error: string
+  data: any
+}
+
+/** 预构建的服务器列表，页面挂载即展示，用户可提前看到测速节点 */
+const serverResults = ref<ServerResult[]>([])
+
+/**
+ * 根据 HTTP 状态码返回对应的 CSS 类名
+ * 2xx: success, 3xx: warning, 其他: error
+ */
 function getStatusCodeClass(code: number): string {
   if (code >= 200 && code < 300) return 'status-success'
   if (code >= 300 && code < 400) return 'status-warning'
   return 'status-error'
 }
+
+/** 将毫秒格式化为 ms 或 s 单位的可读字符串 */
 function formatTime(ms: number): string {
   if (ms == null) return '-'
   if (ms < 1000) {
@@ -60,11 +77,13 @@ function formatTime(ms: number): string {
   return `${(ms / 1000).toFixed(2)} s`
 }
 
+/** 将 KB/s 速度格式化为带两位小数的字符串 */
 function formatSpeed(speed: number): string {
   if (speed == null) return '-'
   return `${speed.toFixed(2)} KB/s`
 }
 
+/** 将字节数格式化为 B/KB/MB 单位的可读字符串 */
 function formatSize(bytes: number): string {
   if (bytes == null) return '-'
   if (bytes < 1024) {
@@ -76,13 +95,26 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`
 }
 
+/**
+ * 从 URL 或域名字符串中提取主机名
+ * 支持 IPv6 地址、IPv4 地址、域名格式
+ */
 function extractHost(url: string): string {
-  const regex = /^(?:[a-zA-Z][a-zA-Z\d+.-]*:\/\/)?(?:[^\s@/]+@)?(?<host>(?:\[(?:[0-9a-fA-F:]+)\]|(?:\d{1,3}(?:\.\d{1,3}){3})|(?:[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?(?:\.[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?)*)))(?::\d{1,5})?(?:[/?#][^\s]*)?$/u;
-  
+  const regex = /^(?:[a-zA-Z][a-zA-Z\d+.-]*:\/\/)?(?:[^\s@/]+@)?(?<host>(?:\[(?:[0-9a-fA-F:]+)\]|(?:\d{1,3}(?:\.\d{1,3}){3})|(?:[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?(?:\.[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?)*))(?::\d{1,5})?)(?:[/?#][^\s]*)?$/u;
+
   const match = url.trim().match(regex);
   return match?.groups?.host ?? url;
 }
 
+// =============================================
+// 提前构建服务器列表（学 tcping.vue 策略）
+// 在组件初始化时就创建好 useFetch 实例，
+// 设置 immediate: false + watch: false，
+// 只在用户点击"开始测试"时才调用 execute() 发起请求，
+// 避免页面加载时自动发请求浪费资源。
+// =============================================
+
+/** 双栈服务器：同时支持 IPv4/IPv6 的节点 */
 const dualStackFetches = config.SpeedTest.DualStack.map((server) => {
   const url = computed(() => server.url + 'v1/speed/v6/' + domain.value);
   const { data, error: fetchError, execute } = useFetch(url, {
@@ -92,6 +124,7 @@ const dualStackFetches = config.SpeedTest.DualStack.map((server) => {
   return { label: server.label, data, error: fetchError, execute };
 });
 
+/** IPv6 专用服务器：仅支持 IPv6 的节点 */
 const ipv6Fetches = config.SpeedTest.IPv6.map((server) => {
   const url = computed(() => server.url + 'v1/speed/v6/' + domain.value);
   const { data, error: fetchError, execute } = useFetch(url, {
@@ -101,42 +134,62 @@ const ipv6Fetches = config.SpeedTest.IPv6.map((server) => {
   return { label: server.label, data, error: fetchError, execute };
 });
 
+/** 合并所有服务器 fetch 列表 */
+const allFetches = [
+  ...dualStackFetches.map(fetch => ({ ...fetch, type: 'DualStack' })),
+  ...ipv6Fetches.map(fetch => ({ ...fetch, type: 'IPv6' }))
+];
+
+/**
+ * 初始化服务器结果列表
+ * 页面挂载时调用，让用户提前看到所有测速节点
+ */
+function initServerResults() {
+  serverResults.value = allFetches.map((fetch) => ({
+    label: fetch.label,
+    loading: false,
+    error: '',
+    data: null
+  }))
+}
+
+/**
+ * 执行全站测速
+ * 并发调用所有服务器的 execute() 方法，逐个更新对应行的结果
+ */
 async function SpeedTest() {
   domain.value = extractHost(tmpDomain.value)
   loading.value = true
-  result.value = []
   error.value = ''
   await nextTick()
 
-  const allFetches = [
-    ...dualStackFetches.map(fetch => ({ ...fetch, type: 'DualStack' })),
-    ...ipv6Fetches.map(fetch => ({ ...fetch, type: 'IPv6' }))
-  ];
+  // 重置所有行状态为加载中
+  serverResults.value.forEach((row) => {
+    row.loading = true
+    row.error = ''
+    row.data = null
+  })
 
-  const promises = allFetches.map(async (fetch) => {
+  // 并发请求所有服务器，每个请求完成后立即更新对应行
+  const promises = allFetches.map(async (fetch, index) => {
     try {
       await fetch.execute();
-      return {
-        server: fetch.label,
-        data: fetch.data.value
-      };
+      serverResults.value[index].data = fetch.data.value;
     } catch (err: any) {
-      return {
-        server: fetch.label,
-        data: {},
-        error: err.data?.error || err.message || '请求失败'
-      };
+      serverResults.value[index].error = err.data?.error || err.message || '请求失败';
+    } finally {
+      serverResults.value[index].loading = false;
     }
   });
 
-  const promiseResults = await Promise.all(promises)
-  console.log(promiseResults)
-  result.value = promiseResults
-  loading.value = false
-  return promiseResults
+  Promise.all(promises).finally(() => {
+    loading.value = false
+  })
 }
 
+// 页面挂载后，初始化服务器列表并检查 URL 参数
 onMounted(() => {
+  initServerResults()
   const urlParam = route.query.site as string
   if (urlParam) {
     tmpDomain.value = urlParam
@@ -171,7 +224,7 @@ onMounted(() => {
       {{ error }}
     </div>
 
-    <div v-if="result" class="result-section">
+    <div class="result-section">
       <table class="result-table">
         <thead>
           <tr>
@@ -187,35 +240,47 @@ onMounted(() => {
           </tr>
         </thead>
         <tbody>
-          <template v-for="data in result" :key="data.server">
-          <tr v-if="data.error">
-            <td class="table-value">{{ data.server }}</td>
-            <td class="table-value" colspan="8">
-              <span class="status-code status-error">{{ data.error }}</span>
-            </td>
-          </tr>
-          <tr v-else>
-            <td class="table-value">{{ data.server }}</td>
-            <td class="table-value">{{ data.data?.host_record }}</td>
-            <td class="table-value">
-                <span class="status-code" :class="getStatusCodeClass(data.data?.http_status_code)">
-                    {{ data.data?.http_status_code }}
-                </span>
-            </td>
-            <td class="table-value">
-                <span class="status-code" :class="getStatusCodeClass(data.data?.https_status_code)">
-                    {{ data.data?.https_status_code }}
-                </span>
-            </td>
-            <td class="table-value">{{ formatTime(data.data?.total_time) }}</td>
-            <td class="table-value">{{ formatTime(data.data?.dns_lookup_time) }}</td>
-            <td class="table-value">{{ formatTime(data.data?.first_byte_time) }}</td>
-            <td class="table-value">{{ formatSize(data.data?.page_size) }}</td>
-            <td class="table-value">{{ formatSpeed(data.data?.download_speed) }}</td>
-          </tr>
+          <template v-for="(row, index) in serverResults" :key="index">
+            <!-- 请求失败 -->
+            <tr v-if="row.error">
+              <td class="table-label">{{ row.label }}</td>
+              <td class="table-value" colspan="8">
+                <span class="status-code status-error">{{ row.error }}</span>
+              </td>
+            </tr>
+            <!-- 加载中 -->
+            <tr v-else-if="row.loading">
+              <td class="table-label">{{ row.label }}</td>
+              <td class="table-value" colspan="8">测速中...</td>
+            </tr>
+            <!-- 有结果 -->
+            <tr v-else-if="row.data">
+              <td class="table-label">{{ row.label }}</td>
+              <td class="table-value">{{ row.data?.host_record }}</td>
+              <td class="table-value">
+                  <span class="status-code" :class="getStatusCodeClass(row.data?.http_status_code)">
+                      {{ row.data?.http_status_code }}
+                  </span>
+              </td>
+              <td class="table-value">
+                  <span class="status-code" :class="getStatusCodeClass(row.data?.https_status_code)">
+                      {{ row.data?.https_status_code }}
+                  </span>
+              </td>
+              <td class="table-value">{{ formatTime(row.data?.total_time) }}</td>
+              <td class="table-value">{{ formatTime(row.data?.dns_lookup_time) }}</td>
+              <td class="table-value">{{ formatTime(row.data?.first_byte_time) }}</td>
+              <td class="table-value">{{ formatSize(row.data?.page_size) }}</td>
+              <td class="table-value">{{ formatSpeed(row.data?.download_speed) }}</td>
+            </tr>
+            <!-- 等待测速 -->
+            <tr v-else>
+              <td class="table-label">{{ row.label }}</td>
+              <td class="table-value" colspan="8">-</td>
+            </tr>
           </template>
         </tbody>
-        </table>
+      </table>
     </div>
 
   </div>

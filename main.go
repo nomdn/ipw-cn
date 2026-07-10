@@ -155,6 +155,15 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 	startTime := time.Now()
 	resp, err := client.R().EnableTrace().Get(url)
 
+	// HTTPS 请求失败时 fallback 到 HTTP
+	fallbackToHTTP := false
+	if err != nil && strings.HasPrefix(url, "https://") {
+		httpURL := strings.Replace(url, "https://", "http://", 1)
+		startTime = time.Now()
+		resp, err = client.R().EnableTrace().Get(httpURL)
+		fallbackToHTTP = true
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -171,10 +180,16 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
 	}
 
+	httpStatus := resp.StatusCode()
+	httpsStatus := resp.StatusCode()
+	if fallbackToHTTP {
+		httpsStatus = 0
+	}
+
 	result := &WebsiteCheckDetail{
 		HostRecord:       hostRecord,
-		HTTPStatusCode:   resp.StatusCode(),
-		HTTPSSStatusCode: resp.StatusCode(),
+		HTTPStatusCode:   httpStatus,
+		HTTPSSStatusCode: httpsStatus,
 		DNSLookupTime:    float64(trace.DNSLookup.Milliseconds()),
 		TCPConnectTime:   float64(trace.TCPConnTime.Milliseconds()),
 		HTTPConnectTime:  float64(trace.ConnTime.Milliseconds()),
@@ -209,6 +224,14 @@ func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
 	startTime := time.Now()
 	resp, err := client.R().EnableTrace().Get(url)
 
+	fallbackToHTTP := false
+	if err != nil && strings.HasPrefix(url, "https://") {
+		httpURL := strings.Replace(url, "https://", "http://", 1)
+		startTime = time.Now()
+		resp, err = client.R().EnableTrace().Get(httpURL)
+		fallbackToHTTP = true
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -225,12 +248,17 @@ func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
 		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
 	}
 	dumpBytes, _ := httputil.DumpResponse(resp.RawResponse, false)
+	httpStatus := resp.StatusCode()
+	httpsStatus := resp.StatusCode()
+	if fallbackToHTTP {
+		httpsStatus = 0
+	}
 	result := &WebsiteSpeedTestResult{
 		Version:          version,
 		Headers:          string(dumpBytes),
 		HostRecord:       hostRecord,
-		HTTPStatusCode:   resp.StatusCode(),
-		HTTPSSStatusCode: resp.StatusCode(),
+		HTTPStatusCode:   httpStatus,
+		HTTPSSStatusCode: httpsStatus,
 		DNSLookupTime:    float64(trace.DNSLookup.Milliseconds()),
 		TCPConnectTime:   float64(trace.TCPConnTime.Milliseconds()),
 		HTTPConnectTime:  float64(trace.ConnTime.Milliseconds()),

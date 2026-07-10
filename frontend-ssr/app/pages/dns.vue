@@ -3,6 +3,7 @@ import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
 import { isIPv6 } from 'is-ip';
+import { renderMarkdown } from "../../utils/markdown";
 const route = useRoute()
 
 useHead({
@@ -155,9 +156,10 @@ onMounted(() => {
   }
   getUserIP()
 })
-const { data: page } = await useAsyncData('dns', () =>
-  queryCollection('content').path('/dns').first()
-);
+const { data: page, error } = await useAsyncData('dns-page', () =>
+  $fetch('/api/markdown/dns')
+)
+const doc = page.value;
 </script>
 
 <template>
@@ -252,7 +254,7 @@ const { data: page } = await useAsyncData('dns', () =>
         访客IP: {{userIP }}，您的网络 {{ isIPv6(userIP) ? 'IPv6' : 'IPv4'}} 访问优先<br/>
     </blockquote>
     <div class="markdown">
-    <ContentRenderer v-if="page" :value="page" />
+      <div v-html="doc"></div>
     </div>
     </div>
 

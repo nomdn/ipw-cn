@@ -1,4 +1,5 @@
 import {config} from "./config/index";
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 const extractDomains = (obj: any): string[] => {
   // 将对象转为 JSON 字符串，用正则匹配所有 https:// 开头的域名部分
@@ -12,16 +13,25 @@ const allowedDomains = extractDomains(config);
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
-  modules: ["nitro-cloudflare-dev",'@element-plus/nuxt', '@nuxtjs/sitemap', '@nuxtjs/robots', '@vueuse/nuxt', '@nuxt/content',"nuxt-security"],
+  modules: [
+    "nitro-cloudflare-dev",
+    '@element-plus/nuxt',
+    '@nuxtjs/sitemap',
+    '@nuxtjs/robots',
+    '@vueuse/nuxt',
+    '@nuxt/content',
+    "nuxt-security",
+  ],
   vite: {
     optimizeDeps: {
       include: [
-        'dayjs/plugin/*.js',
         'dayjs',
+        'dayjs/plugin/*.js',
+        'is-ip',
         'lodash-unified',
         'shiki',
       ]
-    }
+    },
   },
   site: { 
   url: config.siteUrl, 
@@ -32,7 +42,7 @@ export default defineNuxtConfig({
     'element-plus/dist/index.css',
     
     // 2. 🌟 关键：引入 Element Plus 官方的暗黑模式 CSS 变量文件
-    'element-plus/theme-chalk/dark/css-vars.css'
+    'element-plus/theme-chalk/dark/css-vars.css',
   ],
   app:{
     head: {
@@ -69,6 +79,12 @@ nitro: {
 
       nodeCompat: true
     },
+    publicAssets: [
+      {
+        dir: 'public',
+        maxAge: 0
+      }
+    ]
   },
   security: {
     headers: {
@@ -78,6 +94,7 @@ nitro: {
           "'self'",
           "'strict-dynamic'",
           "'nonce-{{nonce}}'",
+          "'wasm-unsafe-eval'",
           ...allowedDomains // 允许 Umami 发送数据
         ],
         
@@ -90,6 +107,22 @@ nitro: {
         'font-src': ["'self'", 'https:', 'data:'],
       }
     }
-  }
-  
+  },
+  content: {
+    build: {
+      markdown: {
+        highlight: {
+          theme: {
+            // Default theme (same as single string)
+            default: 'github-light',
+            // Theme used if `html.dark`
+            dark: 'github-dark',
+            // Theme used if `html.sepia`
+            sepia: 'monokai'
+          }
+        }
+      }
+  },
+}
+
 })

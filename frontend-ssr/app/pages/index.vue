@@ -3,7 +3,7 @@ import { computed, ref, onMounted } from 'vue';
 import { isIPv6 } from 'is-ip';
 import { config } from '../../config/index';
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue';
-
+import { highlightCode } from '../../utils/shiki';
 const route = useRoute();
 const canonicalUrl = computed(() => new URL(route.path, config.siteUrl).toString());
 
@@ -82,11 +82,7 @@ const yourIPv6 = ref('');
 
 onMounted(async () => {
   try {
-    const { codeToHtml } = await import('shiki');
-    highlightedCode.value = await codeToHtml(code, {
-      lang: 'bash',
-      theme: 'github-dark'
-    });
+    highlightedCode.value = await highlightCode(code, 'bash');
   } catch {
     highlightedCode.value = '';
   }
