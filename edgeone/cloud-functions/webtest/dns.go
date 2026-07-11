@@ -17,7 +17,7 @@ import (
 // ==========================================
 
 // 阿里云标准 DoH 端点
-var dohEndpoint string = "https://dns.alidns.com/dns-query"
+var dohEndpoint string = "https://doh.pub/dns-query"
 
 type DNSResult struct {
 	Domain   string   `json:"domain"`
@@ -28,7 +28,7 @@ type DNSResult struct {
 
 func SetDNSServer(server string) {
 	if server == "" {
-		server = "https://dns.alidns.com/dns-query"
+		server = "https://doh.pub/dns-query"
 	}
 	dohEndpoint = server
 }
@@ -274,6 +274,37 @@ func ResolveCAARecord(domain string) (DNSResult, error) {
 		}
 	}
 	return result, nil
+}
+
+// ResolveIP 通过 DoH 解析域名，返回指定版本（v4/v6）的 IP 地址字符串
+func ResolveIP(host string, version string) (string, error) {
+	var qtype uint16
+	switch version {
+	case "v6":
+		qtype = dns.TypeAAAA
+	default:
+		qtype = dns.TypeA
+	}
+
+	responseMsg, _, err := executeDoHQuery(host, qtype)
+	if err != nil {
+		return "", err
+	}
+
+	for _, ans := range responseMsg.Answer {
+		switch v := ans.(type) {
+		case *dns.A:
+			if qtype == dns.TypeA {
+				return v.A.String(), nil
+			}
+		case *dns.AAAA:
+			if qtype == dns.TypeAAAA {
+				return v.AAAA.String(), nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no %s record found for %s", version, host)
 }
 
 // ==========================================

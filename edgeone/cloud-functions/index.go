@@ -148,8 +148,13 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 	}
 
 	transport := &http.Transport{
-		DialContext: func(ctx context.Context, net, addr string) (net.Conn, error) {
-			return dialer.DialContext(ctx, network, addr)
+		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
+			host, port, _ := net.SplitHostPort(addr)
+			ip, err := webtest.ResolveIP(host, version)
+			if err != nil {
+				return nil, err
+			}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
 		},
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -217,8 +222,13 @@ func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
 	}
 
 	transport := &http.Transport{
-		DialContext: func(ctx context.Context, net, addr string) (net.Conn, error) {
-			return dialer.DialContext(ctx, network, addr)
+		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
+			host, port, _ := net.SplitHostPort(addr)
+			ip, err := webtest.ResolveIP(host, version)
+			if err != nil {
+				return nil, err
+			}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
 		},
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -286,8 +296,13 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 
 	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 	transport := &http.Transport{
-		DialContext: func(ctx context.Context, net, addr string) (net.Conn, error) {
-			return dialer.DialContext(ctx, network, addr)
+		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
+			host, port, _ := net.SplitHostPort(addr)
+			ip, err := webtest.ResolveIP(host, version)
+			if err != nil {
+				return nil, err
+			}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
 		},
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
@@ -431,11 +446,17 @@ func testWebsite(c *gin.Context) {
 func testWebTools(url, versions string) string {
 	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 	transport := &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			if versions == "v6" {
-				return dialer.DialContext(ctx, "tcp6", addr)
+		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
+			host, port, _ := net.SplitHostPort(addr)
+			ip, err := webtest.ResolveIP(host, versions)
+			if err != nil {
+				return nil, err
 			}
-			return dialer.DialContext(ctx, "tcp4", addr)
+			network := "tcp4"
+			if versions == "v6" {
+				network = "tcp6"
+			}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
 		},
 	}
 	client := resty.New().SetTransport(transport)
