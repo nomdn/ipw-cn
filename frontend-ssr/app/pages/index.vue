@@ -65,14 +65,14 @@ useHead({
 const code = `
 # 请勿用于商业用途，仅供个人测试学习之用，请遵守中国法律法规
 # 查询本机外网 IPv4 地址
-curl 4.wsmdn.dpdns.org
+curl ${config.v4OnlyAPI}
 
 # 查询本机外网 IPv6 地址
-curl 6.wsmdn.dpdns.org
+curl ${config.v6OnlyAPI}
 
 # 测试网络是 IPv4 还是 IPv6 访问优先
 # (访问 IPv4/IPv6 双栈站点，如果返回 IPv6 地址，则 IPv6 访问优先)
-curl test.wsmdn.dpdns.org
+curl ${config.DualStackAPI}
 `.trim(); // 关键：去掉首尾多余的空行
 const highlightedCode = ref('');
 

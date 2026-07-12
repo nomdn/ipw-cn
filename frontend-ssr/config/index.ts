@@ -18,6 +18,8 @@ const config = {
     // 后端API地址
     apiBaseUrl: 'https://api-ipw.wsmdn.dpdns.org/',
     IPLocationAPI : "https://cn2-sichuan.api-ipw.wsmdn.top/",
+    // 全站是否禁止搜索引擎索引
+    noindex: false,
     TCPing:{
         DualStack: [
             {

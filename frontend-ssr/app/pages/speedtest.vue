@@ -172,15 +172,18 @@ async function SpeedTest() {
 
   // 并发请求所有服务器，每个请求完成后立即更新对应行
   const promises = allFetches.map(async (fetch, index) => {
+    const row = serverResults.value[index]
+    if (!row) return
+
     try {
-      await fetch.execute();
-      serverResults.value[index].data = fetch.data.value;
+      await fetch.execute()
+      row.data = fetch.data.value
     } catch (err: any) {
-      serverResults.value[index].error = err.data?.error || err.message || '请求失败';
+      row.error = err?.data?.error || err?.message || '请求失败'
     } finally {
-      serverResults.value[index].loading = false;
+      row.loading = false
     }
-  });
+  })
 
   Promise.all(promises).finally(() => {
     loading.value = false

@@ -1,5 +1,5 @@
 import {config} from "./config/index";
-
+import { docConfig } from "./config/doc";
 // https://nuxt.com/docs/api/configuration/nuxt-config
 const extractDomains = (obj: any): string[] => {
   // 将对象转为 JSON 字符串，用正则匹配所有 https:// 开头的域名部分
@@ -69,6 +69,8 @@ export default defineNuxtConfig({
     indexnowKey: '',
     public: {
       siteUrl: config.siteUrl,
+      docConfig: docConfig,
+
     },
   },
 nitro: {
@@ -113,21 +115,11 @@ nitro: {
       }
     }
   },
-  content: {
-    build: {
-      markdown: {
-        highlight: {
-          theme: {
-            // Default theme (same as single string)
-            default: 'github-light',
-            // Theme used if `html.dark`
-            dark: 'github-dark',
-            // Theme used if `html.sepia`
-            sepia: 'monokai'
-          }
-        }
-      }
-  },
-}
+  sitemap: {
+    sources: [
+      '/api/__sitemap__/urls',
+    ]
+  }
+
 
 })

@@ -50,6 +50,13 @@ useHead({
       'data-website-id': config.umamiWebsiteId,
     },
   ],
+  meta: config.noindex
+    ? [
+        { name: 'robots', content: 'noindex, nofollow' },
+        { name: 'googlebot', content: 'noindex, nofollow' },
+        { name: 'bingbot', content: 'noindex, nofollow' },
+      ]
+    : [],
 });
 </script>
 
