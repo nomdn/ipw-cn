@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22.11.0' # 选择适合的 Node.js 版本
+          node-version: '24' # 选择适合的 Node.js 版本
       
       - name: Install dependencies
         run: npm install -g edgeone
