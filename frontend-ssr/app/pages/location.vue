@@ -12,11 +12,35 @@ useHead({
   title: 'IPv6/IPv4地址查询工具 | IP归属地定位 | 柠檬味ipw.cn',
   meta: [
     { name: 'description', content: '专业的IPv6/IPv4地址查询工具,支持IPv4和IPv6地址归属地查询,提供BiliBili Live、GeoCN、IP2Region、Maxmind等多种数据源对比,精确定位IP地理位置、运营商信息,支持中国大陆及境外地址查询,助力IPv6普及与应用' },
+    { name: 'keywords', content: 'ipv6地址查询,ipv4地址查询,ip归属地,ip地理位置,ip定位,运营商查询,ipv6归属地,ipv4归属地,maxmind,ip2region,geocn' },
     { property: 'og:title', content: 'IPv6/IPv4地址归属地查询工具 - 柠檬味ipw.cn' },
     { property: 'og:description', content: '多数据源IP地址归属地查询,支持IPv4和IPv6,提供地理位置、运营商等详细信息' },
     { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
     { property: 'og:type', content: 'website' },
   ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebApplication',
+        name: 'IPv6/IPv4地址归属地查询工具',
+        description: '专业的IPv6/IPv4地址归属地查询工具，支持BiliBili Live、GeoCN、IP2Region、Maxmind、纯真社区库等多数据源对比，精确定位IP地理位置、运营商信息。',
+        url: config.siteUrl + 'ipv6',
+        applicationCategory: 'DeveloperApplication',
+        operatingSystem: 'Web',
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'CNY'
+        },
+        provider: {
+          '@type': 'Organization',
+          name: '柠檬味ipw.cn'
+        }
+      })
+    }
+  ]
 });
 interface IPLocationType {
   bilibili?: any;
@@ -79,13 +103,11 @@ function isIPv4(ip: string): boolean {
   return ipRegex.test(ip);
 }
 onMounted(async () => {
-
-  const urlParam = route.query.ip;
-  await navigateTo({ path: '/location', query: { ip: urlParam } });
   html.value = await codeToHtml(code, {
     lang: 'bash',
     theme: 'github-dark'
   })
+  const urlParam = route.query.ip;
   if (urlParam) {
     ipAddress.value = urlParam as string;
     locateIP(urlParam as string);

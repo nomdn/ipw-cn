@@ -19,7 +19,6 @@ export default defineNuxtConfig({
     '@nuxtjs/sitemap',
     '@nuxtjs/robots',
     '@vueuse/nuxt',
-    '@nuxt/content',
     "nuxt-security",
   ],
   vite: {
@@ -74,13 +73,6 @@ export default defineNuxtConfig({
     },
   },
 nitro: {
-    preset: "cloudflare_module",
-    cloudflare: {
-      deployConfig: true,
-
-
-      nodeCompat: true
-    },
     publicAssets: [
       {
         dir: 'public',

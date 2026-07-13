@@ -66,8 +66,8 @@ useHead({
       <router-link to="/ipv6webcheck" style="font-size: 1em;">
         <p style="display: inline-block; margin-left: 10px">IPv6 网站检测</p>
       </router-link>
-      <router-link to="/ipv6" style="font-size: 1em;">
-        <p style="display: inline-block; margin-left: 10px">IPv6 地址查询</p>
+      <router-link to="/location" style="font-size: 1em;">
+        <p style="display: inline-block; margin-left: 10px">IPv6/IPv4 地址查询</p>
       </router-link>
       <router-link to="/ipv6tcping" style="font-size: 1em;">
         <p style="display: inline-block; margin-left: 10px">IPv6 TCPing</p>
@@ -106,8 +106,8 @@ useHead({
       </router-link>
     </el-menu-item>
     <el-menu-item index="2" v-if="!isNarrow">
-      <router-link to="/ipv6">
-        <p style="display: inline-block; margin-left: 10px">IPv6 地址查询</p>
+      <router-link to="/location">
+        <p style="display: inline-block; margin-left: 10px">IPv6/IPv4 地址查询</p>
       </router-link>
     </el-menu-item>
     <el-menu-item index="3" v-if="!isNarrow">
