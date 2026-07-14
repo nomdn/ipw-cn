@@ -73,6 +73,7 @@ export default defineNuxtConfig({
     },
   },
 nitro: {
+  preset: 'cloudflare-module',
     publicAssets: [
       {
         dir: 'public',
