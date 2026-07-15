@@ -151,9 +151,8 @@ docker run -p 8080:8080 -v $(pwd)/setting.json:/app/setting.json lemon-ipw
 
 - **自托管后端**：使用 Docker 或直接运行 Go 二进制，配合 `setting.json` 配置
 - **Cloudflare Workers 后端**：`lemon-getip/` 使用 Hono 框架部署到 Cloudflare Workers
-- **EdgeOne 边缘后端**：`edgeone/cloud-functions/` 和 `edgeone-getip/` 部署到腾讯 EdgeOne Pages
+- **EdgeOne 边缘后端**：`edgeone/` 和 `edgeone-getip/` 部署到腾讯 EdgeOne Pages
 - **SSR 前端**：`frontend-ssr/` 使用 Nuxt 4 + Wrangler 部署到 Cloudflare Workers
-- **SPA 前端（旧）**：`frontend/` 使用 Vite 部署到 Cloudflare Pages
 
 ## 配置
 
