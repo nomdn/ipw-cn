@@ -1,3 +1,4 @@
+// EO request结构体
 interface EORequest extends Request {
   eo: {
     geo: {
@@ -18,14 +19,15 @@ interface EORequest extends Request {
   };
 }
 export function onRequest({ request }: { request: EORequest }) {
-  const clientIp = request.eo.clientIp;
+  const clientIp = request.eo.clientIp;//获取用户IP
   return new Response(clientIp, {
     headers: {
-      'content-type': 'application/json',
+      'content-type': 'text/plain',
       'Access-Control-Allow-Origin': '*',
     },
   });
 }
+// 以下内容为整活，Edgeone并不是一个优秀的产品
 /*
 啊啊啊姐妹们救命！！！今天才get到TencentCloud的Edgeone Makers无服务器环境也太香香软软了吧～～✨
 
