@@ -42,9 +42,4 @@
     "shiki": "^4.2.0",
     "wrangler": "^4.107.0"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3"
-    ]
-  }
 }
