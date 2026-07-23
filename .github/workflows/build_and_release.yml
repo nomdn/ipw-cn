@@ -34,7 +34,6 @@ jobs:
                 CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o lemonipw-windows-arm64.exe
             - name: Build for macOS
               run: |
-                CGO_ENABLED=0 GOOS=darwin GOARCH=386 go build -o lemonipw-darwin-386
                 CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o lemonipw-darwin-amd64
                 CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o lemonipw-darwin-arm64
             - name: Build for FreeBSD
@@ -59,7 +58,6 @@ jobs:
                   lemonipw-windows-386.exe
                   lemonipw-windows-amd64.exe
                   lemonipw-windows-arm64.exe
-                  lemonipw-darwin-386
                   lemonipw-darwin-amd64
                   lemonipw-darwin-arm64
                   lemonipw-freebsd-386
