@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
+import { extractHost } from '~/utils/tools';
 
 const route = useRoute()
 
@@ -108,13 +109,6 @@ function initServerResults() {
   })
   
   serverResults.value = results
-}
-
-function extractHost(url: string): string {
-  const regex = /^(?:[a-zA-Z][a-zA-Z\d+.-]*:\/\/)?(?:[^\s@/]+@)?(?<host>(?:\[(?:[0-9a-fA-F:]+)\]|(?:\d{1,3}(?:\.\d{1,3}){3})|(?:[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?(?:\.[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?)*))(?::\d{1,5})?)(?:[/?#][^\s]*)?$/u;
-
-  const match = url.trim().match(regex);
-  return match?.groups?.host ?? url;
 }
 
 function TCPingAll() {
@@ -246,110 +240,14 @@ onMounted(() => {
 
 <style scoped>
 @import "../style.css";
+@import "../../assets/css/tool-common.css";
 
-.el-input {
-  width: 420px;
-  height: 50px;
-  font: 1.3em sans-serif;
-  margin-right: 10px;
-}
-
-.el-button {
-  width: 165px;
-  height: 50px;
-  font: 1.3em sans-serif;
-}
-
-.result-section {
-  margin-top: 30px;
-}
-
-.result-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: #fff;
-  border: 1px solid #dcdfe6;
-}
-
-html.dark .result-table {
-  background: #2e2d2d;
-  border: 1px solid #2e2e2e;
-}
-
-.result-table thead tr {
-  background-color: #c0c4cc;
-}
-
-html.dark .result-table thead tr {
-  background: #2e2d2d;
-}
-
-.result-table .table-header {
-  padding: 12px 15px;
-  font-weight: 600;
-  color: #303133;
-  text-align: left;
-  border: 1px solid #dcdfe6;
-}
-
-html.dark .result-table .table-header {
-  color: #cfcfcf;
-  border: 1px solid #1a1919;
-}
-
-.result-table tbody tr {
-  border-bottom: 1px solid #dcdfe6;
-}
-
-html.dark .result-table tbody tr {
-  border-bottom: 1px solid #1a1919;
-}
-
-.result-table tbody tr:last-child {
-  border-bottom: none;
-}
-
-.result-table tbody tr:hover {
-  background-color: #f5f7fa;
-}
-
-html.dark .result-table tbody tr:hover {
-  background-color: #393a3a;
+.el-menu--horizontal > .el-menu-item:nth-child(1) {
+  margin-right: auto;
 }
 
 .result-table .table-label {
-  padding: 12px 15px;
-  font-weight: 600;
-  color: #606266;
   width: 200px;
-  text-align: left;
-  border: 1px solid #dcdfe6;
-}
-
-html.dark .result-table .table-label {
-  color: #c0c4cc;
-  border: 1px solid #1a1919;
-}
-
-.result-table .table-value {
-  padding: 12px 15px;
-  color: #303133;
-  border: 1px solid #dcdfe6;
-}
-
-html.dark .result-table .table-value {
-  color: #cfcfcf;
-  border: 1px solid #1a1919;
-}
-
-.loss-ok {
-  color: #67C23A;
-  font-weight: 600;
-}
-
-.loss-warning {
-  color: #F56C6C;
-  font-weight: 600;
 }
 
 .error-text {

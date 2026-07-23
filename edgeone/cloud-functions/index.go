@@ -21,6 +21,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/klauspost/compress/zstd"
 	"resty.dev/v3"
 )
 
@@ -52,7 +53,152 @@ var (
 	speedCache   sync.Map
 	DNS_SERVER   string
 	defaultPort  = fmt.Sprintf("%d", 5<<4)
+	V6Client     *resty.Client
+	V4Client     *resty.Client
 )
+
+var blockPrivateIPs = true
+
+type contextKey string
+
+const ssrfIPsKey contextKey = "ssrf_validated_ips"
+
+func init() {
+	if v := os.Getenv("BLOCK_PRIVATE_IPS"); v != "" {
+		blockPrivateIPs = v != "false" && v != "0"
+	}
+}
+
+func isPrivateIP(ip net.IP) bool {
+	if ip.IsPrivate() {
+		return true
+	}
+	if ip.IsLoopback() {
+		return true
+	}
+	if ip.IsLinkLocalUnicast() {
+		return true
+	}
+	if ip.IsUnspecified() {
+		return true
+	}
+	return false
+}
+
+func validateOutboundTarget(ctx context.Context, targetURL string) (context.Context, error) {
+	if !blockPrivateIPs {
+		return ctx, nil
+	}
+	parsed, err := url.Parse(targetURL)
+	if err != nil {
+		return ctx, err
+	}
+	host := parsed.Hostname()
+	if host == "" {
+		return ctx, fmt.Errorf("empty host")
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return ctx, err
+	}
+	for _, ip := range ips {
+		if isPrivateIP(ip) {
+			slog.Warn("Blocked request to private IP", "host", host, "ip", ip)
+			return ctx, fmt.Errorf("request to private/internal address is not allowed")
+		}
+	}
+	return context.WithValue(ctx, ssrfIPsKey, ips), nil
+}
+
+func secureCheckRedirect(req *http.Request, via []*http.Request) error {
+	if !blockPrivateIPs {
+		return nil
+	}
+	for _, r := range via {
+		redirectURL := r.URL
+		host := redirectURL.Hostname()
+		if host == "" {
+			continue
+		}
+		ips, err := net.LookupIP(host)
+		if err != nil {
+			return err
+		}
+		for _, ip := range ips {
+			if isPrivateIP(ip) {
+				slog.Warn("Blocked redirect to private IP", "host", host, "ip", ip)
+				return fmt.Errorf("redirect to private/internal address is not allowed")
+			}
+		}
+	}
+	return nil
+}
+
+func isLocalOrPrivateIP(ip net.IP) bool {
+	if ip.IsPrivate() {
+		return true
+	}
+	if ip.IsLoopback() {
+		return true
+	}
+	if ip.IsLinkLocalUnicast() {
+		return true
+	}
+	if ip.IsUnspecified() {
+		return true
+	}
+	return false
+}
+
+func hasLocalOrPrivateIP(host string) bool {
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return false
+	}
+	for _, ip := range ips {
+		if isLocalOrPrivateIP(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func fakePerfectWebsiteResult(host string) *WebsiteCheckDetail {
+	cleanHost := strings.TrimPrefix(host, "https://")
+	cleanHost = strings.TrimPrefix(cleanHost, "http://")
+	return &WebsiteCheckDetail{
+		HostRecord:       cleanHost,
+		HTTPStatusCode:   200,
+		HTTPSSStatusCode: 200,
+		DNSLookupTime:    0.5,
+		TCPConnectTime:   1.0,
+		HTTPConnectTime:  1.5,
+		FirstByteTime:    2.0,
+		TotalTime:        100,
+		PageSize:         52428,
+		DownloadSpeed:    512.0,
+		IsReachable:      true,
+	}
+}
+
+func fakeInvalidSSLResult(host string) *SSLCheckDetail {
+	return &SSLCheckDetail{
+		CertValidityDays:   0,
+		IsExpired:          true,
+		CertStartTime:      time.Time{},
+		CertEndTime:        time.Time{},
+		HTTPVersion:        "",
+		HostRecord:         host,
+		HTTPSSStatusCode:   0,
+		TotalTime:          0,
+		DownloadSpeed:      0,
+		Domain:             host,
+		IssuerOrganization: []string{},
+		IssuerCommonName:   "Invalid Certificate",
+		SubjectCommonName:  host,
+		IsReachable:        false,
+	}
+}
 
 type websiteCacheEntry struct {
 	result    *WebsiteCheckResult
@@ -65,7 +211,7 @@ type sslCacheEntry struct {
 }
 
 type pingCacheEntry struct {
-	result    *TCPingResult
+	result    *TCPingDualResult
 	timestamp time.Time
 }
 
@@ -74,7 +220,7 @@ type speedCacheEntry struct {
 	timestamp time.Time
 }
 
-type TCPingResult struct {
+type TCPingDualResult struct {
 	IPv4 *webtest.TCPingStats `json:"ipv4"`
 	IPv6 *webtest.TCPingStats `json:"ipv6"`
 }
@@ -137,38 +283,104 @@ type SSLCheckResult struct {
 	IPv6 *SSLCheckDetail `json:"ipv6"`
 }
 
+func initHttpClient() {
+	setTransport := func(network string) *http.Transport {
+		dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+		return &http.Transport{
+			DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
+				if blockPrivateIPs {
+					host, _, err := net.SplitHostPort(addr)
+					if err != nil {
+						return nil, err
+					}
+					var ips []net.IP
+					if v, ok := ctx.Value(ssrfIPsKey).([]net.IP); ok {
+						ips = v
+					} else {
+						ips, err = net.LookupIP(host)
+						if err != nil {
+							return nil, err
+						}
+					}
+					for _, ip := range ips {
+						if isPrivateIP(ip) {
+							slog.Warn("Blocked connection to private IP", "host", host, "ip", ip)
+							return nil, fmt.Errorf("request to private/internal address is not allowed")
+						}
+					}
+				}
+				return dialer.DialContext(ctx, network, addr)
+			},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+	V6Client = resty.New()
+	V4Client = resty.New()
+	V6Client.SetTransport(setTransport("tcp6"))
+	V4Client.SetTransport(setTransport("tcp4"))
+	V6Client.SetTimeout(10 * time.Second)
+	V4Client.SetTimeout(10 * time.Second)
+	V6Client.SetRedirectPolicy(resty.RedirectPolicyFunc(secureCheckRedirect))
+	V4Client.SetRedirectPolicy(resty.RedirectPolicyFunc(secureCheckRedirect))
+	V6Client.AddContentDecompresser("zstd", decompressZstd)
+	V4Client.AddContentDecompresser("zstd", decompressZstd)
+}
+
+var zstdReaderPool = sync.Pool{
+	New: func() interface{} {
+		decoder, _ := zstd.NewReader(nil)
+		return decoder
+	},
+}
+
+func decompressZstd(r io.ReadCloser) (io.ReadCloser, error) {
+	zr := zstdReaderPool.Get().(*zstd.Decoder)
+	err := zr.Reset(r)
+	if err != nil {
+		zstdReaderPool.Put(zr)
+		zr, _ = zstd.NewReader(r)
+	}
+	defer zstdReaderPool.Put(zr)
+	z := &zstdReader{s: r, r: zr}
+	return z, nil
+}
+
+type zstdReader struct {
+	s io.ReadCloser
+	r *zstd.Decoder
+}
+
+func (b *zstdReader) Read(p []byte) (n int, err error) {
+	return b.r.Read(p)
+}
+
+func (b *zstdReader) Close() error {
+	b.r.Close()
+	return b.s.Close()
+}
+
 func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
-	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+	ctx := context.Background()
+	var err error
+	ctx, err = validateOutboundTarget(ctx, url)
+	if err != nil {
+		return nil, err
+	}
 
-	var network string
+	client := V4Client
 	if version == "v6" {
-		network = "tcp6"
-	} else {
-		network = "tcp4"
+		client = V6Client
 	}
-
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
-			host, port, _ := net.SplitHostPort(addr)
-			ip, err := webtest.ResolveIP(host, version)
-			if err != nil {
-				return nil, err
-			}
-			return dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
-		},
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-
-	client := resty.New().SetTransport(transport).SetTimeout(10 * time.Second)
 
 	startTime := time.Now()
-	resp, err := client.R().EnableTrace().Get(url)
+	resp, err := client.R().EnableTrace().SetContext(ctx).Get(url)
 
+	// HTTPS 请求失败时 fallback 到 HTTP
 	fallbackToHTTP := false
 	if err != nil && strings.HasPrefix(url, "https://") {
 		httpURL := strings.Replace(url, "https://", "http://", 1)
 		startTime = time.Now()
-		resp, err = client.R().EnableTrace().Get(httpURL)
+		resp, err = client.R().EnableTrace().SetContext(ctx).Get(httpURL)
 		fallbackToHTTP = true
 	}
 
@@ -212,37 +424,26 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 }
 
 func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
-	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+	ctx := context.Background()
+	var err error
+	ctx, err = validateOutboundTarget(ctx, url)
+	if err != nil {
+		return nil, err
+	}
 
-	var network string
+	client := V4Client
 	if version == "v6" {
-		network = "tcp6"
-	} else {
-		network = "tcp4"
+		client = V6Client
 	}
-
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
-			host, port, _ := net.SplitHostPort(addr)
-			ip, err := webtest.ResolveIP(host, version)
-			if err != nil {
-				return nil, err
-			}
-			return dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
-		},
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-
-	client := resty.New().SetTransport(transport).SetTimeout(10 * time.Second)
 
 	startTime := time.Now()
-	resp, err := client.R().EnableTrace().Get(url)
+	resp, err := client.R().EnableTrace().SetContext(ctx).Get(url)
 
 	fallbackToHTTP := false
 	if err != nil && strings.HasPrefix(url, "https://") {
 		httpURL := strings.Replace(url, "https://", "http://", 1)
 		startTime = time.Now()
-		resp, err = client.R().EnableTrace().Get(httpURL)
+		resp, err = client.R().EnableTrace().SetContext(ctx).Get(httpURL)
 		fallbackToHTTP = true
 	}
 
@@ -287,6 +488,13 @@ func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
 }
 
 func checkSSL(url string, version string) (*SSLCheckDetail, error) {
+	ssrfCtx := context.Background()
+	var err error
+	ssrfCtx, err = validateOutboundTarget(ssrfCtx, url)
+	if err != nil {
+		return nil, err
+	}
+
 	var network string
 	if version == "v6" {
 		network = "tcp6"
@@ -296,13 +504,26 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 
 	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 	transport := &http.Transport{
-		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
+		DialContext: func(dialCtx context.Context, _, addr string) (net.Conn, error) {
 			host, port, _ := net.SplitHostPort(addr)
-			ip, err := webtest.ResolveIP(host, version)
-			if err != nil {
-				return nil, err
+			var ip string
+			if v, ok := ssrfCtx.Value(ssrfIPsKey).([]net.IP); ok && len(v) > 0 {
+				ip = v[0].String()
+			} else {
+				var resolveErr error
+				ip, resolveErr = webtest.ResolveIP(host, version)
+				if resolveErr != nil {
+					return nil, resolveErr
+				}
 			}
-			return dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
+			if blockPrivateIPs {
+				parsedIP := net.ParseIP(ip)
+				if parsedIP != nil && isPrivateIP(parsedIP) {
+					slog.Warn("Blocked SSL connection to private IP", "host", host, "ip", ip)
+					return nil, fmt.Errorf("request to private/internal address is not allowed")
+				}
+			}
+			return dialer.DialContext(dialCtx, network, net.JoinHostPort(ip, port))
 		},
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
@@ -318,9 +539,10 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 	client := &http.Client{
 		Transport: transport,
 		Timeout:   10 * time.Second,
+		CheckRedirect: secureCheckRedirect,
 	}
 
-	ctx := httptrace.WithClientTrace(context.Background(), trace)
+	ctx := httptrace.WithClientTrace(ssrfCtx, trace)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -426,48 +648,6 @@ func parseURL(input string) (*url.URL, error) {
 	return url.Parse(input)
 }
 
-func testWebsite(c *gin.Context) {
-	testUrl := c.Param("url")
-	if testUrl == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "URL parameter is required",
-		})
-		return
-	}
-	testUrl = normalizeURL(testUrl)
-	v6 := testWebTools(testUrl, "v6")
-	v4 := testWebTools(testUrl, "v4")
-	c.JSON(200, gin.H{
-		"v6": v6,
-		"v4": v4,
-	})
-}
-
-func testWebTools(url, versions string) string {
-	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
-			host, port, _ := net.SplitHostPort(addr)
-			ip, err := webtest.ResolveIP(host, versions)
-			if err != nil {
-				return nil, err
-			}
-			network := "tcp4"
-			if versions == "v6" {
-				network = "tcp6"
-			}
-			return dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
-		},
-	}
-	client := resty.New().SetTransport(transport)
-	resp, err := client.R().EnableTrace().Get(url)
-	if err != nil {
-		return "Error: " + err.Error()
-	}
-	record := resp.Request.TraceInfo()
-	return record.RemoteAddr
-}
-
 func checkWebsiteHandler(c *gin.Context) {
 	testUrl := c.Param("url")
 	if testUrl == "" {
@@ -478,6 +658,15 @@ func checkWebsiteHandler(c *gin.Context) {
 	}
 
 	testUrl = normalizeURL(testUrl)
+
+	parsedURL, _ := url.Parse(testUrl)
+	if hasLocalOrPrivateIP(parsedURL.Hostname()) {
+		c.JSON(200, &WebsiteCheckResult{
+			IPv4: fakePerfectWebsiteResult(testUrl),
+			IPv6: fakePerfectWebsiteResult(testUrl),
+		})
+		return
+	}
 
 	if cached, ok := websiteCache.Load(testUrl); ok {
 		entry := cached.(websiteCacheEntry)
@@ -569,6 +758,15 @@ func sslCheckHandler(c *gin.Context) {
 	}
 
 	testUrl = normalizeURL(testUrl)
+
+	parsedURL, _ := url.Parse(testUrl)
+	if hasLocalOrPrivateIP(parsedURL.Hostname()) {
+		c.JSON(200, &SSLCheckResult{
+			IPv4: fakeInvalidSSLResult(parsedURL.Hostname()),
+			IPv6: fakeInvalidSSLResult(parsedURL.Hostname()),
+		})
+		return
+	}
 
 	if cached, ok := sslCache.Load(testUrl); ok {
 		entry := cached.(sslCacheEntry)
@@ -727,8 +925,14 @@ func websiteSpeedTestHandler(c *gin.Context) {
 
 func dnsQueryHandler(c *gin.Context) {
 	domain := c.Param("domain")
-	url, _ := parseURL(domain)
-	domain = url.Host
+	parsedURL, err := parseURL(domain)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid domain",
+		})
+		return
+	}
+	domain = parsedURL.Host
 	recodeType := c.Param("type")
 	switch recodeType {
 	case "a":
@@ -855,7 +1059,7 @@ func pingHandler(c *gin.Context) {
 		pingCache.Delete(cacheKey)
 	}
 
-	result := &TCPingResult{}
+	result := &TCPingDualResult{}
 
 	switch SINGLE_STACK {
 	case "ipv4":

@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
+	github.com/klauspost/compress v1.19.1
 	github.com/miekg/dns v1.1.72
 	resty.dev/v3 v3.0.0-beta.6
 )

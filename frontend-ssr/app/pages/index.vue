@@ -4,6 +4,7 @@ import { isIPv6 } from 'is-ip';
 import { config } from '../../config/index';
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue';
 import { highlightCode } from '../../utils/shiki';
+import { isIPv4 } from '~/utils/tools';
 const route = useRoute();
 const canonicalUrl = computed(() => new URL(route.path, config.siteUrl).toString());
 
@@ -103,12 +104,8 @@ onMounted(async () => {
     yourIPv6.value = ipV6.value;
   }
 });
-
-function isIPv4(ip: string): boolean {
-  const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
-  return ipRegex.test(ip);
-}
 </script>
+
 
 <template>
   <div class="title">

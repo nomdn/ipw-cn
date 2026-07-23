@@ -16,7 +16,7 @@ const config = {
     v6OnlyAPI: "https://6.wsmdn.dpdns.org/",
     DualStackAPI: "https://test.wsmdn.dpdns.org/",
     // 后端API地址
-    apiBaseUrl: 'https://api-ipw.wsmdn.dpdns.org/',
+    apiBaseUrl: 'https://cn-jiangsu.api-ipw.wsmdn.top/',
     IPLocationAPI : "https://cn2-sichuan.api-ipw.wsmdn.top/",
     // 全站是否禁止搜索引擎索引
     noindex: false,
@@ -24,7 +24,7 @@ const config = {
         DualStack: [
             {
                 label: "中国 江苏 移动",
-                url :"https://api-ipw.wsmdn.dpdns.org/",
+                url :"https://cn-jiangsu.api-ipw.wsmdn.top/",
             },
         ],
         IPv4: [
@@ -51,7 +51,7 @@ const config = {
         DualStack: [
             {
                 label: "中国 江苏 移动",
-                url :"https://api-ipw.wsmdn.dpdns.org/",
+                url :"https://cn-jiangsu.api-ipw.wsmdn.top/",
             },
         ],
         IPv4: [
@@ -76,7 +76,7 @@ const config = {
     NSLookup:[
         {
             label: "中国 江苏 移动",
-            url :"https://api-ipw.wsmdn.dpdns.org/",
+            url :"https://cn-jiangsu.api-ipw.wsmdn.top/",
         },
         {
             label: "中国 广州 腾讯云",

@@ -1,0 +1,67 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+        - 'v*'
+  workflow_dispatch:
+jobs:
+    build-and-release:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Setup Go
+              uses: actions/setup-go@v4
+              with:
+                go-version: '1.26.2' # 选择适合的 Go 版本
+
+            - name: Build for Linux
+              run: |
+                CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -o lemonipw-linux-386
+                CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o lemonipw-linux-amd64
+                CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o lemonipw-linux-arm64
+                CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -o lemonipw-linux-armv7
+                CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -o lemonipw-linux-armv6
+                CGO_ENABLED=0 GOOS=linux GOARCH=loong64 go build -o lemonipw-linux-loong64
+            - name: Build for Windows
+              run: |
+                CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -o lemonipw-windows-386.exe
+                CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o lemonipw-windows-amd64.exe
+                CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o lemonipw-windows-arm64.exe
+            - name: Build for macOS
+              run: |
+                CGO_ENABLED=0 GOOS=darwin GOARCH=386 go build -o lemonipw-darwin-386
+                CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o lemonipw-darwin-amd64
+                CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o lemonipw-darwin-arm64
+            - name: Build for FreeBSD
+              run: |
+                CGO_ENABLED=0 GOOS=freebsd GOARCH=386 go build -o lemonipw-freebsd-386
+                CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -o lemonipw-freebsd-amd64
+                CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build -o lemonipw-freebsd-arm64
+            - name: Release
+              uses: softprops/action-gh-release@v3
+              if: github.ref_type == 'tag'
+              with:
+                name: Release for ${{ github.ref_name }}
+                tag_name: ${{ github.ref_name }}
+                generate_release_notes: true
+                files: |
+                  lemonipw-linux-386
+                  lemonipw-linux-amd64
+                  lemonipw-linux-arm64
+                  lemonipw-linux-armv7
+                  lemonipw-linux-armv6
+                  lemonipw-linux-loong64
+                  lemonipw-windows-386.exe
+                  lemonipw-windows-amd64.exe
+                  lemonipw-windows-arm64.exe
+                  lemonipw-darwin-386
+                  lemonipw-darwin-amd64
+                  lemonipw-darwin-arm64
+                  lemonipw-freebsd-386
+                  lemonipw-freebsd-amd64
+                  lemonipw-freebsd-arm64

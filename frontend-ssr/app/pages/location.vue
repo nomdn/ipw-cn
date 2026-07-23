@@ -4,7 +4,8 @@ import { isIPv6 } from 'is-ip';
 import {config} from '../../config/index';
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue';
 import { useRoute } from 'vue-router'
-import { codeToHtml } from 'shiki'
+import { highlightCode } from '../../utils/shiki'
+import { extractHost, isIPv4 } from '~/utils/tools';
 const route = useRoute();
 const loading = ref(false);
 
@@ -98,15 +99,8 @@ function locateIP(IP: string){
   });
 }
 
-function isIPv4(ip: string): boolean {
-  const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
-  return ipRegex.test(ip);
-}
 onMounted(async () => {
-  html.value = await codeToHtml(code, {
-    lang: 'bash',
-    theme: 'github-dark'
-  })
+  html.value = await highlightCode(code, 'bash')
   const urlParam = route.query.ip;
   if (urlParam) {
     ipAddress.value = urlParam as string;
@@ -221,27 +215,7 @@ onMounted(async () => {
 </template>
 <style scoped>
 @import "../style.css";
-.el-input {
-  width: 420px;
-  height: 50px;
-  font: 1.3em sans-serif;
-  margin-right: 10px;
-}
-
-.el-button {
-  width: 165px;
-  height: 50px;
-  font: 1.3em sans-serif;
-}
-:deep(.shiki span) {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace !important;
-}
-:deep(.shiki){
-  padding: 20px;
-  border-radius: 10px;
-}
-
-
+@import "../../assets/css/tool-common.css";
 </style>
 <style>
 @import "../style.css";
@@ -253,15 +227,6 @@ onMounted(async () => {
 }
 .el-menu--horizontal > .el-menu-item:nth-child(1) {
   margin-right: auto;
-}
-
-:deep(.shiki span) {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace !important;
-}
-
-:deep(.shiki) {
-  padding: 20px;
-  border-radius: 10px;
 }
 
 .el-input {

@@ -2,6 +2,8 @@ package ipdb
 
 import (
 	"bufio"
+	"math/rand"
+	"net"
 
 	"fmt"
 	"log/slog"
@@ -25,10 +27,10 @@ var (
 	qqwryMu       sync.RWMutex
 	mmdbDBs       map[string]*maxminddb.Reader
 	mmdbMu        sync.RWMutex
-	divisionFull   map[int]string
-	divisionShort  map[int]string
-	divisionMu     sync.RWMutex
-	bilibiliCache  sync.Map
+	divisionFull  map[int]string
+	divisionShort map[int]string
+	divisionMu    sync.RWMutex
+	bilibiliCache sync.Map
 )
 
 type bilibiliCacheEntry struct {
@@ -37,10 +39,12 @@ type bilibiliCacheEntry struct {
 }
 
 type MMDBCityResult struct {
-	Country     string `json:"country"`
-	CountryCode string `json:"country_code"`
-	Region      string `json:"administrative_area"`
-	City        string `json:"city"`
+	Country     string  `json:"country"`
+	CountryCode string  `json:"country_code"`
+	Region      string  `json:"administrative_area"`
+	City        string  `json:"city"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
 }
 
 type MMDBASNResult struct {
@@ -64,22 +68,22 @@ type BilibiliIPQueryResponse struct {
 }
 
 type BilibiliIPQueryData struct {
-	Addr      string  `json:"addr"`
-	Country   string  `json:"country"`
-	Province  string  `json:"province"`
-	City      string  `json:"city"`
-	ISP       string  `json:"isp"`
-	Latitude  float64 `json:"latitude,string"`
-	Longitude float64 `json:"longitude,string"`
+	Addr      string `json:"addr"`
+	Country   string `json:"country"`
+	Province  string `json:"province"`
+	City      string `json:"city"`
+	ISP       string `json:"isp"`
+	Latitude  string `json:"latitude"`
+	Longitude string `json:"longitude"`
 }
 
 type BilibiliResult struct {
-	Country   string  `json:"country"`
-	Region    string  `json:"administrative_area"`
-	City      string  `json:"city"`
-	ISP       string  `json:"isp"`
-	Latitude  float64 `json:"latitude"`
-	Longitude float64 `json:"longitude"`
+	Country   string `json:"country"`
+	Region    string `json:"administrative_area"`
+	City      string `json:"city"`
+	ISP       string `json:"isp"`
+	Latitude  string `json:"latitude"`
+	Longitude string `json:"longitude"`
 }
 
 func loadDivisionCode(path string, sep string) (map[int]string, error) {
@@ -298,6 +302,10 @@ func searchMMDBCity(ip string) (*MMDBCityResult, error) {
 		City struct {
 			Names map[string]string `maxminddb:"names"`
 		} `maxminddb:"city"`
+		Location struct {
+			Latitude  float64 `maxminddb:"latitude"`
+			Longitude float64 `maxminddb:"longitude"`
+		} `maxminddb:"location"`
 	}
 	if err := db.Lookup(addr).Decode(&record); err != nil {
 		return nil, err
@@ -305,6 +313,8 @@ func searchMMDBCity(ip string) (*MMDBCityResult, error) {
 
 	result := &MMDBCityResult{
 		CountryCode: record.Country.ISOCode,
+		Latitude:    record.Location.Latitude,
+		Longitude:   record.Location.Longitude,
 	}
 	if name, ok := record.Country.Names["zh-CN"]; ok {
 		result.Country = name
@@ -350,6 +360,10 @@ func searchDBIPCity(ip string) (*MMDBCityResult, error) {
 		City struct {
 			Names map[string]string `maxminddb:"names"`
 		} `maxminddb:"city"`
+		Location struct {
+			Latitude  float64 `maxminddb:"latitude"`
+			Longitude float64 `maxminddb:"longitude"`
+		} `maxminddb:"location"`
 	}
 	if err := db.Lookup(addr).Decode(&record); err != nil {
 		return nil, err
@@ -357,6 +371,8 @@ func searchDBIPCity(ip string) (*MMDBCityResult, error) {
 
 	result := &MMDBCityResult{
 		CountryCode: record.Country.ISOCode,
+		Latitude:    record.Location.Latitude,
+		Longitude:   record.Location.Longitude,
 	}
 	if name, ok := record.Country.Names["zh-CN"]; ok {
 		result.Country = name
@@ -443,9 +459,13 @@ func searchGeoCN(ip string) (*GeoCNResult, error) {
 }
 
 func searchBilibili(ip string) (*BilibiliResult, error) {
+	if net.ParseIP(ip) == nil {
+		return nil, fmt.Errorf("invalid IP address: %s", ip)
+	}
+
 	if cached, ok := bilibiliCache.Load(ip); ok {
 		entry := cached.(bilibiliCacheEntry)
-		if time.Since(entry.timestamp) < 5*24*time.Hour {
+		if time.Since(entry.timestamp) < 24*time.Hour {
 			return entry.result, nil
 		}
 		bilibiliCache.Delete(ip)
@@ -453,7 +473,10 @@ func searchBilibili(ip string) (*BilibiliResult, error) {
 
 	client := resty.New()
 	defer client.Close()
-	resp, err := client.R().SetResult(&BilibiliIPQueryResponse{}).Get("https://api.live.bilibili.com/ip_service/v1/ip_service/get_ip_addr?ip=" + ip)
+	resp, err := client.R().
+		SetQueryParam("ip", ip).
+		SetResult(&BilibiliIPQueryResponse{}).
+		Get("https://api.live.bilibili.com/ip_service/v1/ip_service/get_ip_addr")
 	if err != nil {
 		return nil, err
 	}
@@ -526,6 +549,7 @@ func reloadAll() {
 }
 
 func Init(ghproxy string) {
+
 	localOK := true
 	if err := loadIp2Region(); err != nil {
 		slog.Warn("Local ip2region not available", "error", err)
@@ -548,16 +572,23 @@ func Init(ghproxy string) {
 		slog.Info("All databases loaded from local files")
 	} else {
 		slog.Info("Downloading databases...")
-		closeAllDBs()
-		PullDatabase(ghproxy)
-		loadAll()
+		if pullErr := PullDatabase(ghproxy); pullErr != nil {
+			slog.Error("Some databases failed to download", "error", pullErr)
+		}
+		reloadAll()
 	}
 
 	go func() {
 		for {
-			time.Sleep(time.Hour * 24)
+			jitter := time.Duration(rand.Int63n(int64(time.Hour)))
+			sleepDuration := 24*time.Hour + jitter
+			time.Sleep(sleepDuration)
+			slog.Info("Starting database sync...")
+			if err := PullDatabase(ghproxy); err != nil {
+				slog.Error("Database sync failed", "error", err)
+				continue
+			}
 			closeAllDBs()
-			PullDatabase(ghproxy)
 			reloadAll()
 			slog.Info("Database sync completed, waiting for next sync...")
 		}

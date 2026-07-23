@@ -39,7 +39,7 @@ func QueryA(domain string) (DNSResult, error) {
 	duration := time.Since(start).Seconds() * 1000
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query DNS for %s: %v\n", domain, err)
+		slog.Warn("Failed to query DNS", "domain", domain, "error", err)
 		result.Record = []string{}
 		return result, err
 	}
@@ -75,7 +75,7 @@ func ResolveAAAARecord(domain string) (DNSResult, error) {
 	duration := time.Since(start).Seconds() * 1000
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query DNS for %s: %v\n", domain, err)
+		slog.Warn("Failed to query DNS", "domain", domain, "error", err)
 		result.Record = []string{}
 		return result, err
 	}
@@ -111,7 +111,7 @@ func ResolveTXTRecord(domain string) (DNSResult, error) {
 	duration := time.Since(start).Seconds() * 1000
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query DNS for %s: %v\n", domain, err)
+		slog.Warn("Failed to query DNS", "domain", domain, "error", err)
 		result.Record = []string{}
 		return result, err
 	}
@@ -149,7 +149,7 @@ func ResolveNSRecord(domain string) (DNSResult, error) {
 	duration := time.Since(start).Seconds() * 1000
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query DNS for %s: %v\n", domain, err)
+		slog.Warn("Failed to query DNS", "domain", domain, "error", err)
 		result.Record = []string{}
 		return result, err
 	}
@@ -185,7 +185,7 @@ func ResolveCNAMERecord(domain string) (DNSResult, error) {
 	duration := time.Since(start).Seconds() * 1000
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query CNAME for %s: %v\n", domain, err)
+		slog.Warn("Failed to query CNAME", "domain", domain, "error", err)
 		result.Record = []string{}
 		return result, err
 	}
@@ -221,7 +221,7 @@ func ResolveMXRecord(domain string) (DNSResult, error) {
 	duration := time.Since(start).Seconds() * 1000
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query MX for %s: %v\n", domain, err)
+		slog.Warn("Failed to query MX", "domain", domain, "error", err)
 		result.Record = []string{}
 		return result, err
 	}
@@ -257,7 +257,7 @@ func ResolveSRVRecord(domain string) (DNSResult, error) {
 	duration := time.Since(start).Seconds() * 1000
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query SRV for %s: %v\n", domain, err)
+		slog.Warn("Failed to query SRV", "domain", domain, "error", err)
 		result.Record = []string{}
 		return result, err
 	}
@@ -285,7 +285,7 @@ func ResolvePTRRecord(ip string) (DNSResult, error) {
 	start := time.Now()
 	ptrName, err := dns.ReverseAddr(ip)
 	if err != nil {
-		slog.Warn("Invalid IP address for PTR query: %s, error: %v", ip, err)
+		slog.Warn("Invalid IP address for PTR query", "ip", ip, "error", err)
 		result := DNSResult{Domain: ip, Record: []string{}}
 		return result, fmt.Errorf("invalid IP address: %v", err)
 	}
@@ -300,7 +300,7 @@ func ResolvePTRRecord(ip string) (DNSResult, error) {
 	duration := time.Since(start).Seconds() * 1000
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query PTR for %s: %v\n", ip, err)
+		slog.Warn("Failed to query PTR", "ip", ip, "error", err)
 		result.Record = []string{}
 		return result, err
 	}
@@ -336,7 +336,7 @@ func ResolveCAARecord(domain string) (DNSResult, error) {
 	duration := time.Since(start).Seconds() * 1000
 	result.Duration = duration
 	if err != nil {
-		slog.Warn("Failed to query CAA for %s: %v\n", domain, err)
+		slog.Warn("Failed to query CAA", "domain", domain, "error", err)
 		result.Record = []string{}
 		return result, err
 	}

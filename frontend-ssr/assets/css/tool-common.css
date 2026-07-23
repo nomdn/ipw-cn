@@ -1,0 +1,235 @@
+/* tool-common.css - 网络工具页面公共样式 */
+
+/* 输入框和按钮 */
+.el-input {
+  width: 420px;
+  height: 50px;
+  font: 1.3em sans-serif;
+  margin-right: 10px;
+}
+
+.el-button {
+  width: 165px;
+  height: 50px;
+  font: 1.3em sans-serif;
+}
+
+.el-select {
+  margin-right: 10px;
+}
+
+:deep(.el-select__wrapper) {
+  height: 50px !important;
+  min-height: 50px !important;
+  padding-top: 0 !important;
+}
+
+:deep(.el-select__selected-item) {
+  line-height: 48px !important;
+  height: 48px !important;
+  font-size: 16px;
+}
+
+:deep(.el-select__caret) {
+  font-size: 18px;
+  line-height: 50px !important;
+}
+
+:deep(.el-input__wrapper) {
+  height: 50px !important;
+  box-shadow: 0 0 0 1px var(--el-border-color) inset !important;
+}
+
+:deep(.el-input__inner) {
+  height: 48px !important;
+  line-height: 48px !important;
+  font-size: 16px;
+}
+
+/* 结果区域 */
+.result-section {
+  margin-top: 30px;
+}
+
+/* 表格样式 */
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+}
+
+html.dark .result-table {
+  background: #2e2d2d;
+  border: 1px solid #2e2e2e;
+}
+
+.result-table thead tr {
+  background-color: #c0c4cc;
+}
+
+html.dark .result-table thead tr {
+  background: #2e2d2d;
+}
+
+.result-table .table-header {
+  padding: 12px 15px;
+  font-weight: 600;
+  color: #303133;
+  text-align: left;
+  border: 1px solid #dcdfe6;
+}
+
+html.dark .result-table .table-header {
+  color: #cfcfcf;
+  border: 1px solid #1a1919;
+}
+
+.result-table tbody tr {
+  border-bottom: 1px solid #dcdfe6;
+}
+
+html.dark .result-table tbody tr {
+  border-bottom: 1px solid #1a1919;
+}
+
+.result-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.result-table tbody tr:hover {
+  background-color: #f5f7fa;
+}
+
+html.dark .result-table tbody tr:hover {
+  background-color: #393a3a;
+}
+
+.result-table .table-label {
+  padding: 12px 15px;
+  font-weight: 600;
+  color: #606266;
+  width: 150px;
+  text-align: left;
+  border: 1px solid #dcdfe6;
+}
+
+html.dark .result-table .table-label {
+  color: #c0c4cc;
+  border: 1px solid #1a1919;
+}
+
+.result-table .table-value {
+  padding: 12px 15px;
+  color: #303133;
+  border: 1px solid #dcdfe6;
+}
+
+html.dark .result-table .table-value {
+  color: #cfcfcf;
+  border: 1px solid #1a1919;
+}
+
+/* 状态样式 */
+.status-code {
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 4px;
+}
+
+.status-success {
+  color: #67C23A;
+  background: #f0f9eb;
+}
+
+.status-warning {
+  color: #E6A23C;
+  background: #fdf6ec;
+}
+
+.status-error {
+  color: #F56C6C;
+  background: #fef0f0;
+}
+
+.valid {
+  color: #67C23A;
+  font-weight: 600;
+}
+
+.expired {
+  color: #F56C6C;
+  font-weight: 600;
+}
+
+.loss-ok {
+  color: #67C23A;
+  font-weight: 600;
+}
+
+.loss-warning {
+  color: #F56C6C;
+  font-weight: 600;
+}
+
+/* 错误消息 */
+.error-message {
+  margin-top: 20px;
+  padding: 15px;
+  background: #fef0f0;
+  color: #F56C6C;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 1.1em;
+}
+
+/* 代码块 */
+pre {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre;
+  max-width: 100%;
+}
+
+pre code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.9em;
+  color: #303133;
+}
+
+html.dark pre {
+  background: #303133;
+}
+
+html.dark pre code {
+  color: #f8f9fa;
+}
+
+/* 徽章区域 */
+.badge-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.badge-item {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+}
+
+.badge-item h4 {
+  margin: 0 0 15px 0;
+  color: #3EAF7C;
+  font-size: 1.2em;
+}
+
+.badge-item img {
+  display: block;
+  margin-bottom: 15px;
+  max-width: 200px;
+}

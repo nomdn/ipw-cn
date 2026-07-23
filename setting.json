@@ -1,6 +1,6 @@
 {
     "port": 8080,
-    "gh-proxy": "https://fastgit.cc/",
+    "gh-proxy": "https://github.chenc.dev/",
     "single-stack": "",
     "dns-server": ""
 }

@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
 import { isIPv6 } from 'is-ip';
 import { renderMarkdown } from "../../utils/markdown";
+import { formatTime } from '~/utils/tools';
 const route = useRoute()
 
 useHead({
@@ -57,14 +58,6 @@ async function getUserIP(){
     userIP.value = data
   })
   return userIP.value
-}
-
-function formatTime(ms: number): string {
-  if (ms == null) return '-'
-  if (ms < 1000) {
-    return `${ms} ms`
-  }
-  return `${(ms / 1000).toFixed(2)} s`
 }
 
 const recordTypes = [
@@ -132,11 +125,11 @@ async function queryDNS() {
       };
     }
   });
-
+  nowRecordType.value = recordType.value
   const promiseResults = await Promise.all(promises)
   console.log(promiseResults)
   isloading.value = false
-  nowRecordType.value = recordType.value
+  
   return promiseResults
 }
 
@@ -187,7 +180,7 @@ const doc = page.value;
       <el-button 
         @click="queryDNS()" 
         type="primary" 
-        :loading="loading"
+        :loading="isloading"
       >
         查询
       </el-button>
@@ -209,26 +202,23 @@ const doc = page.value;
         <tbody>
           <tr v-for="(result) in results" :key="result.server">
             <td class="table-label">{{result.server}}</td>
-            <td class="table-value">{{nowRecordType || '--'}}</td>
-            
-            <td class="table-value" style="text-align: center;">
+            <td class="table-value">{{nowRecordType.toUpperCase() || '--'}}</td>
+            <td class="table-value" v-if="result.loading" colspan="4" style="text-align: left;">加载中...</td>
+            <td class="table-value" v-if="!result.loading">
               <template v-if="result && result.data?.record">
                 <div v-for="(ip, index) in result.data.record.slice(0, 5)" :key="index" class="ip-address">
                   <span>{{ ip }}</span>
                 </div>
               </template>
               
-              <span v-else-if="!isloading && result.data?.record?.length === 0" class="status-code" style="color: #F56C6C; background: #fef0f0;">
+              <span v-else-if="!result.loading && result.data?.record?.length === 0" class="status-code" style="color: #F56C6C; background: #fef0f0;">
                 解析失败
-              </span>
-              <span v-else-if="isloading" class="status-code" style="color: #909399; background: #f4f4f5;">
-                加载中
               </span>
             </td>
             
-            <td class="table-value">{{result.data?.record?.length || 0}}</td>
-            <td class="table-value">{{formatTime(result.data?.duration)}}</td>
-            <td class="table-value">{{result.data?.ttl}}</td>
+            <td class="table-value" v-if="!result.loading">{{result.data?.record?.length || 0}}</td>
+            <td class="table-value" v-if="!result.loading">{{formatTime(result.data?.duration)}}</td>
+            <td class="table-value" v-if="!result.loading">{{result.data?.ttl}}</td>
           </tr>
         </tbody>
         
@@ -262,207 +252,16 @@ const doc = page.value;
 
 <style scoped>
 @import "../style.css";
+@import "../../assets/css/tool-common.css";
+
+.el-menu--horizontal > .el-menu-item:nth-child(1) {
+  margin-right: auto;
+}
 
 .markdown :deep(a) {
-    color: #3EAF7C !important;
-    font-size: 1.3em;
-    text-decoration: none
-}
-.el-input {
-  width: 420px;
-  height: 50px;
-  font: 1.3em sans-serif;
-  margin-right: 10px;
-}
-.custom-height-select {
-  --el-component-size: 50px; 
-}
-
-.el-select {
-  margin-right: 10px;
-}
-/* 2. 针对新版 Element Plus (>= 2.4.0) 的 el-select 结构 */
-:deep(.el-select__wrapper) {
-  height: 50px !important;
-  min-height: 50px !important;
-  padding-top: 0 !important;
-}
-
-
-
-/* 让选中的文字垂直居中 */
-:deep(.el-select__selected-item) {
-  line-height: 48px !important;
-  height: 48px !important;
-  font-size: 16px;
-}
-
-/* 右侧下拉箭头垂直居中 */
-:deep(.el-select__caret) {
-  font-size: 18px;
-  line-height: 50px !important;
-}
-
-/* 3. 兼容老版本 Element Plus (< 2.4.0)，以防万一 */
-:deep(.el-input__wrapper) {
-  height: 50px !important;
-  box-shadow: 0 0 0 1px var(--el-border-color) inset !important;
-}
-:deep(.el-input__inner) {
-  height: 48px !important;
-  line-height: 48px !important;
-  font-size: 16px;
-}
-.el-button {
-  width: 165px;
-  height: 50px;
-  font: 1.3em sans-serif;
-}
-
-.result-section {
-  margin-top: 30px;
-}
-
-.server-block {
-  margin-bottom: 30px;
-}
-
-.server-block h3 {
-  margin-bottom: 15px;
-  color: #303133;
-  font-size: 1.2em;
-}
-
-html.dark .server-block h3 {
-  color: #cfcfcf;
-}
-
-.result-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: #fff;
-  border: 1px solid #dcdfe6;
-}
-
-html.dark .result-table {
-  background: #2e2d2d;
-  border: 1px solid #2e2e2e;
-}
-
-.result-table thead tr {
-  background-color: #c0c4cc;
-}
-.result-table .table-label {
-  padding: 12px 15px;
-  font-weight: 600;
-  color: #606266;
-  width: 200px;
-  text-align: left;
-  border: 1px solid #dcdfe6;
-}
-
-html.dark .result-table .table-label {
-  color: #c0c4cc;
-  border: 1px solid #1a1919;
-}
-
-.result-table .table-value {
-  padding: 12px 15px;
-  color: #303133;
-  border: 1px solid #dcdfe6;
-  text-align: center;
-}
-
-html.dark .result-table .table-value {
-  color: #cfcfcf;
-  border: 1px solid #1a1919;
-}
-html.dark .result-table thead tr {
-  background: #2e2d2d;
-}
-.ip-value {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-}
-
-.ip-address {
-  display: block;
-  text-align: center;
-  padding: 2px 0;
-}
-
-.result-table .table-header {
-  padding: 12px 15px;
-  font-weight: 600;
-  color: #303133;
-  text-align: left;
-  border: 1px solid #dcdfe6;
-}
-
-html.dark .result-table .table-header {
-  color: #cfcfcf;
-  border: 1px solid #1a1919;
-}
-
-.result-table tbody tr {
-  border-bottom: 1px solid #dcdfe6;
-}
-
-html.dark .result-table tbody tr {
-  border-bottom: 1px solid #1a1919;
-}
-
-.result-table tbody tr:last-child {
-  border-bottom: none;
-}
-
-.result-table tbody tr:hover {
-  background-color: #f5f7fa;
-}
-
-html.dark .result-table tbody tr:hover {
-  background-color: #393a3a;
-}
-
-.result-table .table-label {
-  padding: 12px 15px;
-  font-weight: 600;
-  color: #606266;
-  width: 100px;
-  text-align: left;
-  border: 1px solid #dcdfe6;
-}
-
-html.dark .result-table .table-label {
-  color: #c0c4cc;
-  border: 1px solid #1a1919;
-}
-
-.result-table .table-value {
-  padding: 12px 15px;
-  color: #303133;
-  border: 1px solid #dcdfe6;
-  word-break: break-all;
-}
-
-html.dark .result-table .table-value {
-  color: #cfcfcf;
-  border: 1px solid #1a1919;
-}
-
-.status-message {
-  padding: 15px;
-  color: #909399;
-  text-align: center;
-}
-
-.error-message {
-  padding: 15px;
-  background: #fef0f0;
-  color: #F56C6C;
-  border-radius: 6px;
-  text-align: center;
+  color: #3EAF7C !important;
+  font-size: 1.3em;
+  text-decoration: none
 }
 </style>
 

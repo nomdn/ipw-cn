@@ -3,6 +3,7 @@ import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { CircleCheckFilled, CircleCloseFilled,InfoFilled } from '@element-plus/icons-vue';
 import { config } from '../../config/index';
+import { extractHost, formatTime, formatSpeed, getStatusCodeClass } from '~/utils/tools';
 const route = useRoute()
 
 useHead({
@@ -101,25 +102,6 @@ function formatDate(dateString: string): string {
   })
 }
 
-function formatTime(ms: number): string {
-  if (ms == null || ms <= 0) return '-'
-  if (ms < 1000) {
-    return `${ms} ms`
-  }
-  return `${(ms / 1000).toFixed(2)} s`
-}
-
-function formatSpeed(speed: number): string {
-  if (speed == null || speed <= 0) return '-'
-  return `${speed.toFixed(2)} KB/s`
-}
-
-function getStatusCodeClass(code: number): string {
-  if (code >= 200 && code < 300) return 'status-success'
-  if (code >= 300 && code < 400) return 'status-warning'
-  return 'status-error'
-}
-
 function checkSSL() {
   testDomain.value = extractHost(tmpDomain.value)
   loading.value = true
@@ -129,13 +111,6 @@ function checkSSL() {
     executeSSL();
   });
 }
-function extractHost(url: string): string {
-  const regex = /^(?:[a-zA-Z][a-zA-Z\d+.-]*:\/\/)?(?:[^\s@/]+@)?(?<host>(?:\[(?:[0-9a-fA-F:]+)\]|(?:\d{1,3}(?:\.\d{1,3}){3})|(?:[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?(?:\.[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d._-]*?)*))(?::\d{1,5})?)(?:[/?#][^\s]*)?$/u;
-
-  const match = url.trim().match(regex);
-  return match?.groups?.host ?? url;
-}
-
 onMounted(() => {
   const urlParam = route.query.site as string
   if (urlParam) {
@@ -390,202 +365,10 @@ onMounted(() => {
 
 <style scoped>
 @import "../style.css";
+@import "../../assets/css/tool-common.css";
+
 .el-menu--horizontal > .el-menu-item:nth-child(1) {
   margin-right: auto;
-}
-
-:deep(.shiki span) {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace !important;
-}
-
-:deep(.shiki) {
-  padding: 20px;
-  border-radius: 10px;
-}
-
-.el-input {
-  width: 420px;
-  height: 50px;
-  font: 1.3em sans-serif;
-  margin-right: 10px;
-}
-
-.el-button {
-  width: 165px;
-  height: 50px;
-  font: 1.3em sans-serif;
-}
-
-.result-section {
-  margin-top: 30px;
-}
-
-.result-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: #fff;
-  border: 1px solid #dcdfe6;
-}
-html.dark .result-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: #2e2d2d;
-  border: 1px solid #2e2e2e;
-}
-.result-table thead tr {
-  background-color: #c0c4cc;
-}
-html.dark .result-table thead tr {
-    background: #2e2d2d;
-
-}
-
-.result-table .table-header {
-  padding: 12px 15px;
-  font-weight: 600;
-  color: #303133;
-  text-align: left;
-  border: 1px solid #dcdfe6;
-}
-html.dark .result-table .table-header {
-  padding: 12px 15px;
-  font-weight: 600;
-  color: #cfcfcf;
-  text-align: left;
-  border: 1px solid #1a1919;
-}
-
-.result-table tbody tr {
-  border-bottom: 1px solid #dcdfe6;
-}
-html.dark .result-table tbody tr {
-  border-bottom: 1px solid #1a1919;
-}
-
-
-.result-table tbody tr:last-child {
-  border-bottom: none;
-}
-
-.result-table tbody tr:hover {
-  background-color: #f5f7fa;
-}
-html.dark .result-table tbody tr:hover {
-  background-color: #393a3a;
-}
-
-.result-table .table-label {
-  padding: 12px 15px;
-  font-weight: 600;
-  color: #606266;
-  width: 150px;
-  text-align: left;
-  border: 1px solid #dcdfe6;
-}
-html.dark .result-table .table-label {
-  color: #c0c4cc;
-  border: 1px solid #1a1919;
-}
-
-.result-table .table-value {
-  padding: 12px 15px;
-  color: #303133;
-  border: 1px solid #dcdfe6;
-}
-html.dark .result-table .table-value {
-  color: #cfcfcf;
-  border: 1px solid #1a1919;
-}
-.valid {
-  color: #67C23A;
-  font-weight: 600;
-}
-
-.expired {
-  color: #F56C6C;
-  font-weight: 600;
-}
-
-.status-code {
-  font-weight: 600;
-  padding: 4px 12px;
-  border-radius: 4px;
-}
-
-.status-success {
-  color: #67C23A;
-  background: #f0f9eb;
-}
-
-.status-warning {
-  color: #E6A23C;
-  background: #fdf6ec;
-}
-
-.status-error {
-  color: #F56C6C;
-  background: #fef0f0;
-}
-
-.error-message {
-  margin-top: 20px;
-  padding: 15px;
-  background: #fef0f0;
-  color: #F56C6C;
-  border-radius: 6px;
-  text-align: center;
-  font-size: 1.1em;
-}
-
-pre {
-  background: #f8f9fa;
-  padding: 15px;
-  border-radius: 6px;
-  overflow-x: auto;
-  white-space: pre;
-  max-width: 100%;
-}
-
-pre code {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-  font-size: 0.9em;
-  color: #303133;
-}
-html.dark pre {
-  background: #303133;
-}
-
-html.dark pre code {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-  color: #f8f9fa;
-}
-
-
-
-.badge-section {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  margin-top: 20px;
-}
-
-.badge-item {
-  background: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  border: 1px solid #e4e7ed;
-}
-
-.badge-item h4 {
-  margin: 0 0 15px 0;
-  color: #3EAF7C;
-  font-size: 1.2em;
-}
-
-.badge-item img {
-  display: block;
-  margin-bottom: 15px;
-  max-width: 200px;
 }
 </style>
 

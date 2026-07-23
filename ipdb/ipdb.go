@@ -19,7 +19,7 @@ type downloadTask struct {
 	name string
 }
 
-func PullDatabase(ghproxy string) (error, error) {
+func PullDatabase(ghproxy string) error {
 	tasks := []downloadTask{
 		{"https://cdn.jsdelivr.net/gh/ljxi/GeoCN@main/data/full.txt", "full.txt"},
 		{"https://cdn.jsdelivr.net/gh/ljxi/GeoCN@main/data/short.txt", "short.txt"},
@@ -36,7 +36,7 @@ func PullDatabase(ghproxy string) (error, error) {
 	os.RemoveAll(tmpDir)
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		slog.Error("Failed to create tmp directory", "error", err)
-		return err, err
+		return err
 	}
 
 	slog.Info("Starting parallel downloads...", "count", len(tasks))
@@ -60,33 +60,37 @@ func PullDatabase(ghproxy string) (error, error) {
 		}
 	}
 
-	if failCount > 0 {
-		slog.Error("Some downloads failed, keeping tmp for inspection", "failed", failCount)
-		return fmt.Errorf("%d downloads failed", failCount), fmt.Errorf("%d downloads failed", failCount)
-	}
-
-	slog.Info("All downloads succeeded, copying to working directory...")
+	slog.Info("Copying downloaded files to working directory...")
 	for _, t := range tasks {
 		src := filepath.Join(tmpDir, t.name)
+		if _, err := os.Stat(src); os.IsNotExist(err) {
+			slog.Warn("Skipping missing file", "file", t.name)
+			continue
+		}
 		dst := "./" + t.name
 		if err := copyFile(src, dst); err != nil {
 			slog.Error("Failed to copy file", "file", t.name, "error", err)
-			return err, err
+			continue
 		}
 		if strings.HasSuffix(t.name, ".gz") {
 			outName := strings.TrimSuffix(t.name, ".gz")
 			slog.Info("Decompressing...", "file", t.name, "output", outName)
 			if err := gunzipFile(dst, "./"+outName); err != nil {
 				slog.Error("Failed to decompress", "file", t.name, "error", err)
-				return err, err
 			}
 			os.Remove(dst)
 		}
 	}
 
 	os.RemoveAll(tmpDir)
+
+	if failCount > 0 {
+		slog.Error("Some downloads failed", "failed", failCount)
+		return fmt.Errorf("%d downloads failed", failCount)
+	}
+
 	slog.Info("Download completed successfully!")
-	return nil, nil
+	return nil
 }
 
 func downloadWithRetry(url, name string) error {
@@ -126,16 +130,35 @@ func copyFile(src, dst string) error {
 	}
 	defer in.Close()
 
-	out, err := os.Create(dst)
+	tmp := dst + ".tmp"
+	out, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
 	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		os.Remove(tmp)
 		return err
 	}
-	return out.Close()
+
+	if err := out.Sync(); err != nil {
+		out.Close()
+		os.Remove(tmp)
+		return err
+	}
+
+	if err := out.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+
+	if err := os.Rename(tmp, dst); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+
+	return nil
 }
 
 func gunzipFile(src, dst string) error {
@@ -151,14 +174,33 @@ func gunzipFile(src, dst string) error {
 	}
 	defer gz.Close()
 
-	out, err := os.Create(dst)
+	tmp := dst + ".tmp"
+	out, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
 	if _, err := io.Copy(out, gz); err != nil {
+		out.Close()
+		os.Remove(tmp)
 		return err
 	}
-	return out.Close()
+
+	if err := out.Sync(); err != nil {
+		out.Close()
+		os.Remove(tmp)
+		return err
+	}
+
+	if err := out.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+
+	if err := os.Rename(tmp, dst); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+
+	return nil
 }

@@ -12,11 +12,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-// ==========================================
-// ⭐️ 核心重构：严格遵循 RFC 8484 标准 DoH (二进制报文)
-// ==========================================
-
-// 阿里云标准 DoH 端点
+// 腾讯云标准 DoH 端点
 var dohEndpoint string = "https://doh.pub/dns-query"
 
 type DNSResult struct {

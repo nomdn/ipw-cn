@@ -29,21 +29,7 @@ type TCPingStats struct {
 }
 
 func resolveHost(host string, version string) (string, error) {
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return "", fmt.Errorf("DNS lookup failed: %w", err)
-	}
-
-	for _, ip := range ips {
-		if version == "v4" && ip.To4() != nil {
-			return ip.String(), nil
-		}
-		if version == "v6" && ip.To4() == nil && ip.To16() != nil {
-			return ip.String(), nil
-		}
-	}
-
-	return "", fmt.Errorf("no %s address found for %s", version, host)
+	return ResolveIP(host, version)
 }
 
 func TCPing(host string, port string, version string, timeout time.Duration) (*TCPingResult, error) {
@@ -86,7 +72,17 @@ func TCPing(host string, port string, version string, timeout time.Duration) (*T
 func TCPingRun(host string, port string, count int, version string, timeout time.Duration, interval time.Duration) (*TCPingStats, error) {
 	ip, err := resolveHost(host, version)
 	if err != nil {
-		return nil, err
+		return &TCPingStats{
+			IP:      "Error: " + err.Error(),
+			Port:    port,
+		Sent:    count,
+		Success: 0,
+		Results: nil,
+		MinRTT:  -1,
+		MaxRTT:  -1,
+		AvgRTT:  -1,
+		LossRate: 100,
+		}, nil
 	}
 
 	stats := &TCPingStats{

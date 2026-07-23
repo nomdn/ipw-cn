@@ -110,7 +110,17 @@ func TCPing(host string, port string, version string, timeout time.Duration) (*T
 func TCPingRun(host string, port string, count int, version string, timeout time.Duration, interval time.Duration) (*TCPingStats, error) {
 	ip, err := resolveHost(host, version)
 	if err != nil {
-		return nil, err
+		return &TCPingStats{
+			IP:      "Error: " + err.Error(),
+			Port:    port,
+			Sent:    count,
+			Success: 0,
+			Results: nil,
+			MinRTT:  -1,
+			MaxRTT:  -1,
+			AvgRTT:  -1,
+			LossRate: 100,
+		}, nil
 	}
 
 	stats := &TCPingStats{
