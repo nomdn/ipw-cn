@@ -45,7 +45,7 @@ jobs:
               uses: softprops/action-gh-release@v3
               if: github.ref_type == 'tag'
               with:
-                name: Release for ${{ github.ref_name }}
+                name: Release ${{ github.ref_name }}
                 tag_name: ${{ github.ref_name }}
                 token: ${{ secrets.MINT_TOKEN }}
                 
