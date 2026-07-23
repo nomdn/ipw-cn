@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"lemon-ipw/ipdb"
+	"lemon-ipw/ssrf"
 	"lemon-ipw/webtest"
 	"log/slog"
 	"net"
@@ -26,25 +27,23 @@ import (
 	"resty.dev/v3"
 )
 
-// Init初始化函数
-var blockPrivateIPs = true
-
-type ssrfContextKey string
-
-const ssrfValidatedIPsKey ssrfContextKey = "ssrf_validated_ips"
-
 func initHTTPClients() {
 	setTransport := func(network string) *http.Transport {
 		dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 		return &http.Transport{
+			// DialContext performs SSRF validation before establishing connections.
+			// 1. Reuse validated IPs from context (cached by ValidateOutboundTarget).
+			// 2. Resolve hostname via DNS if no cached IPs exist.
+			// 3. Block connections to private/internal IPs.
+			// 4. Pin the connection to the first resolved IP to prevent DNS rebinding.
 			DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
-				if blockPrivateIPs {
-					host, _, err := net.SplitHostPort(addr)
+				if ssrf.Enabled() {
+					host, port, err := net.SplitHostPort(addr)
 					if err != nil {
 						return nil, err
 					}
 					var ips []net.IP
-					if v, ok := ctx.Value(ssrfValidatedIPsKey).([]net.IP); ok {
+					if v, ok := ctx.Value(ssrf.ValidatedIPsKey()).([]net.IP); ok {
 						ips = v
 					} else {
 						ips, err = net.LookupIP(host)
@@ -53,10 +52,13 @@ func initHTTPClients() {
 						}
 					}
 					for _, ip := range ips {
-						if isPrivateIP(ip) {
+						if ssrf.IsPrivateIP(ip) {
 							slog.Warn("Blocked connection to private IP", "host", host, "ip", ip)
 							return nil, fmt.Errorf("request to private/internal address is not allowed")
 						}
+					}
+					if len(ips) > 0 {
+						addr = net.JoinHostPort(ips[0].String(), port)
 					}
 				}
 				return dialer.DialContext(ctx, network, addr)
@@ -70,66 +72,11 @@ func initHTTPClients() {
 	V4Client.SetTransport(setTransport("tcp4"))
 	V6Client.SetTimeout(10 * time.Second)
 	V4Client.SetTimeout(10 * time.Second)
-	V6Client.SetRedirectPolicy(resty.RedirectPolicyFunc(secureCheckRedirect))
-	V4Client.SetRedirectPolicy(resty.RedirectPolicyFunc(secureCheckRedirect))
+	V6Client.SetRedirectPolicy(resty.RedirectPolicyFunc(ssrf.SecureCheckRedirect))
+	V4Client.SetRedirectPolicy(resty.RedirectPolicyFunc(ssrf.SecureCheckRedirect))
 	V6Client.AddContentDecompresser("zstd", decompressZstd)
 	V4Client.AddContentDecompresser("zstd", decompressZstd)
 
-}
-
-func init() {
-	if v := os.Getenv("BLOCK_PRIVATE_IPS"); v != "" {
-		blockPrivateIPs = v != "false" && v != "0"
-	}
-}
-
-// 工具函数
-// Tools Functions
-// isPrivateIP checks if the given IP address is a private or internal IP address.
-// isPrivateIP 检查给定的 IP 地址是否为私有或内部 IP 地址。
-func isPrivateIP(ip net.IP) bool {
-	if ip.IsPrivate() {
-		return true
-	}
-	if ip.IsLoopback() {
-		return true
-	}
-	if ip.IsLinkLocalUnicast() {
-		return true
-	}
-	if ip.IsUnspecified() {
-		return true
-	}
-	return false
-}
-
-func isLocalOrPrivateIP(ip net.IP) bool {
-	if ip.IsPrivate() {
-		return true
-	}
-	if ip.IsLoopback() {
-		return true
-	}
-	if ip.IsLinkLocalUnicast() {
-		return true
-	}
-	if ip.IsUnspecified() {
-		return true
-	}
-	return false
-}
-
-func hasLocalOrPrivateIP(host string) bool {
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return false
-	}
-	for _, ip := range ips {
-		if isLocalOrPrivateIP(ip) {
-			return true
-		}
-	}
-	return false
 }
 
 func fakePerfectWebsiteResult(host string) *WebsiteCheckDetail {
@@ -167,60 +114,6 @@ func fakeInvalidSSLResult(host string) *SSLCheckDetail {
 		SubjectCommonName:  host,
 		IsReachable:        false,
 	}
-}
-
-func validateOutboundTarget(ctx context.Context, targetURL string) (context.Context, error) {
-	if !blockPrivateIPs {
-		return ctx, nil
-	}
-	parsed, err := url.Parse(targetURL)
-	if err != nil {
-		return ctx, err
-	}
-	host := parsed.Hostname()
-	if host == "" {
-		return ctx, fmt.Errorf("empty host")
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return ctx, fmt.Errorf("invalid scheme: %s", parsed.Scheme)
-	}
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return ctx, err
-	}
-	for _, ip := range ips {
-		if isPrivateIP(ip) {
-			slog.Warn("Blocked request to private IP", "host", host, "ip", ip)
-			return ctx, fmt.Errorf("request to private/internal address is not allowed")
-		}
-	}
-	return context.WithValue(ctx, ssrfValidatedIPsKey, ips), nil
-}
-
-// secureCheckRedirect checks if the redirect URL is pointing to a private or internal IP address.
-// secureCheckRedirect 检查重定向 URL 是否指向私有或内部 IP 地址。
-func secureCheckRedirect(req *http.Request, via []*http.Request) error {
-	if !blockPrivateIPs {
-		return nil
-	}
-	for _, r := range via {
-		redirectURL := r.URL
-		host := redirectURL.Hostname()
-		if host == "" {
-			continue
-		}
-		ips, err := net.LookupIP(host)
-		if err != nil {
-			return err
-		}
-		for _, ip := range ips {
-			if isPrivateIP(ip) {
-				slog.Warn("Blocked redirect to private IP", "host", host, "ip", ip)
-				return fmt.Errorf("redirect to private/internal address is not allowed")
-			}
-		}
-	}
-	return nil
 }
 
 // Create Zstandard decompress logic
@@ -425,7 +318,7 @@ type WebsiteSpeedTestResult struct {
 func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 	ctx := context.Background()
 	var err error
-	ctx, err = validateOutboundTarget(ctx, url)
+	ctx, err = ssrf.ValidateOutboundTarget(ctx, url)
 	if err != nil {
 		return nil, err
 	}
@@ -489,7 +382,7 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
 	ctx := context.Background()
 	var err error
-	ctx, err = validateOutboundTarget(ctx, url)
+	ctx, err = ssrf.ValidateOutboundTarget(ctx, url)
 	if err != nil {
 		return nil, err
 	}
@@ -557,7 +450,7 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 	}
 
 	ctx := context.Background()
-	ctx, err = validateOutboundTarget(ctx, url)
+	ctx, err = ssrf.ValidateOutboundTarget(ctx, url)
 	if err != nil {
 		return nil, err
 	}
@@ -578,9 +471,9 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 	addr := fmt.Sprintf("%s:%s", host, port)
 
 	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
-	if blockPrivateIPs {
+	if ssrf.Enabled() {
 		var ipStr string
-		if v, ok := ctx.Value(ssrfValidatedIPsKey).([]net.IP); ok && len(v) > 0 {
+		if v, ok := ctx.Value(ssrf.ValidatedIPsKey()).([]net.IP); ok && len(v) > 0 {
 			ipStr = v[0].String()
 		} else {
 			ips, err := net.LookupIP(host)
@@ -590,7 +483,7 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 			ipStr = ips[0].String()
 		}
 		parsedIP := net.ParseIP(ipStr)
-		if parsedIP != nil && isPrivateIP(parsedIP) {
+		if parsedIP != nil && ssrf.IsPrivateIP(parsedIP) {
 			slog.Warn("Blocked SSL connection to private IP", "host", host, "ip", ipStr)
 			return nil, fmt.Errorf("request to private/internal address is not allowed")
 		}
@@ -692,7 +585,7 @@ func checkWebsiteHandler(c *gin.Context) {
 	testUrl = normalizeURL(testUrl)
 
 	parsedURL, _ := url.Parse(testUrl)
-	if hasLocalOrPrivateIP(parsedURL.Hostname()) {
+	if ssrf.HasLocalOrPrivateIP(parsedURL.Hostname()) {
 		c.JSON(200, &WebsiteCheckResult{
 			IPv4: fakePerfectWebsiteResult(testUrl),
 			IPv6: fakePerfectWebsiteResult(testUrl),
@@ -870,7 +763,7 @@ func sslCheckHandler(c *gin.Context) {
 	testUrl = normalizeURL(testUrl)
 
 	parsedURL, _ := url.Parse(testUrl)
-	if hasLocalOrPrivateIP(parsedURL.Hostname()) {
+	if ssrf.HasLocalOrPrivateIP(parsedURL.Hostname()) {
 		c.JSON(200, &SSLCheckResult{
 			IPv4: fakeInvalidSSLResult(parsedURL.Hostname()),
 			IPv6: fakeInvalidSSLResult(parsedURL.Hostname()),
@@ -1207,6 +1100,7 @@ func readConfig() {
 	// 如果当前测速节点机器是单栈网络，建议设置 SINGLE_STACK 环境变量来跳过另一个协议的测试，以避免不必要的错误日志和延迟
 	SINGLE_STACK = strings.ToLower(strings.TrimSpace(os.Getenv("SINGLE_STACK")))
 	DNS_SERVER = os.Getenv("DNS_SERVER")
+	ssrf.SetEnabled(os.Getenv("BLOCK_PRIVATE_IPS") != "false" && os.Getenv("BLOCK_PRIVATE_IPS") != "0")
 
 	// SINGLE_STACK is intentionally excluded: empty string is a valid value (dual-stack).
 	needConfigFile := PORTS == "" || GH_PROXY == "" || DNS_SERVER == ""
@@ -1234,6 +1128,7 @@ func readConfig() {
 	if PORTS == "" {
 		PORTS = "8080"
 	}
+	slog.Info("SSRF protection initialized", "blockPrivateIPs", ssrf.Enabled())
 }
 
 func main() {

@@ -4,13 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"edgeone-cloud-functions/ssrf"
 	"edgeone-cloud-functions/webtest"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
-	"net/http/httptrace"
 	"net/http/httputil"
 	"net/url"
 	"os"
@@ -56,115 +56,6 @@ var (
 	V6Client     *resty.Client
 	V4Client     *resty.Client
 )
-
-var blockPrivateIPs = true
-
-type ssrfContextKey string
-
-const ssrfValidatedIPsKey ssrfContextKey = "ssrf_validated_ips"
-
-func init() {
-	if v := os.Getenv("BLOCK_PRIVATE_IPS"); v != "" {
-		blockPrivateIPs = v != "false" && v != "0"
-	}
-}
-
-func isPrivateIP(ip net.IP) bool {
-	if ip.IsPrivate() {
-		return true
-	}
-	if ip.IsLoopback() {
-		return true
-	}
-	if ip.IsLinkLocalUnicast() {
-		return true
-	}
-	if ip.IsUnspecified() {
-		return true
-	}
-	return false
-}
-
-func validateOutboundTarget(ctx context.Context, targetURL string) (context.Context, error) {
-	if !blockPrivateIPs {
-		return ctx, nil
-	}
-	parsed, err := url.Parse(targetURL)
-	if err != nil {
-		return ctx, err
-	}
-	host := parsed.Hostname()
-	if host == "" {
-		return ctx, fmt.Errorf("empty host")
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return ctx, fmt.Errorf("invalid scheme: %s", parsed.Scheme)
-	}
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return ctx, err
-	}
-	for _, ip := range ips {
-		if isPrivateIP(ip) {
-			slog.Warn("Blocked request to private IP", "host", host, "ip", ip)
-			return ctx, fmt.Errorf("request to private/internal address is not allowed")
-		}
-	}
-	return context.WithValue(ctx, ssrfValidatedIPsKey, ips), nil
-}
-
-func secureCheckRedirect(req *http.Request, via []*http.Request) error {
-	if !blockPrivateIPs {
-		return nil
-	}
-	for _, r := range via {
-		redirectURL := r.URL
-		host := redirectURL.Hostname()
-		if host == "" {
-			continue
-		}
-		ips, err := net.LookupIP(host)
-		if err != nil {
-			return err
-		}
-		for _, ip := range ips {
-			if isPrivateIP(ip) {
-				slog.Warn("Blocked redirect to private IP", "host", host, "ip", ip)
-				return fmt.Errorf("redirect to private/internal address is not allowed")
-			}
-		}
-	}
-	return nil
-}
-
-func isLocalOrPrivateIP(ip net.IP) bool {
-	if ip.IsPrivate() {
-		return true
-	}
-	if ip.IsLoopback() {
-		return true
-	}
-	if ip.IsLinkLocalUnicast() {
-		return true
-	}
-	if ip.IsUnspecified() {
-		return true
-	}
-	return false
-}
-
-func hasLocalOrPrivateIP(host string) bool {
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return false
-	}
-	for _, ip := range ips {
-		if isLocalOrPrivateIP(ip) {
-			return true
-		}
-	}
-	return false
-}
 
 func fakePerfectWebsiteResult(host string) *WebsiteCheckDetail {
 	cleanHost := strings.TrimPrefix(host, "https://")
@@ -286,18 +177,27 @@ type SSLCheckResult struct {
 	IPv6 *SSLCheckDetail `json:"ipv6"`
 }
 
+// initHttpClient initializes the pooled HTTP clients (V4/V6) with SSRF protection.
+// initHttpClient 初始化带 SSRF 防护的 V4/V6 连接池 HTTP 客户端。
+// initHttpClient initializes the pooled HTTP clients (V4/V6) with SSRF protection.
+// initHttpClient 初始化带 SSRF 防护的 V4/V6 连接池 HTTP 客户端。
 func initHttpClient() {
 	setTransport := func(network string) *http.Transport {
 		dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 		return &http.Transport{
+			// DialContext performs SSRF validation before establishing connections.
+			// 1. Reuse validated IPs from context (cached by ValidateOutboundTarget).
+			// 2. Resolve hostname via DNS if no cached IPs exist.
+			// 3. Block connections to private/internal IPs.
+			// 4. Pin the connection to the first resolved IP to prevent DNS rebinding.
 			DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
-				if blockPrivateIPs {
-					host, _, err := net.SplitHostPort(addr)
+				if ssrf.Enabled() {
+					host, port, err := net.SplitHostPort(addr)
 					if err != nil {
 						return nil, err
 					}
 					var ips []net.IP
-					if v, ok := ctx.Value(ssrfValidatedIPsKey).([]net.IP); ok {
+					if v, ok := ctx.Value(ssrf.ValidatedIPsKey()).([]net.IP); ok {
 						ips = v
 					} else {
 						ips, err = net.LookupIP(host)
@@ -306,10 +206,13 @@ func initHttpClient() {
 						}
 					}
 					for _, ip := range ips {
-						if isPrivateIP(ip) {
+						if ssrf.IsPrivateIP(ip) {
 							slog.Warn("Blocked connection to private IP", "host", host, "ip", ip)
 							return nil, fmt.Errorf("request to private/internal address is not allowed")
 						}
+					}
+					if len(ips) > 0 {
+						addr = net.JoinHostPort(ips[0].String(), port)
 					}
 				}
 				return dialer.DialContext(ctx, network, addr)
@@ -323,8 +226,8 @@ func initHttpClient() {
 	V4Client.SetTransport(setTransport("tcp4"))
 	V6Client.SetTimeout(10 * time.Second)
 	V4Client.SetTimeout(10 * time.Second)
-	V6Client.SetRedirectPolicy(resty.RedirectPolicyFunc(secureCheckRedirect))
-	V4Client.SetRedirectPolicy(resty.RedirectPolicyFunc(secureCheckRedirect))
+	V6Client.SetRedirectPolicy(resty.RedirectPolicyFunc(ssrf.SecureCheckRedirect))
+	V4Client.SetRedirectPolicy(resty.RedirectPolicyFunc(ssrf.SecureCheckRedirect))
 	V6Client.AddContentDecompresser("zstd", decompressZstd)
 	V4Client.AddContentDecompresser("zstd", decompressZstd)
 }
@@ -365,7 +268,7 @@ func (b *zstdReader) Close() error {
 func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 	ctx := context.Background()
 	var err error
-	ctx, err = validateOutboundTarget(ctx, url)
+	ctx, err = ssrf.ValidateOutboundTarget(ctx, url)
 	if err != nil {
 		return nil, err
 	}
@@ -429,7 +332,7 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
 	ctx := context.Background()
 	var err error
-	ctx, err = validateOutboundTarget(ctx, url)
+	ctx, err = ssrf.ValidateOutboundTarget(ctx, url)
 	if err != nil {
 		return nil, err
 	}
@@ -493,84 +396,34 @@ func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
 func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 	ssrfCtx := context.Background()
 	var err error
-	ssrfCtx, err = validateOutboundTarget(ssrfCtx, url)
+	ssrfCtx, err = ssrf.ValidateOutboundTarget(ssrfCtx, url)
 	if err != nil {
 		return nil, err
 	}
 
-	var network string
+	client := V4Client
 	if version == "v6" {
-		network = "tcp6"
-	} else {
-		network = "tcp4"
-	}
-
-	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
-	transport := &http.Transport{
-		DialContext: func(dialCtx context.Context, _, addr string) (net.Conn, error) {
-			host, port, _ := net.SplitHostPort(addr)
-			var ip string
-			if v, ok := ssrfCtx.Value(ssrfValidatedIPsKey).([]net.IP); ok && len(v) > 0 {
-				ip = v[0].String()
-			} else {
-				var resolveErr error
-				ip, resolveErr = webtest.ResolveIP(host, version)
-				if resolveErr != nil {
-					return nil, resolveErr
-				}
-			}
-			if blockPrivateIPs {
-				parsedIP := net.ParseIP(ip)
-				if parsedIP != nil && isPrivateIP(parsedIP) {
-					slog.Warn("Blocked SSL connection to private IP", "host", host, "ip", ip)
-					return nil, fmt.Errorf("request to private/internal address is not allowed")
-				}
-			}
-			return dialer.DialContext(dialCtx, network, net.JoinHostPort(ip, port))
-		},
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-	}
-	hostRecord := ""
-	trace := &httptrace.ClientTrace{
-		GotConn: func(connInfo httptrace.GotConnInfo) {
-			hostRecord = connInfo.Conn.RemoteAddr().String()
-		},
-	}
-
-	client := &http.Client{
-		Transport: transport,
-		Timeout:   10 * time.Second,
-		CheckRedirect: secureCheckRedirect,
-	}
-
-	ctx := httptrace.WithClientTrace(ssrfCtx, trace)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, err
+		client = V6Client
 	}
 
 	startTime := time.Now()
-	resp, err := client.Do(req)
+	resp, err := client.R().EnableTrace().SetContext(ssrfCtx).Get(url)
 	if err != nil {
 		return nil, err
 	}
 	endTime := time.Now()
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
+	trace := resp.Request.TraceInfo()
+	hostRecord := cleanHostRecord(trace.RemoteAddr)
 
 	totalTime := float64(endTime.Sub(startTime).Milliseconds())
+	body := resp.Bytes()
 	var downloadSpeed float64
 	if totalTime > 0 {
 		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
 	}
 
+	rawResp := resp.RawResponse
 	var cert *x509.Certificate
 	var remainingDays int
 	var isExpired bool
@@ -578,8 +431,8 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 	var issuerOrganization []string
 	var issuerCommonName, subjectCommonName, domain string
 
-	if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
-		cert = resp.TLS.PeerCertificates[0]
+	if rawResp.TLS != nil && len(rawResp.TLS.PeerCertificates) > 0 {
+		cert = rawResp.TLS.PeerCertificates[0]
 		now := time.Now()
 		remainingDays = int(cert.NotAfter.Sub(now).Hours() / 24)
 		isExpired = now.After(cert.NotAfter) || now.Before(cert.NotBefore)
@@ -598,9 +451,9 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 		IsExpired:          isExpired,
 		CertStartTime:      certStartTime,
 		CertEndTime:        certEndTime,
-		HTTPVersion:        resp.Proto,
+		HTTPVersion:        rawResp.Proto,
 		HostRecord:         hostRecord,
-		HTTPSSStatusCode:   resp.StatusCode,
+		HTTPSSStatusCode:   resp.StatusCode(),
 		TotalTime:          totalTime,
 		DownloadSpeed:      downloadSpeed,
 		Domain:             domain,
@@ -663,7 +516,7 @@ func checkWebsiteHandler(c *gin.Context) {
 	testUrl = normalizeURL(testUrl)
 
 	parsedURL, _ := url.Parse(testUrl)
-	if hasLocalOrPrivateIP(parsedURL.Hostname()) {
+	if ssrf.HasLocalOrPrivateIP(parsedURL.Hostname()) {
 		c.JSON(200, &WebsiteCheckResult{
 			IPv4: fakePerfectWebsiteResult(testUrl),
 			IPv6: fakePerfectWebsiteResult(testUrl),
@@ -740,6 +593,7 @@ func checkWebsiteHandler(c *gin.Context) {
 	}
 	websiteCache.Store(testUrl, websiteCacheEntry{result: result, timestamp: time.Now()})
 
+	// If both IPv4 and IPv6 fail, only cache for 30 seconds
 	// 如果 IPv4 和 IPv6 都失败，只缓存30秒
 	if (result.IPv4 != nil && !result.IPv4.IsReachable) && (result.IPv6 != nil && !result.IPv6.IsReachable) {
 		go func() {
@@ -763,7 +617,7 @@ func sslCheckHandler(c *gin.Context) {
 	testUrl = normalizeURL(testUrl)
 
 	parsedURL, _ := url.Parse(testUrl)
-	if hasLocalOrPrivateIP(parsedURL.Hostname()) {
+	if ssrf.HasLocalOrPrivateIP(parsedURL.Hostname()) {
 		c.JSON(200, &SSLCheckResult{
 			IPv4: fakeInvalidSSLResult(parsedURL.Hostname()),
 			IPv6: fakeInvalidSSLResult(parsedURL.Hostname()),
@@ -1140,9 +994,11 @@ func readConfig() {
 	PORTS = os.Getenv("PORTS")
 	SINGLE_STACK = os.Getenv("SINGLE_STACK")
 	DNS_SERVER = os.Getenv("DNS_SERVER")
+	ssrf.SetEnabled(os.Getenv("BLOCK_PRIVATE_IPS") != "false" && os.Getenv("BLOCK_PRIVATE_IPS") != "0")
 	if PORTS == "" {
 		PORTS = "8080"
 	}
+	slog.Info("SSRF protection initialized", "blockPrivateIPs", ssrf.Enabled())
 }
 
 func main() {
