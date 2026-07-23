@@ -2,8 +2,6 @@ name: Build and Release
 
 on:
   push:
-    branches:
-      - main
     tags:
         - 'v*'
   workflow_dispatch:
@@ -47,7 +45,7 @@ jobs:
               with:
                 name: Release for ${{ github.ref_name }}
                 tag_name: ${{ github.ref_name }}
-                generate_release_notes: true
+                generate_release_notes: false
                 files: |
                   lemonipw-linux-386
                   lemonipw-linux-amd64
