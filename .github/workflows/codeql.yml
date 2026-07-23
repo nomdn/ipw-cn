@@ -71,7 +71,7 @@ jobs:
       with:
         node-version: '22' # 推荐使用 LTS 版本，如 18 或 20
         cache: 'pnpm' # 启用 npm 缓存以加速后续运行
-        cache-dependency-path: 'frontend-ssr/pnpm-lock.yml'
+        cache-dependency-path: 'frontend-ssr/pnpm-lock.yaml'
 
 
     # Add any setup steps before running the `github/codeql-action/init` action.
