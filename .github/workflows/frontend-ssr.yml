@@ -29,5 +29,5 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           cd frontend-ssr
-          npm install
-          npm run deploy
+          pnpm install
+          pnpm run deploy

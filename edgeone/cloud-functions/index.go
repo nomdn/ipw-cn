@@ -59,9 +59,9 @@ var (
 
 var blockPrivateIPs = true
 
-type contextKey string
+type ssrfContextKey string
 
-const ssrfIPsKey contextKey = "ssrf_validated_ips"
+const ssrfValidatedIPsKey ssrfContextKey = "ssrf_validated_ips"
 
 func init() {
 	if v := os.Getenv("BLOCK_PRIVATE_IPS"); v != "" {
@@ -107,7 +107,7 @@ func validateOutboundTarget(ctx context.Context, targetURL string) (context.Cont
 			return ctx, fmt.Errorf("request to private/internal address is not allowed")
 		}
 	}
-	return context.WithValue(ctx, ssrfIPsKey, ips), nil
+	return context.WithValue(ctx, ssrfValidatedIPsKey, ips), nil
 }
 
 func secureCheckRedirect(req *http.Request, via []*http.Request) error {
@@ -294,7 +294,7 @@ func initHttpClient() {
 						return nil, err
 					}
 					var ips []net.IP
-					if v, ok := ctx.Value(ssrfIPsKey).([]net.IP); ok {
+					if v, ok := ctx.Value(ssrfValidatedIPsKey).([]net.IP); ok {
 						ips = v
 					} else {
 						ips, err = net.LookupIP(host)
@@ -507,7 +507,7 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 		DialContext: func(dialCtx context.Context, _, addr string) (net.Conn, error) {
 			host, port, _ := net.SplitHostPort(addr)
 			var ip string
-			if v, ok := ssrfCtx.Value(ssrfIPsKey).([]net.IP); ok && len(v) > 0 {
+			if v, ok := ssrfCtx.Value(ssrfValidatedIPsKey).([]net.IP); ok && len(v) > 0 {
 				ip = v[0].String()
 			} else {
 				var resolveErr error

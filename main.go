@@ -29,9 +29,9 @@ import (
 // Init初始化函数
 var blockPrivateIPs = true
 
-type contextKey string
+type ssrfContextKey string
 
-const ssrfIPsKey contextKey = "ssrf_validated_ips"
+const ssrfValidatedIPsKey ssrfContextKey = "ssrf_validated_ips"
 
 func initHTTPClients() {
 	setTransport := func(network string) *http.Transport {
@@ -44,7 +44,7 @@ func initHTTPClients() {
 						return nil, err
 					}
 					var ips []net.IP
-					if v, ok := ctx.Value(ssrfIPsKey).([]net.IP); ok {
+					if v, ok := ctx.Value(ssrfValidatedIPsKey).([]net.IP); ok {
 						ips = v
 					} else {
 						ips, err = net.LookupIP(host)
@@ -191,7 +191,7 @@ func validateOutboundTarget(ctx context.Context, targetURL string) (context.Cont
 			return ctx, fmt.Errorf("request to private/internal address is not allowed")
 		}
 	}
-	return context.WithValue(ctx, ssrfIPsKey, ips), nil
+	return context.WithValue(ctx, ssrfValidatedIPsKey, ips), nil
 }
 
 // secureCheckRedirect checks if the redirect URL is pointing to a private or internal IP address.
@@ -577,7 +577,7 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 	if blockPrivateIPs {
 		var ipStr string
-		if v, ok := ctx.Value(ssrfIPsKey).([]net.IP); ok && len(v) > 0 {
+		if v, ok := ctx.Value(ssrfValidatedIPsKey).([]net.IP); ok && len(v) > 0 {
 			ipStr = v[0].String()
 		} else {
 			ips, err := net.LookupIP(host)
