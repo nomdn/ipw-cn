@@ -181,6 +181,9 @@ func validateOutboundTarget(ctx context.Context, targetURL string) (context.Cont
 	if host == "" {
 		return ctx, fmt.Errorf("empty host")
 	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return ctx, fmt.Errorf("invalid scheme: %s", parsed.Scheme)
+	}
 	ips, err := net.LookupIP(host)
 	if err != nil {
 		return ctx, err
