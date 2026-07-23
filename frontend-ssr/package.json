@@ -41,5 +41,5 @@
     "nitro-cloudflare-dev": "^0.2.2",
     "shiki": "^4.2.0",
     "wrangler": "^4.107.0"
-  },
+  }
 }
