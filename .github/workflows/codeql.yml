@@ -63,6 +63,8 @@ jobs:
     # 1. 安装 pnpm (Vue3 项目必需)
     - name: Install pnpm
       uses: pnpm/action-setup@v4
+      with:
+        version: 11
     # 2. 设置 Node.js 环境，这是构建 Vue3 项目所必需的
     - name: Setup Node.js
       uses: actions/setup-node@v4
