@@ -127,7 +127,6 @@ func ValidateOutboundTarget(ctx context.Context, targetURL string) (context.Cont
 			return ctx, fmt.Errorf("request to private/internal address is not allowed")
 		}
 	}
-	slog.Info("SSRF protection: request allowed", "host", host, "ips", ips)
 	return context.WithValue(ctx, validatedIPsKey, ips), nil
 }
 

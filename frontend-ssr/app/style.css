@@ -36,12 +36,19 @@ h2{
     margin: 0 auto;
     margin-top: 60px;
 }
+
+@media (max-width: 768px) {
+    .content {
+        width: 95%;
+        min-width: unset;
+    }
+}
 .one-line{
     display: flex;
     flex-direction: row;
     justify-content: flex-start;
     align-items: center;
-
+    flex-wrap: wrap;
 }
 .one-line p{
     font-size: 1.3em;
@@ -110,17 +117,41 @@ footer {
 }
 
 @media (max-width: 768px) {
+    .content {
+        width: 95%;
+        min-width: unset;
+        margin-top: 30px;
+    }
+
+    h1 {
+        font-size: 1.8em;
+    }
+
+    .title p {
+        font-size: 1em;
+        margin-right: 10px;
+        margin-left: 10px;
+    }
+
+    footer {
+        margin-top: 30px;
+    }
+
     footer .one-line {
         font-size: 0.75em;
         flex-wrap: wrap;
         justify-content: center;
+        text-align: center;
     }
-    footer .one-line a {
-        font-size: 0.75em;
-    }
+
     footer .one-line img {
-        height: 2em;
+        height: 1.2em;
+        width: auto;
         vertical-align: middle;
+    }
+
+    footer .one-line a {
+        font-size: 0.9em;
     }
 }
 html.dark {
@@ -141,7 +172,8 @@ html.dark blockquote {
 :deep(.shiki){
   padding: 1rem;
   border-radius: 10px;
-  overflow: auto
+  overflow: auto;
+  max-width: 100%;
 }
 .spoiler {
     position: relative; /* 使得伪元素可以定位 */

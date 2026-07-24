@@ -1,6 +1,8 @@
 {
     "port": 8080,
-    "gh-proxy": "https://github.chenc.dev/",
+    "gh-proxy": "",
     "single-stack": "",
-    "dns-server": ""
+    "dns-server": "",
+    "block-private-ips": true,
+    "ipdb": true
 }

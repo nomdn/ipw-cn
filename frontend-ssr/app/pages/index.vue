@@ -146,8 +146,9 @@ onMounted(async () => {
   padding: 1rem;
   border-radius: 0.75rem;
   overflow-x: auto;
+  max-width: 100%;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .code-block--fallback {
@@ -157,6 +158,12 @@ onMounted(async () => {
   color: rgb(255, 255, 255);
 }
 
+@media (max-width: 768px) {
+  .code-block {
+    padding: 0.75rem;
+    font-size: 0.8em;
+  }
+}
 </style>
 <style>
 :root {
