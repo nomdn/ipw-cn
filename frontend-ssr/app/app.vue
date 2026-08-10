@@ -1,20 +1,36 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref } from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import { Moon, Sunny, Expand } from '@element-plus/icons-vue';
+import { useRoute } from 'vue-router';
 import { config } from '../config/index';
 
 const isNarrow = ref(false);
 let mediaQueryList: MediaQueryList | null = null;
 const drawer = ref(false);
+const route = useRoute();
 
 const isDark = useDark();
 const toggleDark = useToggle(isDark);
+
+watch(() => route.fullPath, () => {
+  drawer.value = false;
+});
 
 function cleanChineseCharacters(str:string) {
 return str.replace(/[\u4e00-\u9fa5]/g, '');
 }
 let umamiScript: HTMLScriptElement | null = null
+
+useHead({
+  meta: config.noindex
+    ? [
+        { name: 'robots', content: 'noindex, nofollow' },
+        { name: 'googlebot', content: 'noindex, nofollow' },
+        { name: 'bingbot', content: 'noindex, nofollow' },
+      ]
+    : [],
+});
 
 onMounted(() => {
   mediaQueryList = window.matchMedia('(max-width: 768px)');
@@ -42,7 +58,7 @@ onMounted(() => {
 
 <template>
   
-  <el-drawer v-if="isNarrow" v-model="drawer" direction="ltr" style="height: 100%;" size="50%">
+  <el-drawer id="mobile-navigation" v-if="isNarrow" v-model="drawer" direction="ltr" style="height: 100%;" size="50%">
       <router-link to="/ipv6webcheck" style="font-size: 1em;">
         <p style="display: inline-block; margin-left: 10px">IPv6 网站检测</p>
       </router-link>
@@ -66,11 +82,21 @@ onMounted(() => {
   </el-drawer>
   <el-menu
       mode="horizontal"
-      :ellipsis="false"
+      :ellipsis="!isNarrow"
       
     >
     <el-menu-item index="0">
-      <el-icon v-if="isNarrow" @click="drawer = !drawer"><Expand /></el-icon>
+      <button
+        v-if="isNarrow"
+        type="button"
+        class="nav-icon-button"
+        aria-label="打开导航菜单"
+        :aria-expanded="drawer"
+        aria-controls="mobile-navigation"
+        @click.stop="drawer = !drawer"
+      >
+        <el-icon aria-hidden="true"><Expand /></el-icon>
+      </button>
       <router-link to="/">
         <el-image src="/favicon.svg" style="margin-top: 20px;" /> 
         <h2 style="display: inline-block; margin-left: 10px" v-if="!isNarrow">柠檬味ipw.cn</h2>
@@ -134,8 +160,16 @@ onMounted(() => {
     </el-menu-item>
     <el-menu-item index="10">
       <ClientOnly>
-      <el-icon @click="toggleDark()" v-if="isDark" style="cursor: pointer;"><Moon style="height: 20px; width: 20px;"/></el-icon>
-      <el-icon @click="toggleDark()" v-else style="cursor: pointer;"><Sunny style="height: 20px; width: 20px;"/></el-icon>
+      <button
+        type="button"
+        class="nav-icon-button"
+        :aria-label="isDark ? '切换到浅色模式' : '切换到深色模式'"
+        :aria-pressed="isDark"
+        @click="toggleDark()"
+      >
+        <el-icon v-if="isDark" aria-hidden="true"><Moon style="height: 20px; width: 20px;"/></el-icon>
+        <el-icon v-else aria-hidden="true"><Sunny style="height: 20px; width: 20px;"/></el-icon>
+      </button>
       </ClientOnly>
     </el-menu-item>
 
@@ -173,6 +207,29 @@ onMounted(() => {
 .el-menu--horizontal > .el-menu-item:nth-child(1) {
   margin-right: auto;
 }
+.nav-icon-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.nav-icon-button:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .nav-icon-button:hover {
+    background: var(--el-fill-color-light);
+  }
+}
 :deep(.shiki span) {
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace !important;
   word-wrap:break-word;
@@ -180,6 +237,8 @@ onMounted(() => {
 :deep(.shiki){
   padding: 20px;
   border-radius: 10px;
+  overflow: auto;
+  max-width: 100%;
 }
 
 :deep(.el-menu-item a) {
@@ -230,24 +289,17 @@ html.dark {
   text-overflow: ellipsis;
 }
 
-/* 防止窄屏设备在 Vue 水合前出现宽屏布局闪烁 */
-html.is-narrow .el-drawer__container {
-  display: none !important;
-}
-html.is-narrow .el-menu--horizontal > .el-divider {
-  display: none !important;
-}
-html.is-narrow .el-menu--horizontal > .el-menu-item[index="1"],
-html.is-narrow .el-menu--horizontal > .el-menu-item[index="2"],
-html.is-narrow .el-menu--horizontal > .el-menu-item[index="3"],
-html.is-narrow .el-menu--horizontal > .el-menu-item[index="4"],
-html.is-narrow .el-menu--horizontal > .el-menu-item[index="5"],
-html.is-narrow .el-menu--horizontal > .el-menu-item[index="6"],
-html.is-narrow .el-menu--horizontal > .el-sub-menu[index="7"]
-html.is-narrow .el-menu--horizontal > .el-sub-menu[index="8"]
-html.is-narrow .el-menu--horizontal > .el-sub-menu[index="9"]
-html.is-narrow .el-menu--horizontal > .el-sub-menu[index="10"] {
-  display: none !important;
+/* 在 Vue 水合前也按视口隐藏桌面导航，避免窄屏横向溢出。 */
+@media (max-width: 768px) {
+  .el-menu--horizontal > .el-divider,
+  .el-menu--horizontal > .el-sub-menu,
+  .el-menu--horizontal > .el-menu-item:not(:first-child):not(:last-child) {
+    display: none !important;
+  }
+
+  .el-menu--horizontal > .el-menu-item:first-child h2 {
+    display: none !important;
+  }
 }
 .el-menu--horizontal {
   --el-menu-hover-bg-color: transparent !important;

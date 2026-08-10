@@ -220,15 +220,6 @@ html.dark blockquote {
   background-color: #1a1919;
   border-left: 10px solid #111111;
 }
-:deep(.shiki span) {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace !important;
-}
-:deep(.shiki){
-  padding: 1rem;
-  border-radius: 10px;
-  overflow: auto;
-  max-width: 100%;
-}
 .spoiler {
     position: relative; /* 使得伪元素可以定位 */
     background-color: rgba(200, 200, 200, 0.3); /* 浅灰色半透明背景 */
