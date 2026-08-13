@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
+import { useMiddlewareFetch } from '../../utils/middleware';
 import { isIPv6 } from 'is-ip';
 import { formatTime } from '../../utils/tools';
 const route = useRoute()
@@ -73,7 +74,7 @@ const recordTypes = [
 
 const dnsServerFetches = config.NSLookup.map((server) => {
   const url = computed(() => "/middleware/" + server.id + "/dns/" + recordType.value + "/" + domain.value);
-  const { data, error, execute } = useFetch(url, {
+  const { data, error, execute } = useMiddlewareFetch(url, {
     immediate: false,
     watch: false,
   });

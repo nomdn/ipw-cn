@@ -1,4 +1,4 @@
-import { defineEventHandler, getQuery, createError } from 'h3'
+import { defineEventHandler, getQuery, createError, setResponseStatus } from 'h3'
 import { config } from '../../../config/index'
 export default defineEventHandler(async (event) => {
     const slugString: string = event.context.params?.slug as any
@@ -100,14 +100,18 @@ export default defineEventHandler(async (event) => {
             data = await $fetch(`${apiBaseUrl}v1/${apiType}/${raw}`, {
                 method: 'GET',
                 headers: authHeaders,
-            }).catch((error) => {
+            }).catch((error: any) => {
                 console.error(`Error fetching from ${apiBaseUrl}:`, error)
-                throw createError({ statusCode: 500, statusMessage: 'Backend error '+error })
-            })|| {}
-        if (!data || Object.keys(data).length === 0) {
-            throw createError({ statusCode: 500, statusMessage: 'Backend error' })
-        }
-            
+                const errStatus = error?.status ?? error?.statusCode
+                if (errStatus) {
+                    // 上游返回的错误响应（4xx/5xx），直接转发其状态码与错误体，不包装成 500
+                    setResponseStatus(event, errStatus)
+                    return error.data ?? {}
+                }
+                // 网络层错误（无法连接上游）
+                setResponseStatus(event, 502)
+                return { statusCode: 502, statusMessage: 'Backend unreachable' }
+            })
         return data
     }else if (apiType === 'tcping' || apiType === 'udping' || apiType === 'speed') {
         let apiBaseUrls:Array<{ id: string, url: string ,label: string}> = []
@@ -146,14 +150,18 @@ export default defineEventHandler(async (event) => {
         data = await $fetch(`${apiBaseUrl}v1/${apiType}/${raw}${queryString ? '?' + queryString : ''}`, {
                 method: 'GET',
                 headers: authHeaders,
-            }).catch((error) => {
+            }).catch((error: any) => {
                 console.error(`Error fetching from ${apiBaseUrl}:`, error)
-                throw createError({ statusCode: 500, statusMessage: 'Backend error '+error })
-            })|| {}
-        if (!data || Object.keys(data).length === 0) {
-            throw createError({ statusCode: 500, statusMessage: 'Backend error' })
-        }
-            
+                const errStatus = error?.status ?? error?.statusCode
+                if (errStatus) {
+                    // 上游返回的错误响应（4xx/5xx），直接转发其状态码与错误体，不包装成 500
+                    setResponseStatus(event, errStatus)
+                    return error.data ?? {}
+                }
+                // 网络层错误（无法连接上游）
+                setResponseStatus(event, 502)
+                return { statusCode: 502, statusMessage: 'Backend unreachable' }
+            })
         return data
 
         

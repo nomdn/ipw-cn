@@ -16,3 +16,4 @@ lemon-ipw
 *.log
 node_modules/
 setting.json
+.workbuddy/

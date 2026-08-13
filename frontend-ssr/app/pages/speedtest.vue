@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
+import { useMiddlewareFetch } from '../../utils/middleware';
 import { extractHost, formatTime, formatSpeed, formatSize, getStatusCodeClass } from '../../utils/tools';
 
 
@@ -69,7 +70,7 @@ const serverResults = ref<ServerResult[]>([])
 /** 双栈服务器：同时支持 IPv4/IPv6 的节点 */
 const dualStackFetches = config.SpeedTest.DualStack.map((server) => {
   const url = computed(() => "/middleware/" + server.id + "/speed/v4/" + domain.value);
-  const { data, error: fetchError, execute } = useFetch(url, {
+  const { data, error: fetchError, execute } = useMiddlewareFetch(url, {
     immediate: false,
     watch: false,
   });
@@ -79,7 +80,7 @@ const dualStackFetches = config.SpeedTest.DualStack.map((server) => {
 /** IPv4 专用服务器：仅支持 IPv4 的节点 */
 const ipv4Fetches = config.SpeedTest.IPv4.map((server) => {
   const url = computed(() => "/middleware/" + server.id + "/speed/v4/" + domain.value);
-  const { data, error: fetchError, execute } = useFetch(url, {
+  const { data, error: fetchError, execute } = useMiddlewareFetch(url, {
     immediate: false,
     watch: false,
   });

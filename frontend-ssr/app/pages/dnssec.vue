@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMiddlewareFetch } from '../../utils/middleware';
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index'
@@ -72,7 +73,7 @@ const apiList = config.NSLookup
 
 const dnssecFetches = apiList.map((server) => {
   const url = computed(() => "/middleware/" + server.id + "/dnssec/" + tmpDomain.value)
-  const { data, error, execute } = useFetch<DNSSECResult>(url, {
+  const { data, error, execute } = useMiddlewareFetch<DNSSECResult>(url, {
     immediate: false,
     watch: false,
   })

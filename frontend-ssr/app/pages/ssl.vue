@@ -3,6 +3,7 @@ import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { CircleCheckFilled, CircleCloseFilled,InfoFilled } from '@element-plus/icons-vue';
 import { config } from '../../config/index';
+import { useMiddlewareFetch } from '../../utils/middleware';
 import { extractHost, getStatusCodeClass, formatTime, formatSpeed } from '../../utils/tools';
 const route = useRoute()
 
@@ -74,7 +75,7 @@ const error = ref('')
 const result = ref<SSLCheckResponse | null>(null)
 const sslUrl = computed(() => "/middleware/" + backendID.value + "/ssl/" + testDomain.value);
 
-const { data: sslData, error: sslError, execute: executeSSL } = useFetch<SSLCheckResponse>(sslUrl, {
+const { data: sslData, error: sslError, execute: executeSSL } = useMiddlewareFetch<SSLCheckResponse>(sslUrl, {
   immediate: false,
   watch: false,
 });

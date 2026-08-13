@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
+import { useMiddlewareFetch } from '../../utils/middleware';
 import { CircleCheckFilled, CircleCloseFilled,InfoFilled,Position } from '@element-plus/icons-vue';
 import { extractHost, getStatusCodeClass, formatTime, formatSize, formatSpeed } from '../../utils/tools';
 
@@ -72,7 +73,7 @@ const error = ref('')
 const result = ref<PerformanceCheckResponse | null>(null)
 const checkUrl = computed(() => "/middleware/" + backendID.value + "/detail/" + testDomain.value);
 
-const { data: checkData, error: checkError, execute: executeCheck } = useFetch<PerformanceCheckResponse>(checkUrl, {
+const { data: checkData, error: checkError, execute: executeCheck } = useMiddlewareFetch<PerformanceCheckResponse>(checkUrl, {
   immediate: false,
   watch: false,
 });

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import { Moon, Sunny, Expand } from '@element-plus/icons-vue';
 import { config } from '../config/index';
@@ -14,8 +14,88 @@ const toggleDark = useToggle(isDark);
 function cleanChineseCharacters(str:string) {
 return str.replace(/[\u4e00-\u9fa5]/g, '');
 }
-let umamiScript: HTMLScriptElement | null = null
 
+// ==================== 响应式折叠菜单 ====================
+// 映射表：菜单按显示顺序排在一个数组里，每项自带 minWidth（px）折叠阈值。
+// 规则：视口宽度 >= minWidth 显示，低于则折叠进「更多」子菜单。
+// 断点从右往左递减（最右侧 index 9 先折叠），数值可按需调整。
+// divider 也带 minWidth（取其后第一项的值）：所在段全部折叠时，分隔线一并隐藏。
+interface NavItem {
+  kind: 'item'
+  index: string
+  label: string
+  to: string
+  minWidth: number
+}
+interface NavGroup {
+  kind: 'group'
+  index: string
+  label: string
+  minWidth: number
+  children: { index: string; label: string; to: string }[]
+}
+interface NavDivider {
+  kind: 'divider'
+  minWidth: number
+}
+type MenuEntry = NavItem | NavGroup | NavDivider
+
+const menu: MenuEntry[] = [
+  { kind: 'item', index: '1', label: 'IPv6 网站检测', to: '/ipv6webcheck', minWidth: 950 },
+  { kind: 'item', index: '2', label: 'IPv6/IPv4 地址查询', to: '/location', minWidth: 990 },
+  { kind: 'item', index: '3', label: 'IPv6 TCPing测试', to: '/ipv6tcping', minWidth: 1030 },
+  { kind: 'divider', minWidth: 1080 }, // 与 index 4 相同：4-6 段全折叠时隐藏
+  { kind: 'item', index: '4', label: 'IPv6 DNS解析', to: '/dns', minWidth: 1080 },
+  { kind: 'item', index: '5', label: 'IPv6 SSL检查', to: '/ssl', minWidth: 1130 },
+  { kind: 'item', index: '6', label: 'IPv6 网站测速', to: '/ipv6speedtest', minWidth: 1180 },
+  { kind: 'divider', minWidth: 1240 }, // 与 index 7 相同：7-9 段全折叠时隐藏
+  {
+    kind: 'group', index: '7', label: 'IPv4工具箱', minWidth: 1240,
+    children: [
+      { index: '7-0', label: 'IPv4 网站测速', to: '/speedtest' },
+      { index: '7-1', label: 'IPv4 TCPing测试', to: '/tcping' },
+    ],
+  },
+  {
+    kind: 'group', index: '8', label: '其他工具', minWidth: 1300,
+    children: [
+      { index: '8-0', label: '网站截图', to: '/screenshot' },
+      { index: '8-1', label: 'Whois查询', to: '/whois' },
+      { index: '8-3', label: 'ASN查询', to: '/asn' },
+      { index: '8-4', label: 'DNSSEC验证', to: '/dnssec' },
+    ],
+  },
+  { kind: 'item', index: '9', label: '文档', to: '/doc', minWidth: 1360 },
+]
+
+// SSR 阶段无 window，默认按宽屏输出全部菜单项；onMounted 后更新为真实视口宽度
+const viewportWidth = ref(1920)
+
+// 可见项（含分隔线）：视口宽度达标即显示
+const visible = computed<MenuEntry[]>(() =>
+  menu.filter((entry) => viewportWidth.value >= entry.minWidth),
+)
+// 折叠项（不含分隔线）：视口宽度不足即收进「更多」。
+// 用类型谓词收窄为 NavItem | NavGroup，模板里才能安全访问 entry.index
+const hidden = computed<Array<NavItem | NavGroup>>(
+  () => menu.filter((entry): entry is NavItem | NavGroup =>
+    entry.kind !== 'divider' && viewportWidth.value < entry.minWidth),
+)
+
+// 实时同步视口宽度（resize 触发，驱动折叠）
+function updateViewport() {
+  viewportWidth.value = window.innerWidth
+}
+let umamiScript: HTMLScriptElement | null = null
+useHead({
+  meta: config.noindex
+    ? [
+        { name: 'robots', content: 'noindex, nofollow' },
+        { name: 'googlebot', content: 'noindex, nofollow' },
+        { name: 'bingbot', content: 'noindex, nofollow' },
+      ]
+    : [],
+});
 onMounted(() => {
   mediaQueryList = window.matchMedia('(max-width: 768px)');
   isNarrow.value = mediaQueryList.matches;
@@ -26,8 +106,12 @@ onMounted(() => {
 
   mediaQueryList.addEventListener('change', handler);
 
+  updateViewport();
+  window.addEventListener('resize', updateViewport);
+
   onBeforeUnmount(() => {
     mediaQueryList?.removeEventListener('change', handler);
+    window.removeEventListener('resize', updateViewport);
   });
 
   if (!umamiScript && config.umamiScriptUrl) {
@@ -43,26 +127,26 @@ onMounted(() => {
 <template>
   
   <el-drawer v-if="isNarrow" v-model="drawer" direction="ltr" style="height: 100%;" size="50%">
-      <router-link to="/ipv6webcheck" style="font-size: 1em;">
-        <p style="display: inline-block; margin-left: 10px">IPv6 网站检测</p>
+      <router-link to="/ipv6webcheck">
+        <p class="menu-item-text">IPv6 网站检测</p>
       </router-link>
-      <router-link to="/location" style="font-size: 1em;">
-        <p style="display: inline-block; margin-left: 10px">IPv6/IPv4 地址查询</p>
+      <router-link to="/location">
+        <p class="menu-item-text">IPv6/IPv4 地址查询</p>
       </router-link>
-      <router-link to="/ipv6tcping" style="font-size: 1em;">
-        <p style="display: inline-block; margin-left: 10px">IPv6 TCPing</p>
+      <router-link to="/ipv6tcping">
+        <p class="menu-item-text">IPv6 TCPing</p>
       </router-link>
-      <router-link to="/dns"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 DNS解析</p></router-link>
-      <router-link to="/ssl" style="font-size: 1em;">
-        <p style="display: inline-block; margin-left: 10px">IPv6 SSL检查</p>
+      <router-link to="/dns"><p class="menu-item-text">IPv6 DNS解析</p></router-link>
+      <router-link to="/ssl">
+        <p class="menu-item-text">IPv6 SSL检查</p>
       </router-link>
-      <a href="/ipv6speedtest"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 网站测速</p></a>
-      <a href="/speedtest"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 网站测速</p></a>
-      <a href="/tcping"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 TCPing</p></a>
-      <a href="/screenshot"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">网站截图</p></a>
-      <a href="/whois"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">Whois查询</p></a>
-      <a href="/asn"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">ASN查询</p></a>
-      <a href="/dnssec"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">DNSSEC验证</p></a>
+      <a href="/ipv6speedtest"><p class="menu-item-text">IPv6 网站测速</p></a>
+      <a href="/speedtest"><p class="menu-item-text">IPv4 网站测速</p></a>
+      <a href="/tcping"><p class="menu-item-text">IPv4 TCPing</p></a>
+      <a href="/screenshot"><p class="menu-item-text">网站截图</p></a>
+      <a href="/whois"><p class="menu-item-text">Whois查询</p></a>
+      <a href="/asn"><p class="menu-item-text">ASN查询</p></a>
+      <a href="/dnssec"><p class="menu-item-text">DNSSEC验证</p></a>
   </el-drawer>
   <el-menu
       mode="horizontal"
@@ -77,61 +161,35 @@ onMounted(() => {
       </router-link>
     </el-menu-item>
     
-    <el-menu-item index="1" v-if="!isNarrow">
-      <router-link to="/ipv6webcheck" style="font-size: 1em;">
-        <p style="display: inline-block; margin-left: 10px">IPv6 网站检测</p>
-      </router-link>
-    </el-menu-item>
-    <el-menu-item index="2" v-if="!isNarrow">
-      <router-link to="/location">
-        <p style="display: inline-block; margin-left: 10px">IPv6/IPv4 地址查询</p>
-      </router-link>
-    </el-menu-item>
-    <el-menu-item index="3" v-if="!isNarrow">
-      <router-link to="/ipv6tcping"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 TCPing测试</p></router-link>
-    </el-menu-item>
-
-    <el-divider style="margin-top: 20px;height: 1.2em;" direction="vertical" v-if="!isNarrow"/>
-
-    <el-menu-item index="4" v-if="!isNarrow">
-      <router-link to="/dns"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 DNS解析</p></router-link>
-    </el-menu-item>
-    <el-menu-item index="5" v-if="!isNarrow">
-      <router-link to="/ssl">
-        <p style="display: inline-block; margin-left: 10px">IPv6 SSL检查</p>
-      </router-link>
-    </el-menu-item>
-    <el-menu-item index="6" v-if="!isNarrow">
-      <router-link to="/ipv6speedtest"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv6 网站测速</p></router-link>
-    </el-menu-item>
-    <el-divider style="margin-top: 20px;height: 1.2em;" direction="vertical" v-if="!isNarrow"/>
-    <el-sub-menu index="7" v-if="!isNarrow">
-      <template #title>IPv4工具箱</template>
-      <el-menu-item index="7-0">
-        <router-link to="/speedtest"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 网站测速</p></router-link>
+    <template v-if="!isNarrow">
+    <!-- 可见菜单项：按映射表顺序渲染 item / group / divider -->
+    <template v-for="entry in visible" :key="entry.kind === 'divider' ? 'div-' + entry.minWidth : entry.index">
+      <el-menu-item v-if="entry.kind === 'item'" :index="entry.index">
+        <router-link :to="entry.to"><p class="menu-item-text">{{ entry.label }}</p></router-link>
       </el-menu-item>
-      <el-menu-item index="7-1">
-        <router-link to="/tcping"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">IPv4 TCPing测试</p></router-link>
-      </el-menu-item>
+      <el-sub-menu v-else-if="entry.kind === 'group'" :index="entry.index">
+        <template #title>{{ entry.label }}</template>
+        <el-menu-item v-for="child in entry.children" :key="child.index" :index="child.index">
+          <router-link :to="child.to"><p class="menu-item-text">{{ child.label }}</p></router-link>
+        </el-menu-item>
+      </el-sub-menu>
+      <el-divider v-else style="margin-top: 20px;height: 1.2em;" direction="vertical"/>
+    </template>
+    <!-- 折叠项：统一收进「更多」子菜单（分组用 el-menu-item-group 保留组名） -->
+    <el-sub-menu v-if="hidden.length" index="more">
+      <template #title>更多</template>
+      <template v-for="entry in hidden" :key="entry.index">
+        <el-menu-item v-if="entry.kind === 'item'" :index="'m-' + entry.index">
+          <router-link :to="entry.to"><p class="menu-item-text">{{ entry.label }}</p></router-link>
+        </el-menu-item>
+        <el-menu-item-group v-else :title="entry.label">
+          <el-menu-item v-for="child in entry.children" :key="child.index" :index="'m-' + child.index">
+            <router-link :to="child.to"><p class="menu-item-text">{{ child.label }}</p></router-link>
+          </el-menu-item>
+        </el-menu-item-group>
+      </template>
     </el-sub-menu>
-    <el-sub-menu index="8" v-if="!isNarrow">
-      <template #title>其他工具</template>
-      <el-menu-item index="8-0">
-        <router-link to="/screenshot"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">网站截图</p></router-link>
-      </el-menu-item>
-      <el-menu-item index="8-1">
-        <router-link to="/whois"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">Whois查询</p></router-link>
-      </el-menu-item>
-      <el-menu-item index="8-3">
-        <router-link to="/asn"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">ASN查询</p></router-link>
-      </el-menu-item>
-      <el-menu-item index="8-4">
-        <router-link to="/dnssec"  style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">DNSSEC验证</p></router-link>
-      </el-menu-item>
-    </el-sub-menu>
-    <el-menu-item index="9" v-if="!isNarrow">
-      <router-link to="/doc" style="font-size: 1em;"><p style="display: inline-block; margin-left: 10px">文档</p></router-link>
-    </el-menu-item>
+    </template>
     <el-menu-item index="10">
       <ClientOnly>
       <el-icon @click="toggleDark()" v-if="isDark" style="cursor: pointer;"><Moon style="height: 20px; width: 20px;"/></el-icon>
@@ -170,8 +228,10 @@ onMounted(() => {
 </template>
 <style scoped>
 @import "~/style.css";
-.el-menu--horizontal > .el-menu-item:nth-child(1) {
-  margin-right: auto;
+/* 菜单项统一文本样式（替代原内联 style="display: inline-block; margin-left: 10px"） */
+.menu-item-text {
+  display: inline-block;
+  margin-left: 10px;
 }
 :deep(.shiki span) {
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace !important;
@@ -230,24 +290,24 @@ html.dark {
   text-overflow: ellipsis;
 }
 
-/* 防止窄屏设备在 Vue 水合前出现宽屏布局闪烁 */
-html.is-narrow .el-drawer__container {
-  display: none !important;
-}
-html.is-narrow .el-menu--horizontal > .el-divider {
-  display: none !important;
-}
-html.is-narrow .el-menu--horizontal > .el-menu-item[index="1"],
-html.is-narrow .el-menu--horizontal > .el-menu-item[index="2"],
-html.is-narrow .el-menu--horizontal > .el-menu-item[index="3"],
-html.is-narrow .el-menu--horizontal > .el-menu-item[index="4"],
-html.is-narrow .el-menu--horizontal > .el-menu-item[index="5"],
-html.is-narrow .el-menu--horizontal > .el-menu-item[index="6"],
-html.is-narrow .el-menu--horizontal > .el-sub-menu[index="7"]
-html.is-narrow .el-menu--horizontal > .el-sub-menu[index="8"]
-html.is-narrow .el-menu--horizontal > .el-sub-menu[index="9"]
-html.is-narrow .el-menu--horizontal > .el-sub-menu[index="10"] {
-  display: none !important;
+/* 窄屏（≤768px，与 script 中 isNarrow 的 matchMedia 断点一致）：
+   在水合前由 CSS 兜底隐藏宽屏菜单项，避免窄屏设备闪现宽屏布局 */
+@media (max-width: 768px) {
+  .el-menu--horizontal > .el-divider {
+    display: none !important;
+  }
+  .el-menu--horizontal > .el-menu-item[index="1"],
+  .el-menu--horizontal > .el-menu-item[index="2"],
+  .el-menu--horizontal > .el-menu-item[index="3"],
+  .el-menu--horizontal > .el-menu-item[index="4"],
+  .el-menu--horizontal > .el-menu-item[index="5"],
+  .el-menu--horizontal > .el-menu-item[index="6"],
+  .el-menu--horizontal > .el-sub-menu[index="7"],
+  .el-menu--horizontal > .el-sub-menu[index="8"],
+  .el-menu--horizontal > .el-menu-item[index="9"],
+  .el-menu--horizontal > .el-sub-menu[index="more"] {
+    display: none !important;
+  }
 }
 .el-menu--horizontal {
   --el-menu-hover-bg-color: transparent !important;

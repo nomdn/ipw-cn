@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMiddlewareFetch } from '../../utils/middleware';
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index'
@@ -68,7 +69,7 @@ const currentApiIndex = ref(0)
 const backendID = computed(() => apiList[currentApiIndex.value]?.id || '')
 const whoisUrl = computed(() => '/middleware/' + backendID.value + '/whois/' + domain.value)
 
-const { data: whoisData, error: whoisError, execute: executeWhois } = useFetch<any>(whoisUrl, {
+const { data: whoisData, error: whoisError, execute: executeWhois } = useMiddlewareFetch<any>(whoisUrl, {
   immediate: false,
   watch: false,
 })

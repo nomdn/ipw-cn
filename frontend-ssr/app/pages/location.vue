@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, nextTick, watch } from 'vue';
 import { isIPv6 } from 'is-ip';
 import {config} from '../../config/index';
+import { useMiddlewareFetch } from '../../utils/middleware';
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue';
 import { useRoute } from 'vue-router'
 import { highlightCode } from '../../utils/shiki'
@@ -75,7 +76,7 @@ const UserIP = ref('');
 const error = ref('')
 const locationUrl = computed(() => "/middleware/" + backendID.value + "/location/" + ipAddress.value);
 
-const { data: locationData, error: locationError, execute: executeLocation } = useFetch<IPLocationType>(locationUrl, {
+const { data: locationData, error: locationError, execute: executeLocation } = useMiddlewareFetch<IPLocationType>(locationUrl, {
   immediate: false,
   watch: false,
 });

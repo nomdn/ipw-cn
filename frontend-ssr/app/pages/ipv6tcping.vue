@@ -2,6 +2,7 @@
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
+import { useMiddlewareFetch } from '../../utils/middleware';
 import { isIPv6 } from 'is-ip';
 import { extractHost } from '../../utils/tools';
 const route = useRoute()
@@ -84,7 +85,7 @@ const allServers = [
 
 const tcpingFetches = allServers.map((server) => {
   const url = computed(() => "/middleware/" + server.id + "/tcping/" + extractHost(tmpDomain.value) + "?port=" + port.value);
-  const { data, error: fetchError, execute } = useFetch<TCPingResponse>(url, {
+  const { data, error: fetchError, execute } = useMiddlewareFetch<TCPingResponse>(url, {
     immediate: false,
     watch: false,
   });

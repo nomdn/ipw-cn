@@ -4,6 +4,15 @@
 */
 const config = {
     siteUrl: "https://ipw.wsmdn.top/",
+    // 外部独立中间件服务列表（base URL）。
+    // 与前端自带中间件（server/routes/middleware/[...slug].get.ts 本地转发）同级，
+    // 前端 /middleware/* 请求会依次尝试这些节点（出错重试下一个），
+    // 前端自带中间件始终放在候选列表最后一位兜底。
+    // 未配置或为空数组时，直接使用前端自带中间件。
+    Middleware: <string[]>[
+        "http://127.0.0.1:8091/",
+        // "https://middleware-2.wsmdn.top/",
+    ],
     // Umami 统计
     umamiHost: "https://umami.wsmdn.top/",
     umamiScriptUrl: "https://umami.wsmdn.top/zako.js",

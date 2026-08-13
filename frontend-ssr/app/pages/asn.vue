@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMiddlewareFetch } from '../../utils/middleware';
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index'
@@ -59,7 +60,7 @@ const currentApiIndex = ref(0)
 const backendID = computed(() => apiList[currentApiIndex.value]?.id || '')
 
 
-const { data: asnData, error: asnError, execute: executeASN } = useFetch<ASNResult>(() => '/middleware/' + backendID.value + '/asn/' + tmpIP.value, {
+const { data: asnData, error: asnError, execute: executeASN } = useMiddlewareFetch<ASNResult>(() => '/middleware/' + backendID.value + '/asn/' + tmpIP.value, {
   key: 'asn-fetch',
   immediate: false,
   watch: false,
