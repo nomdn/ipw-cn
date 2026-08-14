@@ -24,9 +24,13 @@ function isConnectionError(e: any): boolean {
     return !!e && typeof getErrorStatus(e) !== 'number'
 }
 
+// 需要切换节点重试的上游状态码：
+// 401 未授权、403 被 CDN/WAF 风控拦截、418 被反爬/限流标记 —— 换一个节点往往就能绕过
+const RETRY_STATUS_CODES = new Set([401, 403, 418])
+
 // useMiddlewareFetch：在 Vue 页面中调用中间件（替代直接 useFetch('/middleware/...')）。
 // 外部中间件与前端自带中间件同级：依次尝试 config.Middleware 中的外部节点，
-// 仅当"节点无法连接"或上游返回 401 时重试下一个候选（最后一位兜底为前端自带中间件）；
+// 仅当"节点无法连接"或上游返回 401/403/418 时重试下一个候选（最后一位兜底为前端自带中间件）；
 // 其余状态码错误不重试，直接返回给页面展示。
 export function useMiddlewareFetch<T = any>(url: MaybeRefOrGetter<string>, options?: any) {
     const path = computed(() => toValue(url) || '')
@@ -37,11 +41,12 @@ export function useMiddlewareFetch<T = any>(url: MaybeRefOrGetter<string>, optio
 
     const result = useFetch<T>(currentUrl, options)
 
-    // 仅"节点无法连接"或 401 时切换到下一个候选并重新请求
+    // 仅"节点无法连接"或命中 RETRY_STATUS_CODES 时切换到下一个候选并重新请求
     watch(() => result.error.value, (err) => {
         if (!err) return
         if (idx.value >= candidates.value.length - 1) return
-        if (!isConnectionError(err) && getErrorStatus(err) !== 401) return
+        const status = getErrorStatus(err)
+        if (!isConnectionError(err) && !(typeof status === 'number' && RETRY_STATUS_CODES.has(status))) return
         idx.value++
         result.execute()
     })

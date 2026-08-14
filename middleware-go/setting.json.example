@@ -1,6 +1,7 @@
 {
     "port": "8091",
     "httpTimeoutSeconds": 30,
+    "cors": "",
     "apiBaseUrls": [
         {
             "label": "中国 江苏 移动",

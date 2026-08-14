@@ -10,6 +10,7 @@ const config = {
     // 前端自带中间件始终放在候选列表最后一位兜底。
     // 未配置或为空数组时，直接使用前端自带中间件。
     Middleware: <string[]>[
+        "https://middleware-1.api-ipw.wsmdn.top/"
         // "http://127.0.0.1:8091/",
         // "https://middleware-2.wsmdn.top/",
     ],
@@ -21,9 +22,9 @@ const config = {
     ICP: "苏ICP备2026012471号",
     GongAn: "苏公网安备32132402000813号",
     // Worker IP查询接口
-    v4OnlyAPI: "https://4.wsmdn.dpdns.org/",
-    v6OnlyAPI: "https://6.wsmdn.dpdns.org/",
-    DualStackAPI: "https://test.wsmdn.dpdns.org/",
+    v4OnlyAPI: "https://4.wsmdn.top",
+    v6OnlyAPI: "https://6.wsmdn.top",
+    DualStackAPI: "https://test.wsmdn.top",
     apiBaseUrls: [
         {
             label: "中国 江苏 移动",

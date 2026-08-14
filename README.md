@@ -39,6 +39,13 @@ ipw-cn/
 ├── ssrf/                    # SSRF 防护模块
 │   └── ssrf.go              # 私有 IP 拦截、安全跳转校验
 │
+├── middleware-go/           # 独立转发中间件（Go Fiber v3，可单独部署）
+│   ├── main.go              # 中间件入口（/v1/* 与 /middleware/* 路由）
+│   ├── setting.json         # 中间件配置（节点列表、apiKeys、cors 等）
+│   ├── setting.json.example # 中间件配置示例
+│   ├── Dockerfile           # 中间件 Docker 镜像
+│   └── middleware-go-linux-arm64  # Linux ARM64 预编译二进制
+│
 ├── frontend-ssr/            # Nuxt 4 SSR 前端（主版本，部署至 Cloudflare Workers）
 │   ├── app/                 # Nuxt 应用源码
 │   │   └── pages/           # 页面组件（location/dns/tcping/ssl/speedtest/whois/dnssec/asn/screenshot）
@@ -85,6 +92,7 @@ ipw-cn/
 | 组件 | 技术 |
 |------|------|
 | 后端（自托管） | Go 1.26 + Gin + Resty |
+| 独立中间件 | Go 1.26 + Fiber v3（转发中间件，多节点候选） |
 | 边缘后端（EdgeOne） | Go（边缘函数） |
 | SSR 前端 | Nuxt 4 + Vue 3 + Element Plus + VueUse |
 | Cloudflare Workers | Hono + TypeScript + Wrangler |
@@ -119,6 +127,25 @@ go run main.go
 ```
 
 首次启动时会自动下载 IP 数据库文件（约 200MB），之后每 24 小时自动更新。
+
+### 独立中间件（middleware-go）
+
+转发中间件，供 SSR 前端在多个上游节点之间做候选重试，可独立部署。
+
+```bash
+cd middleware-go
+
+# 构建（Linux ARM64 示例）
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o middleware-go-linux-arm64 .
+
+# 运行（需配置文件，可用 SETTING_FILE 指定路径）
+./middleware-go-linux-arm64
+
+# 查看版本
+./middleware-go-linux-arm64 --version
+```
+
+所有配置均可通过环境变量覆盖，无需修改配置文件（详见下方「中间件配置」）。
 
 ### SSR 前端（部署至 Cloudflare Workers）
 
@@ -168,6 +195,7 @@ docker run -p 8080:8080 -v $(pwd)/setting.json:/app/setting.json lemon-ipw
 本项目支持多平台部署，前端和后端可独立部署到不同平台：
 
 - **自托管后端**：使用 Docker 或直接运行 Go 二进制，配合 `setting.json` 配置
+- **独立转发中间件**：`middleware-go/` 使用 Go Fiber v3，提供 `/v1/*` 与 `/middleware/*` 转发路由，供前端做多节点候选重试
 - **Cloudflare Workers 后端**：`lemon-getip/` 使用 Hono 框架部署到 Cloudflare Workers
 - **EdgeOne 边缘后端**：`edgeone/` 和 `edgeone-getip/` 部署到腾讯 EdgeOne Pages
 - **SSR 前端**：`frontend-ssr/` 使用 Nuxt 4 + Wrangler 部署到 Cloudflare Workers
@@ -190,6 +218,41 @@ docker run -p 8080:8080 -v $(pwd)/setting.json:/app/setting.json lemon-ipw
 ### 前端配置
 
 前端 API 地址和多节点配置位于各前端项目的 `config/` 目录中。
+
+### 中间件配置（middleware-go）
+
+配置来源优先级：**环境变量 > `setting.json` > 默认值**。`setting.json` 采用平铺结构（键名与前端 `config/index.ts` 一致），也可用环境变量覆盖任意配置项；数组/对象类配置项从环境变量读取 **JSON 字符串**解析。
+
+```json
+{
+    "port": "8091",
+    "httpTimeoutSeconds": 30,
+    "cors": "https://ipw.wsmdn.top",
+    "apiBaseUrls": [{ "label": "中国 江苏 移动", "id": "cn-jiangsu", "url": "https://cn-jiangsu.api-ipw.wsmdn.top/" }],
+    "IPLocationAPIs": [],
+    "TCPing": { "DualStack": [], "IPv4": [], "IPv6": [] },
+    "SpeedTest": { "DualStack": [], "IPv4": [], "IPv6": [] },
+    "NSLookup": [],
+    "apiKeys": { "cn-jiangsu": "token" }
+}
+```
+
+| 配置项 | 环境变量 | 类型 | 说明 |
+|--------|----------|------|------|
+| `port` | `PORT` | 数字/字符串 | 监听端口 |
+| `httpTimeoutSeconds` | `HTTP_TIMEOUT` | 数字 | 上游请求超时（秒） |
+| `cors` | `CORS` | 字符串 | 逗号分隔的允许域名；为空则允许所有（`*`） |
+| `apiBaseUrls` | `API_BASE_URLS` | JSON 数组 | whois/ssl/detail 上游节点 |
+| `IPLocationAPIs` | `IP_LOCATION_APIS` | JSON 数组 | location/asn 上游节点 |
+| `TCPing` | `TCPING` | JSON 对象 | tcping 节点（DualStack/IPv4/IPv6） |
+| `SpeedTest` | `SPEED_TEST` | JSON 对象 | speed 节点（DualStack/IPv4/IPv6） |
+| `NSLookup` | `NS_LOOKUP` | JSON 数组 | dns/dnssec 上游节点 |
+| `apiKeys` | `APIKEYS` | JSON 对象 | `{"backendID": "token"}`，转发时加 `Authorization: Bearer <token>` |
+| 配置文件路径 | `SETTING_FILE` | 字符串 | 指定 setting.json 路径（默认 `./setting.json` 或 `../setting.json`） |
+
+**路由格式**：`/{prefix}/{backendID}/{apiType}/{raw...}`，其中 `prefix` 为 `/v1` 或 `/middleware`，`apiType` 支持 `whois/dns/location/ssl/asn/dnssec/detail/tcping/speed`。响应透传上游状态码与 body；上游网络不可达返回 502。
+
+**版本信息**：通过 ldflags 注入 `main.VERSION / main.COMMIT / main.BUILD_TIME`，运行 `--version` 查看。
 
 ## 许可证
 

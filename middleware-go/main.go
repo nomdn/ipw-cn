@@ -36,6 +36,7 @@ type stackConfig struct {
 type middlewareConfig struct {
 	Port               stringOrNumber    `json:"port"`
 	HTTPTimeoutSeconds int               `json:"httpTimeoutSeconds"`
+	Cors               string            `json:"cors"`
 	APIBaseURLs        []apiInfo         `json:"apiBaseUrls"`
 	IPLocationAPIs     []apiInfo         `json:"IPLocationAPIs"`
 	TCPing             stackConfig       `json:"TCPing"`
@@ -54,6 +55,8 @@ var (
 	BUILD_TIME       string            // 构建时间（构建时由 ldflags 注入）
 	PORT             string            // 监听端口
 	HTTP_TIMEOUT     int               // 上游请求超时（秒）
+	CORS             string            // CORS 配置原始字符串（逗号分隔的允许域名，可空）
+	ACCEPT_DOMAINS   []string          // 允许跨域的域名列表（由 CORS 拆分而来，空则允许所有）
 	API_BASE_URLS    []apiInfo         // whois/ssl/detail 上游列表
 	IP_LOCATION_APIS []apiInfo         // location/asn 上游列表
 	TCPING           stackConfig       // tcping 上游列表（DualStack/IPv4/IPv6）
@@ -68,6 +71,19 @@ var (
 var HTTP_CLIENT = &http.Client{}
 
 // ==================== 工具函数 ====================
+
+// envJSON 从环境变量读取 JSON 字符串并反序列化到 target（用于数组/对象等映射表类配置项）。
+// 环境变量为空时不做任何事；解析失败返回错误，避免静默使用空配置。
+func envJSON(key string, target any) error {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return nil
+	}
+	if err := json.Unmarshal([]byte(raw), target); err != nil {
+		return fmt.Errorf("parse env %s: %w", key, err)
+	}
+	return nil
+}
 
 func (s *stringOrNumber) UnmarshalJSON(data []byte) error {
 	var v any
@@ -331,6 +347,41 @@ func readConfig() error {
 		return fmt.Errorf("parse %s: %w", path, err)
 	}
 
+	// 环境变量覆盖配置（优先级: 环境变量 > setting.json > 默认值）：
+	// 标量直接读；映射表（数组/对象）从环境变量读 JSON 字符串解析。
+	// 部署时无需改动配置文件，用环境变量即可覆盖任意节点/密钥/端口等。
+	if v := os.Getenv("PORT"); v != "" {
+		mw.Port = stringOrNumber(v)
+	}
+	if v := os.Getenv("HTTP_TIMEOUT"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("parse env HTTP_TIMEOUT: %w", err)
+		}
+		mw.HTTPTimeoutSeconds = n
+	}
+	if v := os.Getenv("CORS"); v != "" {
+		mw.Cors = v
+	}
+	if err := envJSON("API_BASE_URLS", &mw.APIBaseURLs); err != nil {
+		return err
+	}
+	if err := envJSON("IP_LOCATION_APIS", &mw.IPLocationAPIs); err != nil {
+		return err
+	}
+	if err := envJSON("TCPING", &mw.TCPing); err != nil {
+		return err
+	}
+	if err := envJSON("SPEED_TEST", &mw.SpeedTest); err != nil {
+		return err
+	}
+	if err := envJSON("NS_LOOKUP", &mw.NSLookup); err != nil {
+		return err
+	}
+	if err := envJSON("APIKEYS", &mw.APIKeys); err != nil {
+		return err
+	}
+
 	// 校验配置存在（防止在错误的文件上静默空跑）
 	hasEndpoints := len(mw.APIBaseURLs) > 0 || len(mw.NSLookup) > 0 || len(mw.IPLocationAPIs) > 0 ||
 		len(mw.TCPing.DualStack) > 0 || len(mw.TCPing.IPv4) > 0 || len(mw.TCPing.IPv6) > 0 ||
@@ -342,6 +393,11 @@ func readConfig() error {
 	// 将配置内容写入全局变量
 	PORT = string(mw.Port)
 	HTTP_TIMEOUT = mw.HTTPTimeoutSeconds
+	CORS = mw.Cors
+	// 逗号分隔的 CORS 域名列表（对齐根 main.go 的 ACCEPT_DOMAINS 用法）
+	if CORS != "" {
+		ACCEPT_DOMAINS = strings.Split(CORS, ",")
+	}
 	API_BASE_URLS = mw.APIBaseURLs
 	IP_LOCATION_APIS = mw.IPLocationAPIs
 	TCPING = mw.TCPing
@@ -387,12 +443,18 @@ func main() {
 
 	// 中间件路由，对应前端 server/routes/middleware/[...slug].get.ts
 	// 同时兼容 /v1/... 与 /middleware/... 两种前缀
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: []string{"*"},
+	// CORS: 配置了 cors 域名列表则仅允许这些来源，否则允许所有（对齐根 main.go 的 ACCEPT_DOMAINS 逻辑）
+	corsConfig := cors.Config{
 		AllowMethods: []string{"GET", "POST", "HEAD", "OPTIONS"},
 		AllowHeaders: []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		MaxAge:       86400,
-	}))
+	}
+	if len(ACCEPT_DOMAINS) > 0 {
+		corsConfig.AllowOrigins = ACCEPT_DOMAINS
+	} else {
+		corsConfig.AllowOrigins = []string{"*"}
+	}
+	app.Use(cors.New(corsConfig))
 	app.Get("/v1/*", middlewareHandler)
 	app.Get("/middleware/*", middlewareHandler)
 
