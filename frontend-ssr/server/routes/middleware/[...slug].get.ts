@@ -47,9 +47,8 @@ export default defineEventHandler(async (event) => {
     } catch (e) {
         console.debug('[middleware debug] JSON parse FAILED:', e)
     }
-    const authHeaders: Record<string, string> = {
-        'Origin': config.siteUrl.replace(/\/$/, ''),
-    }
+    // 转发头：不透传 Origin，避免上游 CORS 误判；仅按需注入 Authorization
+    const authHeaders: Record<string, string> = {}
     if (apiKey) {
         authHeaders['Authorization'] = `Bearer ${apiKey}`
         console.debug('[middleware debug] authHeaders SET Authorization:', `Bearer ${apiKey.slice(0, 1)}...`)

@@ -247,11 +247,8 @@ func middlewareHandler(c fiber.Ctx) error {
 	// 从 API_KEYS 查找 token，未配置时回退到环境变量 APIKEYS (JSON 字符串)
 	apiKey := lookupAPIKey(backendID)
 
-	// 构造转发给上游的请求头：所有接口统一透传客户端请求的 Origin，没有 Origin 头则不传
+	// 构造转发给上游的请求头：不透传客户端 Origin，避免上游 CORS 误判
 	authHeaders := map[string]string{}
-	if origin := c.Get("Origin"); origin != "" {
-		authHeaders["Origin"] = origin
-	}
 	if apiKey != "" {
 		authHeaders["Authorization"] = "Bearer " + apiKey
 	}

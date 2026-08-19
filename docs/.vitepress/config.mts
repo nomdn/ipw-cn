@@ -25,6 +25,11 @@ export default defineConfig({
   lang: "zh-CN",
   cleanUrls: true,
 
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
+    ['link', { rel: 'icon', href: '/favicon.ico' }],
+  ],
+
   themeConfig: {
     // 合并 Teek 的 themeConfig（如 teekHome 等开关）
     ...teekConfig.themeConfig,
@@ -36,12 +41,22 @@ export default defineConfig({
     ],
 
     sidebar: [
-      // 上级分组：部署（新增页面时在 items 里补一条即可）
+      // 简介
+      {
+        text: '简介',
+        items: [
+          { text: '概述', link: '/info/overview' },
+          { text: '快速入门', link: '/guide/getting-started' },
+        ],
+      },
+      // 部署
       {
         text: '部署',
         items: [
           { text: '部署指南', link: '/guide/' },
-          { text: '前端部署', link: '/guide/deploy-frontend' },
+          { text: '后端节点', link: '/guide/deploy-node' },
+          { text: '中间件', link: '/guide/deploy-middleware' },
+          { text: '前端', link: '/guide/deploy-frontend' },
         ],
       },
     ],

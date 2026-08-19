@@ -8,8 +8,8 @@ hero:
   tagline: IP 查询 · 网站检测 · SSL · DNS · DNSSEC · Whois · ASN · 截图
   actions:
     - theme: brand
-      text: 部署指南
-      link: /guide/
+      text: 快速开始
+      link: /guide/getting-started
     - theme: alt
       text: GitHub
       link: https://github.com/nomdn/ipw-cn
