@@ -23,6 +23,12 @@ var dnsServer = "119.28.28.28:53"
 // dnsMode 主通道：dns-server 配置为 URL 时为 "doh"，为 ip:port 时为 "udp"
 var dnsMode = "doh"
 
+// dnsServers 普通 DNS 查询服务器列表（主从：第一个为主，主失败自动切换后续从服务器）
+var dnsServers []string
+
+// dnssecServers DNSSEC 专用服务器列表（未配置时沿用 dnsServers）
+var dnssecServers []string
+
 type DNSResult struct {
 	Domain   string   `json:"domain"`
 	Duration float64  `json:"duration"`
@@ -30,43 +36,111 @@ type DNSResult struct {
 	TTL      uint32   `json:"ttl"`
 }
 
-// SetDNSServer 设置 DNS 服务器：URL（http/https）→ DoH 主通道；ip:port → UDP 主通道
+// SetDNSServer 设置 DNS 服务器：支持逗号分隔多地址主从 failover（第一个为主，主失败自动切换后续从服务器）。
+// 每项支持 "ip:port"（UDP）或 DoH URL http(s)://...；单地址时保持原有语义。
 func SetDNSServer(server string) {
 	if server == "" {
 		return
 	}
-	if strings.HasPrefix(server, "http://") || strings.HasPrefix(server, "https://") {
-		dohEndpoint = server
-		dnsMode = "doh"
-	} else {
-		dnsServer = server
-		dnsMode = "udp"
+	list := splitServers(server)
+	dnsServers = list
+	// 兼容单地址的旧语义：URL → DoH 主通道；ip:port → UDP 主通道
+	if len(list) == 1 {
+		if strings.HasPrefix(server, "http://") || strings.HasPrefix(server, "https://") {
+			dohEndpoint = server
+			dnsMode = "doh"
+		} else {
+			dnsServer = server
+			dnsMode = "udp"
+		}
 	}
+}
+
+// SetDNSSecServer 设置 DNSSEC 专用 DNS 服务器（逗号分隔主从；留空 = 沿用 dns-server 配置）
+func SetDNSSecServer(server string) {
+	if list := splitServers(server); len(list) > 0 {
+		dnssecServers = list
+	}
+}
+
+// splitServers 逗号分隔解析为地址列表（去空白、去空项）
+func splitServers(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // ==========================================
 // ⭐️ 底层核心：DoH + UDP 双通道 DNS 查询
 // ==========================================
 
-// queryDNSMsg 统一 DNS 查询入口：支持 DoH 与 UDP 双通道自动互备。
-// dnsMode 为 "doh" 时优先 DoH（dohEndpoint），失败回退 UDP（dnsServer）；
-// dnsMode 为 "udp" 时优先 UDP（dnsServer），失败回退 DoH（dohEndpoint）。
+// queryDNSMsg 普通 DNS 查询：主从 failover——按配置顺序依次尝试每个服务器，
+// 当前服务器查询失败（网络错误/超时）自动切换下一个；全部失败返回最后一个错误。
+// 单个服务器：URL 走 DoH，ip:port 走 UDP。
 func queryDNSMsg(msg *dns.Msg) (*dns.Msg, float64, error) {
-	if dnsMode == "doh" {
-		resp, dur, err := queryDoHMsg(msg, dohEndpoint)
+	servers := dnsServers
+	if len(servers) == 0 {
+		// 未配置主从列表时回退单地址语义（保持原 DoH/UDP 双通道互备）
+		if dnsMode == "doh" {
+			resp, dur, err := queryDoHMsg(msg, dohEndpoint)
+			if err == nil {
+				return resp, dur, nil
+			}
+			slog.Warn("DoH query failed, falling back to UDP", "endpoint", dohEndpoint, "error", err)
+			return queryUDPMsg(msg, dnsServer)
+		}
+		resp, dur, err := queryUDPMsg(msg, dnsServer)
 		if err == nil {
 			return resp, dur, nil
 		}
-		slog.Warn("DoH query failed, falling back to UDP", "endpoint", dohEndpoint, "error", err)
-		return queryUDPMsg(msg, dnsServer)
+		slog.Warn("UDP query failed, falling back to DoH", "server", dnsServer, "error", err)
+		return queryDoHMsg(msg, dohEndpoint)
 	}
-	resp, dur, err := queryUDPMsg(msg, dnsServer)
-	if err == nil {
-		return resp, dur, nil
-	}
-	slog.Warn("UDP query failed, falling back to DoH", "server", dnsServer, "error", err)
-	return queryDoHMsg(msg, dohEndpoint)
+	return queryWithServers(msg, servers)
 }
+
+// queryDNSSECMsg DNSSEC 查询：优先使用专用服务器（dnssec-server），未配置则沿用普通 dns-server
+func queryDNSSECMsg(msg *dns.Msg) (*dns.Msg, float64, error) {
+	if len(dnssecServers) > 0 {
+		return queryWithServers(msg, dnssecServers)
+	}
+	return queryDNSMsg(msg)
+}
+
+// queryWithServers 依次尝试服务器列表，主失败切从；每个服务器按类型走 DoH 或 UDP
+func queryWithServers(msg *dns.Msg, servers []string) (*dns.Msg, float64, error) {
+	if len(servers) == 0 {
+		servers = []string{defaultUDPServer}
+	}
+	var lastErr error
+	for i, srv := range servers {
+		var resp *dns.Msg
+		var dur float64
+		var err error
+		if strings.HasPrefix(srv, "http://") || strings.HasPrefix(srv, "https://") {
+			resp, dur, err = queryDoHMsg(msg, srv)
+		} else {
+			resp, dur, err = queryUDPMsg(msg, srv)
+		}
+		if err == nil {
+			return resp, dur, nil
+		}
+		lastErr = err
+		if i < len(servers)-1 {
+			slog.Warn("DNS query failed, switching to next server", "server", srv, "error", err)
+		}
+	}
+	slog.Warn("all DNS servers failed", "servers", servers, "error", lastErr)
+	return nil, 0, lastErr
+}
+
+// defaultUDPServer 兜底 UDP 服务器
+const defaultUDPServer = "119.28.28.28:53"
 
 // queryUDPMsg 通过 UDP/TCP 向指定 DNS 服务器发送查询（miekg/dns 自动处理大响应切 TCP）
 func queryUDPMsg(msg *dns.Msg, server string) (*dns.Msg, float64, error) {

@@ -1,6 +1,44 @@
-import { defineEventHandler, getQuery, createError, setResponseStatus } from 'h3'
+import { defineEventHandler, getQuery, createError, setResponseStatus, getRequestHeader, getRequestIP } from 'h3'
 import { config } from '../../../config/index'
+
+// ---- 方案 C：简单限流（每 IP 每分钟次数上限，进程内内存计数；次数取 config.rateLimitPerMinute，0 表示不限流） ----
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+
+function checkRateLimit(ip: string, limit: number): boolean {
+    const now = Date.now()
+    const entry = rateLimitMap.get(ip)
+    if (!entry || entry.resetAt <= now) {
+        rateLimitMap.set(ip, { count: 1, resetAt: now + 60_000 })
+        // 顺带清理过期条目，避免 Map 无限增长
+        if (rateLimitMap.size > 1000) {
+            for (const [k, v] of rateLimitMap) {
+                if (v.resetAt <= now) rateLimitMap.delete(k)
+            }
+        }
+        return true
+    }
+    entry.count++
+    return entry.count <= limit
+}
+
 export default defineEventHandler(async (event) => {
+    // 1) Origin / Referer 校验：跨域浏览器调用一律拒绝。
+    //    注意：无 Origin/Referer 的服务端 SSR 调用与命令行请求无法区分，仅靠下方限流约束。
+    const siteOrigin = new URL(config.siteUrl).origin
+    const origin = getRequestHeader(event, 'origin')
+    const referer = getRequestHeader(event, 'referer')
+    if (origin && origin !== siteOrigin) {
+        throw createError({ statusCode: 403, statusMessage: 'Forbidden: cross-origin request' })
+    }
+    if (referer && referer !== siteOrigin && !referer.startsWith(siteOrigin + '/')) {
+        throw createError({ statusCode: 403, statusMessage: 'Forbidden: invalid referer' })
+    }
+    // 2) 每 IP 每分钟限流（次数取 config.rateLimitPerMinute，0 表示不限流）
+    const rateLimit = config.rateLimitPerMinute || 0
+    if (rateLimit > 0 && !checkRateLimit(getRequestIP(event) || 'unknown', rateLimit)) {
+        throw createError({ statusCode: 429, statusMessage: 'Too Many Requests' })
+    }
+
     const slugString: string = event.context.params?.slug as any
     if (!slugString) {
         throw createError({ statusCode: 400, statusMessage: 'Missing slug parameter' })

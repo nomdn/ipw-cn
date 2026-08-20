@@ -60,100 +60,40 @@ pnpm build
 
 ### 配置文件
 
-#### 后端（setting.json）
+> 完整字段说明、模板与远端配置用法见 [配置文件](/guide/config)。以下为三个组件的最小示例。
 
-后端从当前目录读取 `setting.json`，不存在时使用默认值。最小配置：
+**后端**（`setting.json`，env 可覆盖 `PORTS` / `DNS_SERVER` / `CORS` / `ACCESS_TOKEN` 等）：
 
 ```json
 {
     "port": 8080,
     "dns-server": "119.28.28.28:53",
-    "block-private-ips": true,
-    "ipdb": true,
     "cors": "",
     "access_token": ""
 }
 ```
 
-- `port`：监听端口
-- `dns-server`：`ip:port` 走 UDP，`https://` URL 走 DoH
-- `block-private-ips`：SSRF 防护开关
-- `ipdb`：IP 数据库开关（首次启动自动下载约 200MB，之后每 24h 更新）
-- `cors`：允许的请求来源（逗号分隔）
-- `access_token`：API 访问令牌，留空则不启用鉴权
-
-以上字段均可用环境变量覆盖（`PORTS` / `DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `IPDB` / `CORS` / `ACCESS_TOKEN`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）。
-
----
-
-#### 前端（config/index.ts）
-
-前端配置在 `frontend-ssr/config/index.ts`，部署前按需修改。完整配置项如下：
-
-| 配置项 | 类型 | 说明 |
-|--------|------|------|
-| `siteUrl` | string | 站点对外地址 |
-| `siteName` | string | 站点名称（页面标题 / 描述 / 页脚品牌） |
-| `EnableInternalMiddleware` | boolean | 是否启用前端内置中间件（作为 `/middleware/*` 候选最后一位兜底），默认 `true` |
-| `Middleware` | string[] | 外部独立中间件 base URL 列表，`/middleware/*` 请求依次尝试、出错重试下一个 |
-| `umamiHost` / `umamiScriptUrl` / `umamiWebsiteId` | string | Umami 统计配置 |
-| `ICP` / `GongAn` | string | 网站备案号（页脚展示） |
-| `noindex` | boolean | 全站是否禁止搜索引擎索引 |
-| `v4OnlyAPI` / `v6OnlyAPI` / `DualStackAPI` | string | IPv4 / IPv6 / 双栈 IP 查询接口 |
-| `apiBaseUrls` | 节点数组 | 基础 API 节点列表（detail / ssl / whois 等） |
-| `IPLocationAPIs` | 节点数组 | IP 归属地 / ASN 查询节点列表 |
-| `TCPing` | 节点分组 | TCPing 节点，按 `DualStack` / `IPv4` / `IPv6` 分组 |
-| `SpeedTest` | 节点分组 | 测速节点，按 `DualStack` / `IPv4` / `IPv6` 分组 |
-| `NSLookup` | 节点数组 | DNS 解析节点列表 |
-
-完整模板（复制到 `frontend-ssr/config/index.ts`，替换占位值即可）：
+**前端**（`frontend-ssr/config/index.ts`，节点 `id` 与中间件 `apiKeys` 键对应）：
 
 ```ts
 const config = {
-    siteUrl: "https://your-domain.com/",        // 站点对外地址
-    siteName: "你的站点名称",                     // 站点名称（页脚展示）
-    // 是否启用前端内置中间件（本地转发，作为候选最后一位兜底）
+    siteUrl: "https://your-domain.com/",
+    siteName: "你的站点名称",
     EnableInternalMiddleware: true,
-    // 外部独立中间件 base URL 列表（可留空，仅用内置中间件）
+    rateLimitPerMinute: 120,
     Middleware: <string[]>[],
-    // Umami 统计（不需要留空）
-    umamiHost: "",
-    umamiScriptUrl: "",
-    umamiWebsiteId: "",
-    // 备案号（页脚展示，不需要留空）
-    ICP: "",
-    GongAn: "",
-    // 是否禁止搜索引擎索引
+    umamiHost: "", umamiScriptUrl: "", umamiWebsiteId: "",
+    ICP: "", GongAn: "",
     noindex: false,
-    // 出站 IP 检测接口（页面直连需 CORS，建议 wsmdn.top 的三个）
-    v4OnlyAPI: "https://4.wsmdn.top",
-    v6OnlyAPI: "https://6.wsmdn.top",
-    DualStackAPI: "https://test.wsmdn.top",
-    // 基础 API 节点（detail / ssl / whois 等）
+    v4OnlyAPI: "https://4.wsmdn.top", v6OnlyAPI: "https://6.wsmdn.top", DualStackAPI: "https://test.wsmdn.top",
     apiBaseUrls: [
         { label: "节点显示名", id: "node-1", url: "https://node-1.example.com/" }
     ],
-    // IP 归属地 / ASN 查询节点
     IPLocationAPIs: [
         { label: "节点显示名", id: "node-1", url: "https://node-1.example.com/" }
     ],
-    // TCPing 节点：IPv4-only 节点只能放 IPv4 分组，不能放 DualStack / IPv6
-    TCPing: {
-        DualStack: [],
-        IPv4: [
-            { label: "节点显示名", id: "node-1", url: "https://node-1.example.com/" }
-        ],
-        IPv6: []
-    },
-    // 测速节点：同上，IPv4-only 节点只能放 IPv4 分组
-    SpeedTest: {
-        DualStack: [],
-        IPv4: [
-            { label: "节点显示名", id: "node-1", url: "https://node-1.example.com/" }
-        ],
-        IPv6: []
-    },
-    // DNS 解析节点
+    TCPing: { DualStack: [], IPv4: [ { label: "节点显示名", id: "node-1", url: "https://node-1.example.com/" } ], IPv6: [] },
+    SpeedTest: { DualStack: [], IPv4: [ { label: "节点显示名", id: "node-1", url: "https://node-1.example.com/" } ], IPv6: [] },
     NSLookup: [
         { label: "节点显示名", id: "node-1", url: "https://node-1.example.com/" }
     ]
@@ -161,65 +101,22 @@ const config = {
 export { config }
 ```
 
-> 节点 `id` 需与后端节点 / 中间件 `apiKeys` 的键保持一致，中间件按 `id` 注入 `Authorization: Bearer <key>`。
-
-节点数组项均为 `{ label, id, url }` 结构，例如：
-
-```ts
-apiBaseUrls: [
-    { label: "中国 江苏 移动", id: "cn-jiangsu", url: "https://cn-jiangsu.api-ipw.wsmdn.top/" }
-]
-```
-
-`label` 为节点展示名，`id` 为节点唯一标识（中间件 `apiKeys` 也按此 id 注入 key），`url` 为节点 base URL。`TCPing` / `SpeedTest` 节点再多一层 `DualStack` / `IPv4` / `IPv6` 分组，分别对应双栈 / 单栈测试时使用的节点列表。
-
-##### 出站 IP 检测接口（v4OnlyAPI / v6OnlyAPI / DualStackAPI）
-
-`v4OnlyAPI` / `v6OnlyAPI` / `DualStackAPI` 用于获取请求方的出站 IP（分别对应 IPv4、IPv6、双栈），首页与部分页面会直接请求。可直接使用的接口：
-
-| 接口 | 类型 |
-|------|------|
-| `https://4.wsmdn.top` | IPv4 |
-| `https://6.wsmdn.top` | IPv6 |
-| `https://test.wsmdn.top` | 双栈 |
-| `https://ipv4.ip.sb` | IPv4 |
-| `https://ipv6.ip.sb` | IPv6 |
-| `https://ip.sb` | 双栈 |
-| `https://4.itdog.cn` | IPv4 |
-| `https://6.itdog.cn` | IPv6 |
-| `https://v.itdog.cn` | 双栈 |
-
-> **CORS 说明**：以上接口仅 `4.wsmdn.top` / `6.wsmdn.top` / `test.wsmdn.top` 返回 `Access-Control-Allow-Origin: *`，其余（ip.sb、itdog.cn）不带 CORS 头。前端页面在客户端导航时会从浏览器直接请求这些接口，**没有 CORS 会被浏览器拦截**，因此页面直连检测建议使用 wsmdn.top 的三个；ip.sb / itdog.cn 适合在服务端或命令行场景使用。
-
----
-
-#### 前端内置中间件（NUXT_APIKEYS）
-
-前端内置中间件（`frontend-ssr/server/routes/middleware/[...slug].get.ts`）作为 `/middleware/*` 候选列表的最后一位兜底，转发时也会注入 key：
-
-- 读取方式：`useRuntimeConfig(event).apiKeys`，按请求的 `backendID`（节点 `id`）查找
-- 环境变量：**`NUXT_APIKEYS`**（Nuxt 约定 `NUXT_` + 配置键 `apiKeys`）
-- 格式：JSON 字符串，例如 `NUXT_APIKEYS='{"cn-jiangsu":"your-key"}'`
-- 注入方式：转发请求头 `Authorization: Bearer <key>`
-
-也可以在 `nuxt.config.ts` 的 `runtimeConfig.apiKeys` 里直接写死（不推荐，密钥不应进仓库）。
-
----
-
-#### 独立中间件（middleware-go）
-
-中间件配置在 `middleware-go/setting.json`：
+**独立中间件**（`middleware-go/setting.json`）：
 
 ```json
 {
     "port": "8091",
     "cors": "",
+    "rate-limit": 120,
+    "remote-config-url": "",
     "apiBaseUrls": [ { "label": "中国 江苏 移动", "id": "cn-jiangsu", "url": "https://cn-jiangsu.api-ipw.wsmdn.top/" } ],
     "apiKeys": { "cn-jiangsu": "" }
 }
 ```
 
-`apiKeys` 用于向后端注入 `Authorization: Bearer <key>`，优先级：setting.json `apiKeys` > 环境变量 `APIKEYS`（JSON 字符串）。
+> 完整字段（`http-timeout-seconds` / `ws-port` / `remote-ingore-config` 等）见 [配置文件 - 独立中间件](/guide/config#独立中间件middleware-go)。**敏感凭据（`apiKeys` / `access_token`）不得上传远端配置，仅放本地或环境变量。**
+
+前端内置中间件通过环境变量 **`NUXT_APIKEYS`**（JSON 字符串，如 `'{"cn-jiangsu":"your-key"}'`）注入 key。
 
 ### systemd 守护进程
 

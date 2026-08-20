@@ -3,6 +3,7 @@ module lemon-ipw
 go 1.26.2
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
 	github.com/ipipdotnet/ipdb-go v1.3.3

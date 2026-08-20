@@ -14,14 +14,37 @@ import (
 )
 
 var (
-	dnsServer = "119.28.28.28:53"
+	// dnsServers 普通 DNS 查询服务器列表（主从：第一个为主，主失败自动切换后续从服务器）
+	dnsServers = []string{"119.28.28.28:53"}
+	// dnssecServers DNSSEC 专用服务器列表（未配置时沿用 dnsServers）
+	dnssecServers []string
 )
 
-// SetDNSServer 设置DNS服务器地址（格式: "ip:port"，也支持 DoH URL http(s)://...）
+// SetDNSServer 设置DNS服务器地址（逗号分隔多地址：第一个为主，主失败自动切换后续从服务器）。
+// 每项支持 "ip:port"（UDP）或 DoH URL http(s)://...
 func SetDNSServer(server string) {
-	if server != "" {
-		dnsServer = server
+	if list := splitServers(server); len(list) > 0 {
+		dnsServers = list
 	}
+}
+
+// SetDNSSecServer 设置DNSSEC专用DNS服务器（逗号分隔主从；留空 = 沿用 dns-server 配置）
+func SetDNSSecServer(server string) {
+	if list := splitServers(server); len(list) > 0 {
+		dnssecServers = list
+	}
+}
+
+// splitServers 逗号分隔解析为地址列表（去空白、去空项）
+func splitServers(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 const (
@@ -29,24 +52,46 @@ const (
 	defaultDoHEndpoint = "https://doh.pub/dns-query"
 )
 
-// queryDNS 统一 DNS 查询入口：支持 DoH 与 UDP 双通道自动互备。
-// dnsServer 配置为 URL（http/https）时优先 DoH，失败回退 UDP（defaultUDPServer）；
-// 配置为 ip:port 时优先 UDP，失败回退 DoH（defaultDoHEndpoint）。
+// queryDNS 普通 DNS 查询：主从 failover——按配置顺序依次尝试每个服务器，
+// 当前服务器查询失败（网络错误/超时）自动切换下一个；全部失败返回最后一个错误。
 func queryDNS(msg *dns.Msg) (*dns.Msg, error) {
-	if strings.HasPrefix(dnsServer, "http://") || strings.HasPrefix(dnsServer, "https://") {
-		resp, err := queryDoHMsg(msg, dnsServer)
+	return queryWithServers(msg, dnsServers)
+}
+
+// queryDNSSEC DNSSEC 查询：优先使用专用服务器（dnssec-server），未配置则沿用普通 dns-server
+func queryDNSSEC(msg *dns.Msg) (*dns.Msg, error) {
+	if len(dnssecServers) > 0 {
+		return queryWithServers(msg, dnssecServers)
+	}
+	return queryWithServers(msg, dnsServers)
+}
+
+// queryWithServers 依次尝试服务器列表，主失败切从
+func queryWithServers(msg *dns.Msg, servers []string) (*dns.Msg, error) {
+	if len(servers) == 0 {
+		servers = []string{defaultUDPServer}
+	}
+	var lastErr error
+	for i, srv := range servers {
+		resp, err := queryOne(msg, srv)
 		if err == nil {
 			return resp, nil
 		}
-		slog.Warn("DoH query failed, falling back to UDP", "endpoint", dnsServer, "error", err)
-		return queryUDPMsg(msg, defaultUDPServer)
+		lastErr = err
+		if i < len(servers)-1 {
+			slog.Warn("DNS query failed, switching to next server", "server", srv, "error", err)
+		}
 	}
-	resp, err := queryUDPMsg(msg, dnsServer)
-	if err == nil {
-		return resp, nil
+	slog.Warn("all DNS servers failed", "servers", servers, "error", lastErr)
+	return nil, lastErr
+}
+
+// queryOne 向单个 DNS 服务器查询：配置为 URL（http/https）走 DoH，否则走 UDP
+func queryOne(msg *dns.Msg, server string) (*dns.Msg, error) {
+	if strings.HasPrefix(server, "http://") || strings.HasPrefix(server, "https://") {
+		return queryDoHMsg(msg, server)
 	}
-	slog.Warn("UDP query failed, falling back to DoH", "server", dnsServer, "error", err)
-	return queryDoHMsg(msg, defaultDoHEndpoint)
+	return queryUDPMsg(msg, server)
 }
 
 // queryUDPMsg 通过 UDP/TCP 向指定 DNS 服务器发送查询（miekg/dns 自动处理大响应切 TCP）

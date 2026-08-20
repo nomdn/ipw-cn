@@ -1,6 +1,10 @@
 {
     "port": "8091",
-    "httpTimeoutSeconds": 30,
+    "http-timeout-seconds": 30,
+    "rate-limit": 120,
+    "ws-port": 8092,
+    "remote-config-url": "",
+    "remote-ingore-config": [],
     "cors": "",
     "apiBaseUrls": [
         {
@@ -24,10 +28,8 @@
                 "url": "https://cn-jiangsu.api-ipw.wsmdn.top/"
             }
         ],
-        "IPv4": [
-        ],
-        "IPv6": [
-        ]
+        "IPv4": [],
+        "IPv6": []
     },
     "SpeedTest": {
         "DualStack": [
@@ -37,10 +39,8 @@
                 "url": "https://cn-jiangsu.api-ipw.wsmdn.top/"
             }
         ],
-        "IPv4": [
-        ],
-        "IPv6": [
-        ]
+        "IPv4": [],
+        "IPv6": []
     },
     "NSLookup": [
         {
@@ -49,6 +49,5 @@
             "url": "https://cn-jiangsu.api-ipw.wsmdn.top/"
         }
     ],
-    "apiKeys": {
-    }
+    "apiKeys": {}
 }

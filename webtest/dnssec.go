@@ -41,7 +41,7 @@ func ResolveDNSSEC(domain string) (*DNSSECResult, error) {
 	msgDNSKEY.SetQuestion(dns.Fqdn(domain), dns.TypeDNSKEY)
 	msgDNSKEY.SetEdns0(4096, true)
 
-	responseDNSKEY, err := queryDNS(msgDNSKEY)
+	responseDNSKEY, err := queryDNSSEC(msgDNSKEY)
 	result.Duration = time.Since(start).Seconds() * 1000
 
 	if err != nil {
@@ -74,7 +74,7 @@ func ResolveDNSSEC(domain string) (*DNSSECResult, error) {
 	msgA.SetQuestion(dns.Fqdn(domain), dns.TypeA)
 	msgA.SetEdns0(4096, true)
 
-	responseA, err := queryDNS(msgA)
+	responseA, err := queryDNSSEC(msgA)
 	if err == nil && responseA.Rcode == dns.RcodeSuccess {
 		var aRRset []dns.RR
 		for _, ans := range responseA.Answer {
@@ -117,7 +117,7 @@ func ResolveDNSSEC(domain string) (*DNSSECResult, error) {
 	// 4. 查询 DS 记录
 	msgDS := new(dns.Msg)
 	msgDS.SetQuestion(dns.Fqdn(domain), dns.TypeDS)
-	responseDS, _ := queryDNS(msgDS)
+	responseDS, _ := queryDNSSEC(msgDS)
 	if responseDS != nil && responseDS.Rcode == dns.RcodeSuccess {
 		for _, ans := range responseDS.Answer {
 			if _, ok := ans.(*dns.DS); ok {
@@ -159,7 +159,7 @@ func ResolveDNSSECForRecord(domain string, recordType uint16) (*DNSSECResult, er
 	msg.SetQuestion(dns.Fqdn(domain), recordType)
 	msg.SetEdns0(4096, true)
 
-	response, err := queryDNS(msg)
+	response, err := queryDNSSEC(msg)
 	result.Duration = time.Since(start).Seconds() * 1000
 
 	if err != nil {
@@ -204,7 +204,7 @@ func ResolveDNSSECForRecord(domain string, recordType uint16) (*DNSSECResult, er
 	msgDNSKEY.SetQuestion(dns.Fqdn(domain), dns.TypeDNSKEY)
 	msgDNSKEY.SetEdns0(4096, true)
 
-	responseDNSKEY, err := queryDNS(msgDNSKEY)
+	responseDNSKEY, err := queryDNSSEC(msgDNSKEY)
 	if err == nil && responseDNSKEY.Rcode == dns.RcodeSuccess {
 		var dnskeyRRset []dns.RR
 		for _, ans := range responseDNSKEY.Answer {
@@ -237,7 +237,7 @@ func ResolveDNSSECForRecord(domain string, recordType uint16) (*DNSSECResult, er
 	// 查询 DS 记录
 	msgDS := new(dns.Msg)
 	msgDS.SetQuestion(dns.Fqdn(domain), dns.TypeDS)
-	responseDS, _ := queryDNS(msgDS)
+	responseDS, _ := queryDNSSEC(msgDS)
 	if responseDS != nil && responseDS.Rcode == dns.RcodeSuccess {
 		for _, ans := range responseDS.Answer {
 			if _, ok := ans.(*dns.DS); ok {

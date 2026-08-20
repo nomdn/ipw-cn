@@ -27,7 +27,7 @@ docker run -d -p 8091:8091 \
   middleware-go
 ```
 
-配置通过挂载 `setting.json` 提供（`apiBaseUrls` / `apiKeys` / `cors` 等）。
+配置通过挂载 `setting.json` 提供（`apiBaseUrls` / `apiKeys` / `cors` / `rate-limit` / `remote-config-url` 等；`rate-limit` 为单 IP 每分钟限流次数，默认 120，0 表示不限流，可用环境变量 `RATE_LIMIT` 覆盖；`remote-config-url` 为远端配置地址，可用环境变量 `REMOTE_CONFIG_URL` 覆盖；**`apiKeys` 为敏感凭据，不随远端配置覆盖**）。
 
 ## 方案二：二进制
 
@@ -37,6 +37,72 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o middleware-go-linux-amd64 .
 ./middleware-go-linux-amd64          # 运行（与 setting.json 同目录）
 ```
 
-所有配置可用环境变量覆盖（`API_BASE_URLS` / `IP_LOCATION_APIS` / `CORS` / `APIKEYS` 等，数组/对象用 JSON 字符串），优先级：**环境变量 > setting.json > 默认值**。
+所有配置可用环境变量覆盖（`API_BASE_URLS` / `IP_LOCATION_APIS` / `CORS` / `APIKEYS` / `RATE_LIMIT` 等，数组/对象用 JSON 字符串），优先级：**环境变量 > setting.json > 默认值**（远端配置 `REMOTE_CONFIG_URL` 高于两者，详见 [配置文件 - 远端配置](/guide/config#远端配置remoteconfigurl)）。
 
 需要守护运行时，参考 [快速入门](/guide/getting-started) 中的 systemd 配置（`WorkingDirectory` 指向 `middleware-go/setting.json` 所在目录）。
+
+## WS 通道（拨测数据经 WebSocket 传输）
+
+middleware-go 内置 WS 服务端，后端节点可作为 **WS 客户端**连入，拨测数据上传改用 WS 通道传输（HTTP 转发保留，双通道并存）。**现有 HTTP 接口（`/v1/*` / `/middleware/*`）完全不变**。
+
+### 架构
+
+```
+前端（HTTP） → middleware-go（8091，HTTP 转发）→ 后端节点（ws:false 时）
+              ↘ middleware-go（8092，WS 服务端）→ 后端节点（ws:true 时，WS 客户端连入）
+```
+
+- WS 服务端跑在**独立端口**（配置 `ws-port`，默认 `8092`，路径 `/ws`；`ws-port: 0` 或环境变量 `WS_PORT=0` 关闭），与 fiber HTTP 服务完全分离；端口走统一配置管道（远端配置 > 环境变量 > setting.json）
+- 节点配置加 `"ws": true`（兼容 `"ws": "true"` 字符串写法）→ 该节点的拨测请求改走 WS 通道；缺省 `false` → 原 HTTP 转发不变
+- ws:true 节点未连接或拨测超时 → 返回 502，不影响其他节点
+
+### 配置示例
+
+```json
+{
+    "port": "8091",
+    "apiBaseUrls": [
+        { "label": "上海 腾讯云 BGP", "id": "tencent-sh", "url": "", "ws": true }
+    ],
+    "TCPing": { "DualStack": [], "IPv4": [], "IPv6": [ { "label": "河北 秦皇岛 联通", "id": "cn-hebei-qinhuangdao", "url": "https://cn-hebei-qinhuangdao.api-ipw.wsmdn.top/", "ws": true } ] }
+}
+```
+
+启动后日志会打印 `ws channel enabled on port 8092`。
+
+### 消息协议
+
+所有消息为 JSON 文本帧，信封：`{ "type": "...", "nodeId": "...", "ts": <unix秒>, "data": {...} }`
+
+| 方向 | type | data 说明 |
+|------|------|-----------|
+| 节点 → middleware | `register` | `{ "nodeId": "...", "key": "..." }`，连接后首条消息，同 id 新连接顶掉旧连接；`key` 为注册凭证，与 setting.json `apiKeys` 配置比对 |
+| middleware → 节点 | `register_ok` | `{ "heartbeatSeconds": 20 }` |
+| middleware → 节点 | `register_error` | `{ "code": 401, "command": "invalid key" }`（注册凭证错误时返回并断开连接） |
+| middleware → 节点 | `probe` | `{ "requestId": "...", "apiType": "tcping", "raw": "qq.com", "query": {"port":"443"} }`，拨测请求（HTTP/WS 双通道时前端请求仍走 HTTP，middleware 内部转 WS） |
+| 节点 → middleware | `probe_result` | `{ "requestId": "...", "status": 200, "body": <JSON 值> }`（body 为 JSON 字符串时按原文透传） |
+| middleware → 节点 | `ping` | 心跳，节点回 `pong` |
+| middleware → 节点 | `status` | 状态/统计上报：`{ "uptimeSeconds": ..., "totalRequests": ..., "errorRequests": ... }`（每 20s） |
+| 节点 → middleware | `command` | 指令下发，如 `{ "command": "reload_config" }`（重读配置；与并发请求存在竞态，生产建议重启生效） |
+
+### 节点侧接入（WS 客户端）
+
+1. 连接 `ws://<中间件IP>:8092/ws`
+2. 首条消息发 `register { "nodeId": "<与中间件配置一致的节点 id>", "key": "<注册凭证>" }`（节点在 setting.json `apiKeys` 里配了 key 就必须传对；未配置 key 的开放节点可不传）
+3. 收到 `probe` → 执行拨测 → 回 `probe_result`（必须携带原 `requestId`，支持乱序返回，同一连接可并发多个拨测）
+4. 收到 `ping` → 回 `pong`；`status` 可忽略或记录
+5. 断线后重连并重新 `register` 即可
+
+### 注册 key 校验
+
+节点注册时中间件按 `apiKeys` 配置校验 key：
+
+- 节点在 `apiKeys` 配置了 key（非空）→ `register` 必须携带正确 key，不传或传错返回 `register_error { "code": 401, "command": "invalid key" }` 并**断开连接**，不进入数据阶段
+- 节点未配置 key（`apiKeys` 无该项或为空）→ 开放注册，不传 key 即可
+
+与 HTTP 通道的鉴权语义一致（配置了 key 就必须带凭据，留空 = 开放）。
+
+### 说明
+
+- 注册阶段按节点 `apiKeys` 配置校验 key（配了 key 必须传对，否则 401 断开；未配置则开放，详见上文「注册 key 校验」）；拨测请求经 WS 转发时不携带 `Authorization` 头（后续由节点侧自行决定是否需要额外鉴权）
+- `ws:true` 且 WS 未启用（`WS_PORT=0`）时，自动回退原 HTTP 转发

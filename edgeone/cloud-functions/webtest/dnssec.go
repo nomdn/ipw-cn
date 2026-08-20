@@ -255,9 +255,9 @@ func ResolveDNSSECForRecord(domain string, recordType uint16) (*DNSSECResult, er
 	return result, nil
 }
 
-// executeDoHQueryMsg 通过 queryDNSMsg（DoH+UDP 双通道）发送 DNS 查询并返回解析后的响应消息
+// executeDoHQueryMsg 通过 queryDNSSECMsg（DNSSEC 专用 DNS，主从 failover；未配置专用则沿用 dns-server）发送 DNS 查询并返回解析后的响应消息
 func executeDoHQueryMsg(msg *dns.Msg) (*dns.Msg, float64, error) {
-	responseMsg, duration, err := queryDNSMsg(msg)
+	responseMsg, duration, err := queryDNSSECMsg(msg)
 	if err != nil {
 		return nil, duration, err
 	}

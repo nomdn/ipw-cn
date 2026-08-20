@@ -57,4 +57,4 @@ go build -o lemonipw main.go
 
 ## 配置
 
-后端配置见 [快速入门 - 配置文件](/guide/getting-started#配置文件)：`setting.json` 或环境变量，支持远端配置（`REMOTE_CONFIG_URL`，优先级：远端 > 环境变量 > setting.json）。
+后端配置见 [配置文件](/guide/config)：`setting.json` 或环境变量，支持远端配置（`REMOTE_CONFIG_URL`，优先级：远端 > 环境变量 > setting.json）。

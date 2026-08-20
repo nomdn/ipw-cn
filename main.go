@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,7 +12,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"strconv"
@@ -85,10 +83,10 @@ func initHTTPClients() {
 
 }
 
-func fakePerfectWebsiteResult(host string) *WebsiteCheckDetail {
+func fakePerfectWebsiteResult(host string) *webtest.WebsiteCheckDetail {
 	cleanHost := strings.TrimPrefix(host, "https://")
 	cleanHost = strings.TrimPrefix(cleanHost, "http://")
-	return &WebsiteCheckDetail{
+	return &webtest.WebsiteCheckDetail{
 		HostRecord:       cleanHost,
 		HTTPStatusCode:   200,
 		HTTPSSStatusCode: 200,
@@ -103,8 +101,8 @@ func fakePerfectWebsiteResult(host string) *WebsiteCheckDetail {
 	}
 }
 
-func fakeInvalidSSLResult(host string) *SSLCheckDetail {
-	return &SSLCheckDetail{
+func fakeInvalidSSLResult(host string) *webtest.SSLCheckDetail {
+	return &webtest.SSLCheckDetail{
 		CertValidityDays:   0,
 		IsExpired:          true,
 		CertStartTime:      time.Time{},
@@ -170,26 +168,6 @@ func (b *zstdReader) Close() error {
 	})
 	return b.closeErr
 }
-func cleanHostRecord(addr string) string {
-	if strings.HasPrefix(addr, "[") {
-		rightBracket := strings.Index(addr, "]")
-		if rightBracket != -1 {
-			return addr[1:rightBracket]
-		}
-	}
-
-	if idx := strings.LastIndex(addr, ":"); idx != -1 {
-		colonCount := strings.Count(addr, ":")
-		if colonCount > 1 {
-			return addr[:idx]
-		}
-		if colonCount == 1 {
-			return addr[:idx]
-		}
-	}
-
-	return addr
-}
 
 // normalizeURL normalizes the input URL by ensuring it has a scheme (http or https).
 // normalizeURL 通过确保输入 URL 具有方案（http 或 https）来规范化输入 URL。
@@ -242,6 +220,7 @@ var (
 	websiteCache   sync.Map
 	SINGLE_STACK   string
 	DNS_SERVER     string
+	DNSSEC_DNS_SERVER string // DNSSEC 专用 DNS 服务器（dnssec-server / DNSSEC_DNS_SERVER），留空沿用 DNS_SERVER
 	sslCache       sync.Map
 	pingCache      sync.Map
 	speedCache     sync.Map
@@ -255,6 +234,10 @@ var (
 	ACCEPT_DOMAINS     []string
 	ACCESS_TOKEN       string
 	REMOTE_CONFIG_URL  string
+	REMOTE_INGORE_CONFIG []string // 不被远端配置覆盖的配置项列表（remote-ingore-config / REMOTE_INGORE_CONFIG）
+	WS_URL             string // WS 客户端：中间件 WS 地址（ws://host:port/ws）
+	WS_NODE_ID         string // WS 客户端：节点 id（与中间件 apiKeys 键一致）
+	WS_NODE_KEY        string // WS 客户端：注册 key（与中间件 apiKeys[节点id] 一致，可空）
 	VERSION            string
 	COMMIT             string
 	BUILD_TIME         string
@@ -276,7 +259,7 @@ type pingCacheEntry struct {
 }
 
 type speedCacheEntry struct {
-	result    *WebsiteSpeedTestResult
+	result    *webtest.WebsiteSpeedTestResult
 	timestamp time.Time
 }
 
@@ -291,304 +274,27 @@ type asnWhoisCacheEntry struct {
 }
 
 type WebsiteCheckResult struct {
-	IPv4 *WebsiteCheckDetail `json:"ipv4"`
-	IPv6 *WebsiteCheckDetail `json:"ipv6"`
+	IPv4 *webtest.WebsiteCheckDetail `json:"ipv4"`
+	IPv6 *webtest.WebsiteCheckDetail `json:"ipv6"`
 }
 
-type WebsiteCheckDetail struct {
-	HostRecord       string  `json:"host_record"`
-	HTTPStatusCode   int     `json:"http_status_code"`
-	HTTPSSStatusCode int     `json:"https_status_code"`
-	DNSLookupTime    float64 `json:"dns_lookup_time"`
-	TCPConnectTime   float64 `json:"tcp_connect_time"`
-	HTTPConnectTime  float64 `json:"http_connect_time"`
-	FirstByteTime    float64 `json:"first_byte_time"`
-	TotalTime        float64 `json:"total_time"`
-	PageSize         int64   `json:"page_size"`
-	DownloadSpeed    float64 `json:"download_speed"`
-	IsReachable      bool    `json:"is_reachable"`
-}
 
-type SSLCheckDetail struct {
-	CertValidityDays   int       `json:"cert_validity_days"`
-	CertStartTime      time.Time `json:"cert_start_time"`
-	CertEndTime        time.Time `json:"cert_end_time"`
-	HTTPVersion        string    `json:"http_version"`
-	HostRecord         string    `json:"host_record"`
-	HTTPSSStatusCode   int       `json:"https_status_code"`
-	TotalTime          float64   `json:"total_time"`
-	DownloadSpeed      float64   `json:"download_speed"`
-	Domain             string    `json:"domain"`
-	IssuerOrganization []string  `json:"issuer_organization"`
-	IssuerCommonName   string    `json:"issuer_common_name"`
-	SubjectCommonName  string    `json:"subject_common_name"`
-	IsExpired          bool      `json:"is_expired"`
-	IsReachable        bool      `json:"is_reachable"`
-}
 
 type SSLCheckResult struct {
-	IPv4 *SSLCheckDetail `json:"ipv4"`
-	IPv6 *SSLCheckDetail `json:"ipv6"`
+	IPv4 *webtest.SSLCheckDetail `json:"ipv4"`
+	IPv6 *webtest.SSLCheckDetail `json:"ipv6"`
 }
 type TCPingResult struct {
 	IPv4 *webtest.TCPingStats `json:"ipv4"`
 	IPv6 *webtest.TCPingStats `json:"ipv6"`
 }
-type WebsiteSpeedTestResult struct {
-	Version          string  `json:"version"`
-	HostRecord       string  `json:"host_record"`
-	HTTPStatusCode   int     `json:"http_status_code"`
-	HTTPSSStatusCode int     `json:"https_status_code"`
-	DNSLookupTime    float64 `json:"dns_lookup_time"`
-	TCPConnectTime   float64 `json:"tcp_connect_time"`
-	HTTPConnectTime  float64 `json:"http_connect_time"`
-	FirstByteTime    float64 `json:"first_byte_time"`
-	TotalTime        float64 `json:"total_time"`
-	PageSize         int64   `json:"page_size"`
-	DownloadSpeed    float64 `json:"download_speed"`
-	Message          string  `json:"message"`
-	Headers          string  `json:"headers"`
-	IsReachable      bool    `json:"is_reachable"`
-}
 
 // Business Endpoints
 // 业务端点
 
-func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
-	ctx := context.Background()
-	var err error
-	ctx, err = ssrf.ValidateOutboundTarget(ctx, url)
-	if err != nil {
-		return nil, err
-	}
 
-	client := V4Client
-	if version == "v6" {
-		client = V6Client
-	}
 
-	startTime := time.Now()
-	resp, err := client.R().EnableTrace().SetContext(ctx).Get(url)
 
-	// HTTPS 请求失败时 fallback 到 HTTP
-	fallbackToHTTP := false
-	if err != nil && strings.HasPrefix(url, "https://") {
-		httpURL := strings.Replace(url, "https://", "http://", 1)
-		startTime = time.Now()
-		resp, err = client.R().EnableTrace().SetContext(ctx).Get(httpURL)
-		fallbackToHTTP = true
-	}
-
-	if err != nil {
-		return nil, err
-	}
-	endTime := time.Now()
-
-	body := resp.Bytes()
-	trace := resp.Request.TraceInfo()
-
-	hostRecord := cleanHostRecord(trace.RemoteAddr)
-
-	dnsLookupTime := trace.DNSLookup.Seconds() * 1000
-	if dnsLookupTime == 0 {
-		dnsLookupTime = measureDNSTime(url, version)
-	}
-	tcpConnectTime := trace.TCPConnTime.Seconds() * 1000
-	httpConnectTime := trace.ConnTime.Seconds() * 1000
-	firstByteTime := trace.ServerTime.Seconds() * 1000
-
-	totalTime := float64(endTime.Sub(startTime).Milliseconds())
-	var downloadSpeed float64
-	if totalTime > 0 {
-		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
-	}
-
-	httpStatus := resp.StatusCode()
-	httpsStatus := resp.StatusCode()
-	if fallbackToHTTP {
-		httpsStatus = 0
-	}
-
-	result := &WebsiteCheckDetail{
-		HostRecord:       hostRecord,
-		HTTPStatusCode:   httpStatus,
-		HTTPSSStatusCode: httpsStatus,
-		DNSLookupTime:    dnsLookupTime,
-		TCPConnectTime:   tcpConnectTime,
-		HTTPConnectTime:  httpConnectTime,
-		FirstByteTime:    firstByteTime,
-		TotalTime:        totalTime,
-		PageSize:         int64(len(body)),
-		DownloadSpeed:    downloadSpeed,
-		IsReachable:      true,
-	}
-
-	return result, nil
-}
-
-func measureDNSTime(urlStr string, version string) float64 {
-	parsed, err := url.Parse(urlStr)
-	if err != nil {
-		return 0
-	}
-	host := parsed.Hostname()
-	if host == "" {
-		return 0
-	}
-	start := time.Now()
-	var dnsErr error
-	if version == "v6" {
-		_, dnsErr = webtest.ResolveAAAARecord(host)
-	} else {
-		_, dnsErr = webtest.ResolveARecord(host)
-	}
-	if dnsErr != nil {
-		return 0
-	}
-	return time.Since(start).Seconds() * 1000
-}
-
-func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
-	ctx := context.Background()
-	var err error
-	ctx, err = ssrf.ValidateOutboundTarget(ctx, url)
-	if err != nil {
-		return nil, err
-	}
-
-	client := V4Client
-	if version == "v6" {
-		client = V6Client
-	}
-
-	startTime := time.Now()
-	resp, err := client.R().EnableTrace().SetContext(ctx).Get(url)
-
-	fallbackToHTTP := false
-	if err != nil && strings.HasPrefix(url, "https://") {
-		httpURL := strings.Replace(url, "https://", "http://", 1)
-		startTime = time.Now()
-		resp, err = client.R().EnableTrace().SetContext(ctx).Get(httpURL)
-		fallbackToHTTP = true
-	}
-
-	if err != nil {
-		return nil, err
-	}
-	endTime := time.Now()
-
-	body := resp.Bytes()
-	trace := resp.Request.TraceInfo()
-
-	hostRecord := cleanHostRecord(trace.RemoteAddr)
-
-	dnsLookupTime := trace.DNSLookup.Seconds() * 1000
-	if dnsLookupTime == 0 {
-		dnsLookupTime = measureDNSTime(url, version)
-	}
-	tcpConnectTime := trace.TCPConnTime.Seconds() * 1000
-	httpConnectTime := trace.ConnTime.Seconds() * 1000
-	firstByteTime := trace.ServerTime.Seconds() * 1000
-
-	totalTime := float64(endTime.Sub(startTime).Milliseconds())
-	var downloadSpeed float64
-	if totalTime > 0 {
-		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
-	}
-	dumpBytes, _ := httputil.DumpResponse(resp.RawResponse, false)
-	httpStatus := resp.StatusCode()
-	httpsStatus := resp.StatusCode()
-	if fallbackToHTTP {
-		httpsStatus = 0
-	}
-	result := &WebsiteSpeedTestResult{
-		Version:          version,
-		Headers:          string(dumpBytes),
-		HostRecord:       hostRecord,
-		HTTPStatusCode:   httpStatus,
-		HTTPSSStatusCode: httpsStatus,
-		DNSLookupTime:    dnsLookupTime,
-		TCPConnectTime:   tcpConnectTime,
-		HTTPConnectTime:  httpConnectTime,
-		FirstByteTime:    firstByteTime,
-		TotalTime:        totalTime,
-		PageSize:         int64(len(body)),
-		DownloadSpeed:    downloadSpeed,
-		IsReachable:      true,
-	}
-
-	return result, nil
-}
-
-func checkSSL(url string, version string) (*SSLCheckDetail, error) {
-	ctx := context.Background()
-	var err error
-	ctx, err = ssrf.ValidateOutboundTarget(ctx, url)
-	if err != nil {
-		return nil, err
-	}
-
-	client := V4Client
-	if version == "v6" {
-		client = V6Client
-	}
-
-	startTime := time.Now()
-	resp, err := client.R().EnableTrace().SetContext(ctx).Get(url)
-	if err != nil {
-		return nil, err
-	}
-	endTime := time.Now()
-
-	trace := resp.Request.TraceInfo()
-	hostRecord := cleanHostRecord(trace.RemoteAddr)
-
-	totalTime := float64(endTime.Sub(startTime).Milliseconds())
-	body := resp.Bytes()
-	var downloadSpeed float64
-	if totalTime > 0 {
-		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
-	}
-
-	rawResp := resp.RawResponse
-	var cert *x509.Certificate
-	var remainingDays int
-	var isExpired bool
-	var issuerOrganization []string
-	var issuerCommonName, subjectCommonName, domain string
-
-	if rawResp.TLS != nil && len(rawResp.TLS.PeerCertificates) > 0 {
-		cert = rawResp.TLS.PeerCertificates[0]
-		now := time.Now()
-		remainingDays = int(cert.NotAfter.Sub(now).Hours() / 24)
-		isExpired = now.After(cert.NotAfter) || now.Before(cert.NotBefore)
-		issuerOrganization = cert.Issuer.Organization
-		issuerCommonName = cert.Issuer.CommonName
-		subjectCommonName = cert.Subject.CommonName
-		domain = cleanHostRecord(cert.Subject.CommonName)
-	} else {
-		return nil, fmt.Errorf("no SSL certificate found")
-	}
-
-	result := &SSLCheckDetail{
-		CertValidityDays:   remainingDays,
-		IsExpired:          isExpired,
-		CertStartTime:      cert.NotBefore,
-		CertEndTime:        cert.NotAfter,
-		HTTPVersion:        resp.Proto(),
-		HostRecord:         hostRecord,
-		HTTPSSStatusCode:   resp.StatusCode(),
-		TotalTime:          totalTime,
-		DownloadSpeed:      downloadSpeed,
-		Domain:             domain,
-		IssuerOrganization: issuerOrganization,
-		IssuerCommonName:   issuerCommonName,
-		SubjectCommonName:  subjectCommonName,
-		IsReachable:        true,
-	}
-
-	return result, nil
-}
 
 func checkWebsiteHandler(c *gin.Context) {
 	testUrl := c.Param("url")
@@ -623,28 +329,28 @@ func checkWebsiteHandler(c *gin.Context) {
 		result := &WebsiteCheckResult{}
 		switch SINGLE_STACK {
 		case "ipv4":
-			ipv4, errV4 := checkWebsite(testUrl, "v4")
+			ipv4, errV4 := webtest.CheckWebsite(testUrl, "v4")
 			if errV4 != nil {
-				ipv4 = &WebsiteCheckDetail{
+				ipv4 = &webtest.WebsiteCheckDetail{
 					HostRecord:  "Error: " + errV4.Error(),
 					IsReachable: false,
 				}
 			}
 			result.IPv4 = ipv4
-			result.IPv6 = &WebsiteCheckDetail{
+			result.IPv6 = &webtest.WebsiteCheckDetail{
 				HostRecord:  "Skipped due to SINGLE_STACK=ipv4",
 				IsReachable: false,
 			}
 		case "ipv6":
-			ipv6, errV6 := checkWebsite(testUrl, "v6")
+			ipv6, errV6 := webtest.CheckWebsite(testUrl, "v6")
 			if errV6 != nil {
-				ipv6 = &WebsiteCheckDetail{
+				ipv6 = &webtest.WebsiteCheckDetail{
 					HostRecord:  "Error: " + errV6.Error(),
 					IsReachable: false,
 				}
 			}
 			result.IPv6 = ipv6
-			result.IPv4 = &WebsiteCheckDetail{
+			result.IPv4 = &webtest.WebsiteCheckDetail{
 				HostRecord:  "Skipped due to SINGLE_STACK=ipv6",
 				IsReachable: false,
 			}
@@ -654,9 +360,9 @@ func checkWebsiteHandler(c *gin.Context) {
 
 			go func() {
 				defer wg.Done()
-				ipv6, errV6 := checkWebsite(testUrl, "v6")
+				ipv6, errV6 := webtest.CheckWebsite(testUrl, "v6")
 				if errV6 != nil {
-					ipv6 = &WebsiteCheckDetail{
+					ipv6 = &webtest.WebsiteCheckDetail{
 						HostRecord:  "Error: " + errV6.Error(),
 						IsReachable: false,
 					}
@@ -666,9 +372,9 @@ func checkWebsiteHandler(c *gin.Context) {
 
 			go func() {
 				defer wg.Done()
-				ipv4, errV4 := checkWebsite(testUrl, "v4")
+				ipv4, errV4 := webtest.CheckWebsite(testUrl, "v4")
 				if errV4 != nil {
-					ipv4 = &WebsiteCheckDetail{
+					ipv4 = &webtest.WebsiteCheckDetail{
 						HostRecord:  "Error: " + errV4.Error(),
 						IsReachable: false,
 					}
@@ -708,7 +414,7 @@ func websiteSpeedTestHandler(c *gin.Context) {
 	switch SINGLE_STACK {
 	case "ipv4":
 		if version != "v4" {
-			c.JSON(http.StatusBadRequest, &WebsiteSpeedTestResult{
+			c.JSON(http.StatusBadRequest, &webtest.WebsiteSpeedTestResult{
 				Version:    "v4",
 				HostRecord: "Skipped due to SINGLE_STACK=ipv4",
 			})
@@ -716,7 +422,7 @@ func websiteSpeedTestHandler(c *gin.Context) {
 		}
 	case "ipv6":
 		if version != "v6" {
-			c.JSON(http.StatusBadRequest, &WebsiteSpeedTestResult{
+			c.JSON(http.StatusBadRequest, &webtest.WebsiteSpeedTestResult{
 				Version:    "v6",
 				HostRecord: "Skipped due to SINGLE_STACK=ipv6",
 			})
@@ -737,14 +443,14 @@ func websiteSpeedTestHandler(c *gin.Context) {
 		speedCache.Delete(cacheKey)
 	}
 
-	var result *WebsiteSpeedTestResult
+	var result *webtest.WebsiteSpeedTestResult
 
 	switch version {
 	case "v6", "v4":
 		rawResult, _, _ := sfGroup.Do(cacheKey, func() (interface{}, error) {
-			r, e := websiteSpeed(url, version)
+			r, e := webtest.SpeedTest(url, version)
 			if e != nil {
-				errorResult := &WebsiteSpeedTestResult{
+				errorResult := &webtest.WebsiteSpeedTestResult{
 					HostRecord: "Error: " + e.Error(),
 				}
 				speedCache.Store(cacheKey, speedCacheEntry{result: errorResult, timestamp: time.Now()})
@@ -757,7 +463,7 @@ func websiteSpeedTestHandler(c *gin.Context) {
 			speedCache.Store(cacheKey, speedCacheEntry{result: r, timestamp: time.Now()})
 			return r, nil
 		})
-		result = rawResult.(*WebsiteSpeedTestResult)
+		result = rawResult.(*webtest.WebsiteSpeedTestResult)
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid version",
@@ -801,31 +507,31 @@ func sslCheckHandler(c *gin.Context) {
 		result := &SSLCheckResult{}
 		switch SINGLE_STACK {
 		case "ipv4":
-			ipv4, errV4 := checkSSL(testUrl, "v4")
+			ipv4, errV4 := webtest.CheckSSL(testUrl, "v4")
 			if errV4 != nil {
-				ipv4 = &SSLCheckDetail{
+				ipv4 = &webtest.SSLCheckDetail{
 					HostRecord:  "Error: " + errV4.Error(),
 					IsExpired:   true,
 					IsReachable: false,
 				}
 			}
 			result.IPv4 = ipv4
-			result.IPv6 = &SSLCheckDetail{
+			result.IPv6 = &webtest.SSLCheckDetail{
 				HostRecord:  "Skipped due to SINGLE_STACK=ipv4",
 				IsExpired:   true,
 				IsReachable: false,
 			}
 		case "ipv6":
-			ipv6, errV6 := checkSSL(testUrl, "v6")
+			ipv6, errV6 := webtest.CheckSSL(testUrl, "v6")
 			if errV6 != nil {
-				ipv6 = &SSLCheckDetail{
+				ipv6 = &webtest.SSLCheckDetail{
 					HostRecord:  "Error: " + errV6.Error(),
 					IsExpired:   true,
 					IsReachable: false,
 				}
 			}
 			result.IPv6 = ipv6
-			result.IPv4 = &SSLCheckDetail{
+			result.IPv4 = &webtest.SSLCheckDetail{
 				HostRecord:  "Skipped due to SINGLE_STACK=ipv6",
 				IsExpired:   true,
 				IsReachable: false,
@@ -836,9 +542,9 @@ func sslCheckHandler(c *gin.Context) {
 
 			go func() {
 				defer wg.Done()
-				ipv6, errV6 := checkSSL(testUrl, "v6")
+				ipv6, errV6 := webtest.CheckSSL(testUrl, "v6")
 				if errV6 != nil {
-					ipv6 = &SSLCheckDetail{
+					ipv6 = &webtest.SSLCheckDetail{
 						HostRecord:  "Error: " + errV6.Error(),
 						IsExpired:   true,
 						IsReachable: false,
@@ -849,9 +555,9 @@ func sslCheckHandler(c *gin.Context) {
 
 			go func() {
 				defer wg.Done()
-				ipv4, errV4 := checkSSL(testUrl, "v4")
+				ipv4, errV4 := webtest.CheckSSL(testUrl, "v4")
 				if errV4 != nil {
-					ipv4 = &SSLCheckDetail{
+					ipv4 = &webtest.SSLCheckDetail{
 						HostRecord:  "Error: " + errV4.Error(),
 						IsExpired:   true,
 						IsReachable: false,
@@ -1285,27 +991,49 @@ func applyRemoteConfig() {
 		slog.Warn("Failed to fetch remote config, falling back to local config", "url", url, "error", err)
 		return
 	}
-	if v := configValue(CONFIG, "port"); v != "" {
+	// ignore 列表：数组中的配置项不被远端覆盖（逐键判断跳过）
+	ignored := func(key string) bool {
+		for _, k := range REMOTE_INGORE_CONFIG {
+			if k == key {
+				return true
+			}
+		}
+		return false
+	}
+	if v := configValue(CONFIG, "port"); v != "" && !ignored("port") {
 		PORTS = v
 	}
-	if v := configValue(CONFIG, "gh-proxy"); v != "" {
+	if v := configValue(CONFIG, "gh-proxy"); v != "" && !ignored("gh-proxy") {
 		GH_PROXY = v
 	}
-	if v := configValue(CONFIG, "single-stack"); v != "" {
+	if v := configValue(CONFIG, "single-stack"); v != "" && !ignored("single-stack") {
 		SINGLE_STACK = strings.ToLower(v)
 	}
-	if v := configValue(CONFIG, "dns-server"); v != "" {
+	if v := configValue(CONFIG, "dns-server"); v != "" && !ignored("dns-server") {
 		DNS_SERVER = v
 	}
-	if v := configValue(CONFIG, "ipdb"); v != "" {
+	if v := configValue(CONFIG, "dnssec-server"); v != "" && !ignored("dnssec-server") {
+		DNSSEC_DNS_SERVER = v
+	}
+	if v := configValue(CONFIG, "ipdb"); v != "" && !ignored("ipdb") {
 		IPDB = v
 	}
-	if v := configValue(CONFIG, "cors"); v != "" {
+	if v := configValue(CONFIG, "cors"); v != "" && !ignored("cors") {
 		CORS = v
 	}
 	// block-private-ips 与 setting.json 格式一致，允许远端覆盖
-	if v := configValue(CONFIG, "block-private-ips"); v != "" {
+	if v := configValue(CONFIG, "block-private-ips"); v != "" && !ignored("block-private-ips") {
 		ssrf.SetEnabled(v != "false" && v != "0")
+	}
+	// WS 客户端配置（远端可覆盖，除非在 ignore 列表中）
+	if v := configValue(CONFIG, "ipw-ws-url"); v != "" && !ignored("ipw-ws-url") {
+		WS_URL = v
+	}
+	if v := configValue(CONFIG, "ipw-node-id"); v != "" && !ignored("ipw-node-id") {
+		WS_NODE_ID = v
+	}
+	if v := configValue(CONFIG, "ipw-node-key"); v != "" && !ignored("ipw-node-key") {
+		WS_NODE_KEY = v
 	}
 	// access_token 不在此覆盖：保持原有优先级（环境变量 > setting.json）
 	if CORS != "" {
@@ -1322,6 +1050,7 @@ func readConfig() {
 	// 如果当前测速节点机器是单栈网络，建议设置 SINGLE_STACK 环境变量来跳过另一个协议的测试，以避免不必要的错误日志和延迟
 	SINGLE_STACK = strings.ToLower(strings.TrimSpace(os.Getenv("SINGLE_STACK")))
 	DNS_SERVER = os.Getenv("DNS_SERVER")
+	DNSSEC_DNS_SERVER = os.Getenv("DNSSEC_DNS_SERVER")
 	IPDB = os.Getenv("IPDB")
 	CORS = os.Getenv("CORS")
 	ACCESS_TOKEN = os.Getenv("ACCESS_TOKEN")
@@ -1347,6 +1076,9 @@ func readConfig() {
 	if DNS_SERVER == "" {
 		DNS_SERVER = viper.GetString("dns-server")
 	}
+	if DNSSEC_DNS_SERVER == "" {
+		DNSSEC_DNS_SERVER = viper.GetString("dnssec-server")
+	}
 	if IPDB == "" {
 		IPDB = viper.GetString("ipdb")
 	}
@@ -1367,6 +1099,30 @@ func readConfig() {
 	if REMOTE_CONFIG_URL == "" {
 		REMOTE_CONFIG_URL = viper.GetString("remote-config-url")
 	}
+	// WS 客户端（接入中间件 WS 通道）：IPW_WS_URL / IPW_NODE_ID / IPW_NODE_KEY，env 优先
+	WS_URL = os.Getenv("IPW_WS_URL")
+	if WS_URL == "" {
+		WS_URL = viper.GetString("ipw-ws-url")
+	}
+	WS_NODE_ID = os.Getenv("IPW_NODE_ID")
+	if WS_NODE_ID == "" {
+		WS_NODE_ID = viper.GetString("ipw-node-id")
+	}
+	WS_NODE_KEY = os.Getenv("IPW_NODE_KEY")
+	if WS_NODE_KEY == "" {
+		WS_NODE_KEY = viper.GetString("ipw-node-key")
+	}
+	// REMOTE_INGORE_CONFIG：不被远端覆盖的配置项列表（JSON 数组字符串，env 优先）
+	if raw := os.Getenv("REMOTE_INGORE_CONFIG"); raw != "" {
+		var list []string
+		if err := json.Unmarshal([]byte(raw), &list); err == nil {
+			REMOTE_INGORE_CONFIG = list
+		} else {
+			slog.Warn("invalid REMOTE_INGORE_CONFIG, ignored", "error", err)
+		}
+	} else {
+		REMOTE_INGORE_CONFIG = viper.GetStringSlice("remote-ingore-config")
+	}
 	applyRemoteConfig()
 	slog.Info("SSRF protection initialized", "blockPrivateIPs", ssrf.Enabled())
 }
@@ -1384,12 +1140,21 @@ func main() {
 	slog.Info("LEMON IPW TEST NODE GOLANG VERSION", "version", VERSION, "commit", COMMIT, "build_time", BUILD_TIME)
 	readConfig()
 	webtest.SetDNSServer(DNS_SERVER)
+	webtest.SetDNSSecServer(DNSSEC_DNS_SERVER)
 	initHTTPClients()
+	// 注入出站 HTTP 客户端到 webtest（探针函数内部按版本取用）
+	webtest.SetHTTPClient(V4Client, V6Client)
 	if IPDB != "false" {
 		ipdb.Init(GH_PROXY)
 	}
 
 	slog.Info("Starting server", "port", PORTS, "gh_proxy", GH_PROXY, "single_stack", SINGLE_STACK, "dns_server", DNS_SERVER, "CORS_ACCEPT", ACCEPT_DOMAINS)
+
+	// WS 客户端：接入中间件 WS 通道（配置 IPW_WS_URL 时启用，HTTP 接口不变）
+	if WS_URL != "" {
+		go wsClientLoop()
+		slog.Info("WS client enabled", "url", WS_URL, "nodeId", WS_NODE_ID)
+	}
 
 	r := gin.Default()
 	corsConfig := cors.DefaultConfig()

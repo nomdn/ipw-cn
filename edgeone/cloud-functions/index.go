@@ -55,6 +55,7 @@ var (
 	speedCache   sync.Map
 	whoisCache   sync.Map
 	DNS_SERVER   string
+	DNSSEC_DNS_SERVER string // DNSSEC 专用 DNS 服务器（dnssec-server / DNSSEC_DNS_SERVER），留空沿用 DNS_SERVER
 	defaultPort  = fmt.Sprintf("%d", 5<<4)
 	V6Client     *resty.Client
 	V4Client     *resty.Client
@@ -1168,6 +1169,9 @@ func applyRemoteConfig() {
 	if v := configValue(CONFIG, "dns-server"); v != "" {
 		DNS_SERVER = v
 	}
+	if v := configValue(CONFIG, "dnssec-server"); v != "" {
+		DNSSEC_DNS_SERVER = v
+	}
 	if v := configValue(CONFIG, "cors"); v != "" {
 		CORS = v
 	}
@@ -1195,6 +1199,9 @@ func readConfig() {
 	if v := os.Getenv("DNS_SERVER"); v != "" {
 		DNS_SERVER = v
 	}
+	if v := os.Getenv("DNSSEC_DNS_SERVER"); v != "" {
+		DNSSEC_DNS_SERVER = v
+	}
 	if v := os.Getenv("CORS"); v != "" {
 		CORS = v
 	}
@@ -1218,6 +1225,7 @@ func main() {
 	readConfig()
 	initHttpClient()
 	webtest.SetDNSServer(DNS_SERVER)
+	webtest.SetDNSSecServer(DNSSEC_DNS_SERVER)
 	slog.Info("Starting server", "port", PORTS, "single_stack", SINGLE_STACK)
 	r := gin.Default()
 	corsConfig := cors.DefaultConfig()

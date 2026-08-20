@@ -28,8 +28,8 @@ function isConnectionError(e: any): boolean {
 }
 
 // 需要切换节点重试的上游状态码：
-// 401 未授权、403 被 CDN/WAF 风控拦截、418 被反爬/限流标记 —— 换一个节点往往就能绕过
-const RETRY_STATUS_CODES = new Set([401, 403, 418])
+// 401 未授权、403 被 CDN/WAF 风控拦截、418 被反爬/限流标记、502 中间件/上游不可用 —— 换一个节点往往就能恢复
+const RETRY_STATUS_CODES = new Set([401, 403, 418, 502])
 
 // 过滤掉 useFetch 专属选项（对 $fetch 无意义），其余（method/query/params/headers/body/timeout 等）原样透传
 function toFetchOptions(options?: any) {

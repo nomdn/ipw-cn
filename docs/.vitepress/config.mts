@@ -40,6 +40,12 @@ export default defineConfig({
       { text: 'GitHub', link: 'https://github.com/nomdn/ipw-cn', target: '_blank' },
     ],
 
+    // 右侧目录：显示 h2 + h3（默认只显示 h2）
+    outline: {
+      level: [2, 3],
+      label: '本页目录',
+    },
+
     sidebar: [
       // 简介
       {
@@ -47,6 +53,7 @@ export default defineConfig({
         items: [
           { text: '概述', link: '/info/overview' },
           { text: '快速入门', link: '/guide/getting-started' },
+          { text: '配置文件', link: '/guide/config' },
         ],
       },
       // 部署

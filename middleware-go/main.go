@@ -12,8 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/viper"
+
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gofiber/fiber/v3/middleware/limiter"
 )
 
 // ==================== 全局变量 ====================
@@ -23,7 +26,28 @@ type apiInfo struct {
 	Label string `json:"label"`
 	ID    string `json:"id"`
 	URL   string `json:"url"`
+	WS    wsFlag `json:"ws"` // 是否经 WS 通道通信（缺省 false = HTTP）；支持 "ws": true 或 "ws": "true"
 }
+
+// wsFlag 兼容 JSON 布尔与字符串两种写法
+type wsFlag bool
+
+func (w *wsFlag) UnmarshalJSON(b []byte) error {
+	s := strings.TrimSpace(string(b))
+	s = strings.Trim(s, `"`)
+	switch s {
+	case "true", "1", "yes":
+		*w = true
+	case "false", "0", "", "no":
+		*w = false
+	default:
+		return fmt.Errorf("invalid ws flag %q", s)
+	}
+	return nil
+}
+
+// UseWS 判断该节点是否走 WS 通道
+func (a *apiInfo) UseWS() bool { return a != nil && bool(a.WS) }
 
 // stackConfig 对应 setting.json TCPing / SpeedTest
 type stackConfig struct {
@@ -32,10 +56,14 @@ type stackConfig struct {
 	IPv6      []apiInfo `json:"IPv6"`
 }
 
-// middlewareConfig 仅用于解析 setting.json（键名与前端 config/index.ts 保持一致）
+// middlewareConfig 仅用于解析 setting.json（JSON 键名统一用连接线，如 http-timeout-seconds）
 type middlewareConfig struct {
 	Port               stringOrNumber    `json:"port"`
-	HTTPTimeoutSeconds int               `json:"httpTimeoutSeconds"`
+	HTTPTimeoutSeconds int               `json:"http-timeout-seconds"`
+	RateLimit          *int              `json:"rate-limit"` // 单 IP 每分钟限流次数；缺省=默认120，0=不限流
+	WSPort             stringOrNumber   `json:"ws-port"`    // WS 服务端口：兼容 "8092" 与 8092；缺省=8092，"0"/0=关闭 WS 通道
+	RemoteConfigURL    string            `json:"remote-config-url"`
+	RemoteIngoreConfig []string          `json:"remote-ingore-config"` // 不被远端覆盖的配置项列表
 	Cors               string            `json:"cors"`
 	APIBaseURLs        []apiInfo         `json:"apiBaseUrls"`
 	IPLocationAPIs     []apiInfo         `json:"IPLocationAPIs"`
@@ -64,11 +92,17 @@ var (
 	NS_LOOKUP        []apiInfo         // dns/dnssec 上游列表
 	API_KEYS         map[string]string // backendID → token
 	CONFIG_SOURCE    string            // 配置文件路径
+	RATE_LIMIT       int               // 单 IP 每分钟限流次数（0 表示不限流），默认 120
+	WS_PORT          int               // WS 服务端口（0 = 关闭），缺省 8092，由 readConfig 统一解析
+	REMOTE_INGORE_CONFIG []string      // 不被远端覆盖的配置项列表（remote-ingore-config / REMOTE_INGORE_CONFIG）
 )
 
 // HTTP_CLIENT 用于转发上游请求（等价于 TS 中的 $fetch），超时由 HTTP_TIMEOUT 决定
 // HTTP_CLIENT forwards requests to upstream backends (equivalent to $fetch in the TS version).
 var HTTP_CLIENT = &http.Client{}
+
+// wsSrv 为全局 WS 服务端（WS_PORT>0 时启动；nil = 未启用）。见 ws.go
+var wsSrv *wsServer
 
 // ==================== 工具函数 ====================
 
@@ -128,6 +162,16 @@ func findURL(list []apiInfo, id string) string {
 		}
 	}
 	return ""
+}
+
+// findNode 按 id 在节点列表中查找（返回指针；找不到返回 nil）
+func findNode(list []apiInfo, id string) *apiInfo {
+	for i := range list {
+		if list[i].ID == id {
+			return &list[i]
+		}
+	}
+	return nil
 }
 
 func keysOf(m map[string]string) []string {
@@ -265,10 +309,19 @@ func middlewareHandler(c fiber.Ctx) error {
 			apiBaseUrls = IP_LOCATION_APIS
 		}
 
-		apiBaseUrl := findURL(apiBaseUrls, backendID)
-		if apiBaseUrl == "" {
+		node := findNode(apiBaseUrls, backendID)
+		if node == nil || (!node.UseWS() && node.URL == "") {
 			return badRequest(c, "Invalid backend ID")
 		}
+		// ws:true 节点：拨测请求经 WS 通道转发（数据上传走 WS），失败返回 502
+		if node.UseWS() && wsSrv != nil {
+			status, body, err := wsSrv.RequestProbe(backendID, apiType, raw, nil, wsProbeTimeout())
+			if err != nil {
+				return c.Status(fiber.StatusBadGateway).SendString("WS probe failed: " + err.Error())
+			}
+			return c.Status(status).Send(body)
+		}
+		apiBaseUrl := node.URL
 		if !strings.HasSuffix(apiBaseUrl, "/") {
 			apiBaseUrl += "/"
 		}
@@ -292,20 +345,31 @@ func middlewareHandler(c fiber.Ctx) error {
 		apiBaseUrls = append(apiBaseUrls, apiTypeConfig.IPv4...)
 		apiBaseUrls = append(apiBaseUrls, apiTypeConfig.IPv6...)
 
-		apiBaseUrl := findURL(apiBaseUrls, backendID)
-		if apiBaseUrl == "" {
-			return badRequest(c, "Invalid backend ID")
-		}
-		if !strings.HasSuffix(apiBaseUrl, "/") {
-			apiBaseUrl += "/"
-		}
-
 		// 转发 query 参数（过滤空值，等价于 TS 中 URLSearchParams 过滤 undefined）
 		queryString := url.Values{}
+		queryMap := make(map[string]string)
 		for k, v := range query {
 			if v != "" {
 				queryString.Set(k, v)
+				queryMap[k] = v
 			}
+		}
+
+		node := findNode(apiBaseUrls, backendID)
+		if node == nil || (!node.UseWS() && node.URL == "") {
+			return badRequest(c, "Invalid backend ID")
+		}
+		// ws:true 节点：拨测请求经 WS 通道转发
+		if node.UseWS() && wsSrv != nil {
+			status, body, err := wsSrv.RequestProbe(backendID, apiType, raw, queryMap, wsProbeTimeout())
+			if err != nil {
+				return c.Status(fiber.StatusBadGateway).SendString("WS probe failed: " + err.Error())
+			}
+			return c.Status(status).Send(body)
+		}
+		apiBaseUrl := node.URL
+		if !strings.HasSuffix(apiBaseUrl, "/") {
+			apiBaseUrl += "/"
 		}
 
 		// 上游错误原样透传（状态码 + body），网络错误返回 502
@@ -318,37 +382,127 @@ func middlewareHandler(c fiber.Ctx) error {
 
 // ==================== readConfig ====================
 
+// viperValue 从 viper 读取配置值并反序列化到 target（数组/对象经 JSON 中转，支持自定义类型如 wsFlag）
+func viperValue(key string, target any) error {
+	v := viper.Get(key)
+	if v == nil {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, target)
+}
+
+// fetchRemoteConfig 从远端 URL 拉取配置内容（middleware setting.json 格式）
+func fetchRemoteConfig(url string) ([]byte, error) {	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("remote config returned status %d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// applyRemoteConfig 应用远端配置，优先级：远端 > 环境变量 > setting.json。
+// 远端地址来源：环境变量 REMOTE_CONFIG_URL 优先，其次 setting.json 的 remote-config-url。
+// 远端字段为空时不覆盖本地值；拉取或解析失败时打印警告并回退本地配置。
+func applyRemoteConfig(mw *middlewareConfig) error {
+	url := os.Getenv("REMOTE_CONFIG_URL")
+	if url == "" {
+		url = mw.RemoteConfigURL
+	}
+	if url == "" {
+		return nil
+	}
+	body, err := fetchRemoteConfig(url)
+	if err != nil {
+		log.Printf("[middleware] WARN failed to fetch remote config, fallback to local: %v", err)
+		return nil
+	}
+	var remote middlewareConfig
+	if err := json.Unmarshal(body, &remote); err != nil {
+		log.Printf("[middleware] WARN invalid remote config JSON, fallback to local: %v", err)
+		return nil
+	}
+	// ignore 列表：数组中的配置项不被远端覆盖（逐键判断跳过）
+	ignored := func(key string) bool {
+		for _, k := range mw.RemoteIngoreConfig {
+			if k == key {
+				return true
+			}
+		}
+		return false
+	}
+	if !ignored("port") && string(remote.Port) != "" {
+		mw.Port = remote.Port
+	}
+	if !ignored("http-timeout-seconds") && remote.HTTPTimeoutSeconds != 0 {
+		mw.HTTPTimeoutSeconds = remote.HTTPTimeoutSeconds
+	}
+	if !ignored("rate-limit") && remote.RateLimit != nil {
+		mw.RateLimit = remote.RateLimit
+	}
+	if !ignored("ws-port") && remote.WSPort != "" {
+		mw.WSPort = remote.WSPort
+	}
+	if !ignored("remote-config-url") && remote.RemoteConfigURL != "" {
+		mw.RemoteConfigURL = remote.RemoteConfigURL
+	}
+	if !ignored("cors") && remote.Cors != "" {
+		mw.Cors = remote.Cors
+	}
+	if !ignored("apiBaseUrls") && len(remote.APIBaseURLs) > 0 {
+		mw.APIBaseURLs = remote.APIBaseURLs
+	}
+	if !ignored("IPLocationAPIs") && len(remote.IPLocationAPIs) > 0 {
+		mw.IPLocationAPIs = remote.IPLocationAPIs
+	}
+	if !ignored("TCPing") && (len(remote.TCPing.DualStack) > 0 || len(remote.TCPing.IPv4) > 0 || len(remote.TCPing.IPv6) > 0) {
+		mw.TCPing = remote.TCPing
+	}
+	if !ignored("SpeedTest") && (len(remote.SpeedTest.DualStack) > 0 || len(remote.SpeedTest.IPv4) > 0 || len(remote.SpeedTest.IPv6) > 0) {
+		mw.SpeedTest = remote.SpeedTest
+	}
+	if !ignored("NSLookup") && len(remote.NSLookup) > 0 {
+		mw.NSLookup = remote.NSLookup
+	}
+	// apiKeys 强制忽略：密钥凭据不随远端配置覆盖（与后端 access_token 一致），只从本地 setting.json / env 读取
+	log.Printf("[middleware] remote config applied from %s", url)
+	return nil
+}
+
 // readConfig 从 setting.json 读取配置并写入全局配置变量。
 // 查找顺序: 环境变量 SETTING_FILE > ./setting.json > ../setting.json
 func readConfig() error {
+	// 统一用 viper 读取 setting.json（SETTING_FILE 指定路径，否则查找 ./ 与 ../）
 	path := os.Getenv("SETTING_FILE")
-	if path == "" {
-		for _, candidate := range []string{"setting.json", "../setting.json"} {
-			if _, err := os.Stat(candidate); err == nil {
-				path = candidate
-				break
-			}
+	viper.SetConfigType("json")
+	if path != "" {
+		viper.SetConfigFile(path)
+	} else {
+		viper.SetConfigName("setting")
+		viper.AddConfigPath(".")
+		viper.AddConfigPath("../")
+	}
+	if err := viper.ReadInConfig(); err != nil {
+		if path == "" {
+			return fmt.Errorf("setting.json not found (set SETTING_FILE to specify its path)")
 		}
-	}
-	if path == "" {
-		return fmt.Errorf("setting.json not found (set SETTING_FILE to specify its path)")
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
 		return err
 	}
 
 	var mw middlewareConfig
-	if err := json.Unmarshal(data, &mw); err != nil {
-		return fmt.Errorf("parse %s: %w", path, err)
-	}
 
-	// 环境变量覆盖配置（优先级: 环境变量 > setting.json > 默认值）：
-	// 标量直接读；映射表（数组/对象）从环境变量读 JSON 字符串解析。
-	// 部署时无需改动配置文件，用环境变量即可覆盖任意节点/密钥/端口等。
+	// 统一读取模式：先 Getenv，再 viper.GetString（env 优先 > setting.json > 默认值）
 	if v := os.Getenv("PORT"); v != "" {
 		mw.Port = stringOrNumber(v)
+	} else {
+		mw.Port = stringOrNumber(viper.GetString("port"))
 	}
 	if v := os.Getenv("HTTP_TIMEOUT"); v != "" {
 		n, err := strconv.Atoi(v)
@@ -356,26 +510,99 @@ func readConfig() error {
 			return fmt.Errorf("parse env HTTP_TIMEOUT: %w", err)
 		}
 		mw.HTTPTimeoutSeconds = n
+	} else {
+		mw.HTTPTimeoutSeconds = viper.GetInt("http-timeout-seconds")
 	}
 	if v := os.Getenv("CORS"); v != "" {
 		mw.Cors = v
+	} else {
+		mw.Cors = viper.GetString("cors")
 	}
+	if v := os.Getenv("REMOTE_CONFIG_URL"); v != "" {
+		mw.RemoteConfigURL = v
+	} else {
+		mw.RemoteConfigURL = viper.GetString("remote-config-url")
+	}
+	// rateLimit（*int：env > setting(IsSet) > 默认120；0 = 不限流）
+	if v := os.Getenv("RATE_LIMIT"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("parse env RATE_LIMIT: %w", err)
+		}
+		mw.RateLimit = &n
+	} else if viper.IsSet("rate-limit") {
+		n := viper.GetInt("rate-limit")
+		mw.RateLimit = &n
+	}
+	// ws-port（stringOrNumber：env > setting(IsSet) > 默认8092；"0"/0 = 关闭 WS 通道）
+	if v := os.Getenv("WS_PORT"); v != "" {
+		mw.WSPort = stringOrNumber(v)
+	} else if viper.IsSet("ws-port") {
+		mw.WSPort = stringOrNumber(viper.GetString("ws-port"))
+	}
+	// remote-ingore-config：不被远端覆盖的配置项列表（env JSON 数组 > setting.json 数组）
+	if raw := os.Getenv("REMOTE_INGORE_CONFIG"); raw != "" {
+		var list []string
+		if err := json.Unmarshal([]byte(raw), &list); err != nil {
+			return fmt.Errorf("parse env REMOTE_INGORE_CONFIG: %w", err)
+		}
+		mw.RemoteIngoreConfig = list
+	} else {
+		mw.RemoteIngoreConfig = viper.GetStringSlice("remote-ingore-config")
+	}
+
+	// 数组/对象类配置：先 Getenv（JSON 字符串），再 viper.Get（经 JSON 中转反序列化到 typed 结构）
 	if err := envJSON("API_BASE_URLS", &mw.APIBaseURLs); err != nil {
 		return err
+	}
+	if len(mw.APIBaseURLs) == 0 {
+		if err := viperValue("apiBaseUrls", &mw.APIBaseURLs); err != nil {
+			return fmt.Errorf("parse apiBaseUrls: %w", err)
+		}
 	}
 	if err := envJSON("IP_LOCATION_APIS", &mw.IPLocationAPIs); err != nil {
 		return err
 	}
+	if len(mw.IPLocationAPIs) == 0 {
+		if err := viperValue("IPLocationAPIs", &mw.IPLocationAPIs); err != nil {
+			return fmt.Errorf("parse IPLocationAPIs: %w", err)
+		}
+	}
 	if err := envJSON("TCPING", &mw.TCPing); err != nil {
 		return err
+	}
+	if viper.Get("TCPing") != nil && len(mw.TCPing.DualStack)+len(mw.TCPing.IPv4)+len(mw.TCPing.IPv6) == 0 {
+		if err := viperValue("TCPing", &mw.TCPing); err != nil {
+			return fmt.Errorf("parse TCPing: %w", err)
+		}
 	}
 	if err := envJSON("SPEED_TEST", &mw.SpeedTest); err != nil {
 		return err
 	}
+	if viper.Get("SpeedTest") != nil && len(mw.SpeedTest.DualStack)+len(mw.SpeedTest.IPv4)+len(mw.SpeedTest.IPv6) == 0 {
+		if err := viperValue("SpeedTest", &mw.SpeedTest); err != nil {
+			return fmt.Errorf("parse SpeedTest: %w", err)
+		}
+	}
 	if err := envJSON("NS_LOOKUP", &mw.NSLookup); err != nil {
 		return err
 	}
+	if len(mw.NSLookup) == 0 {
+		if err := viperValue("NSLookup", &mw.NSLookup); err != nil {
+			return fmt.Errorf("parse NSLookup: %w", err)
+		}
+	}
 	if err := envJSON("APIKEYS", &mw.APIKeys); err != nil {
+		return err
+	}
+	if len(mw.APIKeys) == 0 {
+		if err := viperValue("apiKeys", &mw.APIKeys); err != nil {
+			return fmt.Errorf("parse apiKeys: %w", err)
+		}
+	}
+
+	// 远端配置（最高优先级）：REMOTE_CONFIG_URL 拉取后覆盖（优先级：远端 > 环境变量 > setting.json）
+	if err := applyRemoteConfig(&mw); err != nil {
 		return err
 	}
 
@@ -390,6 +617,23 @@ func readConfig() error {
 	// 将配置内容写入全局变量
 	PORT = string(mw.Port)
 	HTTP_TIMEOUT = mw.HTTPTimeoutSeconds
+	// rateLimit：缺省默认 120 次/分钟；显式 0 表示不限流
+	if mw.RateLimit == nil {
+		RATE_LIMIT = 120
+	} else {
+		RATE_LIMIT = *mw.RateLimit
+	}
+	// ws-port：缺省默认 8092；显式 "0"/0 表示关闭 WS 通道（兼容字符串与数字写法）
+	if mw.WSPort == "" {
+		WS_PORT = 8092
+	} else {
+		n, err := strconv.Atoi(string(mw.WSPort))
+		if err != nil {
+			return fmt.Errorf("parse ws-port %q: %w", mw.WSPort, err)
+		}
+		WS_PORT = n
+	}
+	REMOTE_INGORE_CONFIG = mw.RemoteIngoreConfig
 	CORS = mw.Cors
 	// 逗号分隔的 CORS 域名列表（对齐根 main.go 的 ACCEPT_DOMAINS 用法）
 	if CORS != "" {
@@ -401,7 +645,7 @@ func readConfig() error {
 	SPEED_TEST = mw.SpeedTest
 	NS_LOOKUP = mw.NSLookup
 	API_KEYS = mw.APIKeys
-	CONFIG_SOURCE = path
+	CONFIG_SOURCE = viper.ConfigFileUsed()
 	return nil
 }
 
@@ -430,7 +674,27 @@ func main() {
 	}
 	HTTP_CLIENT.Timeout = time.Duration(timeout) * time.Second
 
+	// WS 服务端（端口由配置 wsPort / 环境变量 WS_PORT 决定，缺省 8092，0 = 关闭；统一走 readConfig）。
+	// 后端节点作为 WS 客户端连入；节点配置 "ws": true 时拨测请求改走 WS 通道。现有 HTTP 路由不受影响。
+	if WS_PORT > 0 {
+		wsSrv = newWSServer(handleWSCommand)
+		go wsSrv.Start(fmt.Sprintf(":%d", WS_PORT))
+		go wsSrv.maintenanceLoop()
+		log.Printf("[ws] ws channel enabled on port %d (node flag \"ws\": true to use)", WS_PORT)
+	} else {
+		log.Printf("[ws] ws channel disabled (wsPort=0)")
+	}
+
 	app := fiber.New()
+
+	// 单 IP 限流（fiber 内置中间件，默认按客户端 IP 计数）：次数由配置 rateLimit / 环境变量 RATE_LIMIT 决定（默认 120 次/分钟），
+	// 0 表示不限流。必须放在所有路由注册之前，fiber 中间件只对注册在其后的路由生效。
+	if RATE_LIMIT > 0 {
+		app.Use(limiter.New(limiter.Config{
+			Max:        RATE_LIMIT,
+			Expiration: time.Minute,
+		}))
+	}
 
 	app.Get("/", func(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
@@ -452,6 +716,7 @@ func main() {
 		corsConfig.AllowOrigins = []string{"*"}
 	}
 	app.Use(cors.New(corsConfig))
+
 	app.Get("/v1/*", middlewareHandler)
 	app.Get("/middleware/*", middlewareHandler)
 

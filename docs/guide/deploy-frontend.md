@@ -26,7 +26,7 @@ pnpm dev
 
 ## 配置说明
 
-前端所有配置集中在 `frontend-ssr/config/index.ts`，完整配置项见 [快速入门 - 配置文件](/guide/getting-started#前端-configindexts)：
+前端所有配置集中在 `frontend-ssr/config/index.ts`，完整配置项见 [配置文件 - 前端](/guide/config#前端-configindexts)：
 
 | 配置项 | 说明 |
 |--------|------|
@@ -37,12 +37,13 @@ pnpm dev
 | `TCPing` / `SpeedTest` / `NSLookup` | 对应功能的多节点候选（DualStack / IPv4 / IPv6） |
 | `Middleware` | 外部独立中间件 base URL 列表，`/middleware/*` 请求依次尝试、失败重试下一个 |
 | `EnableInternalMiddleware` | 是否启用前端内置中间件（本地转发，作为候选列表最后一位兜底），默认 `true` |
+| `rateLimitPerMinute` | 内置中间件单 IP 限流次数（次/分钟），默认 `120`，`0` 表示不限流 |
 | `v4OnlyAPI` / `v6OnlyAPI` / `DualStackAPI` | 出站 IP 检测接口（页面直连建议使用带 CORS 的 wsmdn.top 接口） |
 | `umamiHost` 等 | Umami 统计配置 |
 | `ICP` / `GongAn` | 网站备案号（页脚展示） |
 | `noindex` | 是否禁止搜索引擎索引 |
 
-> 生产环境建议通过构建时的环境变量或部署平台配置覆盖敏感项，不要把密钥写进 `config/index.ts` 提交到仓库。
+> 生产环境建议通过运行时的环境变量或部署平台配置覆盖敏感项，不要把密钥写进 `config/index.ts` 提交到仓库。
 
 ## 部署方案
 
@@ -106,4 +107,4 @@ node .output/server/index.mjs   # 默认监听 3000 端口
 ## 常见问题
 
 - **部署后接口 403 / 跨域**：检查后端 `cors` 配置（独立中间件见 `middleware-go/setting.json` 的 `cors` 字段，逗号分隔允许域名）；服务端转发请求不带 `Origin`，浏览器直接调用才受 CORS 限制。
-- **出站 IP 检测接口被浏览器拦截**：页面直连的 IP 检测接口需要 CORS，详见 [快速入门 - 出站 IP 检测接口](/guide/getting-started#出站-ip-检测接口v4onlyapi--v6onlyapi--dualstackapi)。
+- **出站 IP 检测接口被浏览器拦截**：页面直连的 IP 检测接口需要 CORS，详见 [配置文件 - 出站 IP 检测接口](/guide/config#出站-ip-检测接口v4onlyapi--v6onlyapi--dualstackapi)。
