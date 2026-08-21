@@ -87,7 +87,7 @@ middleware-go 内置 WS 服务端，后端节点可作为 **WS 客户端**连入
 
 ### 节点侧接入（WS 客户端）
 
-1. 连接 `ws://<中间件IP>:8092/ws`
+1. 连接 `ws://<中间件IP>:8092/ws`（本仓库后端节点接入方式见 [后端节点部署 - WS 通道接入](/guide/deploy-node#ws-通道接入可选)，配置 `WS_URL` / `NODE_ID` / `NODE_KEY` 即可自动连接注册）
 2. 首条消息发 `register { "nodeId": "<与中间件配置一致的节点 id>", "key": "<注册凭证>" }`（节点在 setting.json `apiKeys` 里配了 key 就必须传对；未配置 key 的开放节点可不传）
 3. 收到 `probe` → 执行拨测 → 回 `probe_result`（必须携带原 `requestId`，支持乱序返回，同一连接可并发多个拨测）
 4. 收到 `ping` → 回 `pong`；`status` 可忽略或记录

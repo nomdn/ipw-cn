@@ -58,3 +58,23 @@ go build -o lemonipw main.go
 ## 配置
 
 后端配置见 [配置文件](/guide/config)：`setting.json` 或环境变量，支持远端配置（`REMOTE_CONFIG_URL`，优先级：远端 > 环境变量 > setting.json）。
+
+## WS 通道接入（可选）
+
+后端节点可作为 WS 客户端接入 [独立中间件](/guide/deploy-middleware) 的 WS 通道，拨测请求经 WebSocket 转发，节点本地执行探针后回传。不配置则完全走原 HTTP 接口。
+
+**配置三个环境变量**（或 setting.json 的 `ws-url` / `node-id` / `node-key`，env 优先；也支持远端配置覆盖，除非列入 `remote-ingore-config`）：
+
+```bash
+WS_URL=ws://<中间件IP>:8092/ws \
+NODE_ID=<节点id，与中间件 apiBaseUrls 的节点 id 一致> \
+NODE_KEY=<注册key，与中间件 apiKeys[节点id] 一致；节点未配置 key 可留空> \
+./lemonipw
+```
+
+- `WS_URL` 支持**逗号分隔多个中间件**（`ws://主:8092/ws,ws://备:8092/ws`），第一个为主，主故障自动切换下一个
+- **双向心跳**：节点每 10s 发 ping，中间件回 pong；心跳发送连续失败 3 次判定中间件不可用，断开后 3s 重试（注册被拒 30s 重试）
+- 收到 `probe` 后节点直调探针函数（带缓存）并回 `probe_result`，结果与 HTTP 通道一致
+- 节点注册带 `NODE_KEY`：中间件 `apiKeys` 里配了 key 就必须传对，否则返回 401 并断开；未配置 key 的节点开放注册
+
+**注意**：`NODE_ID` 必须与中间件 `apiBaseUrls` / `TCPing` / `SpeedTest` 等配置中的节点 `id` 一致，且该节点需配置 `"ws": true` 才会走 WS 通道。未连接中间件时，`ws:true` 节点的拨测会返回 502。

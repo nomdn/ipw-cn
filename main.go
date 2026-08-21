@@ -1026,13 +1026,13 @@ func applyRemoteConfig() {
 		ssrf.SetEnabled(v != "false" && v != "0")
 	}
 	// WS 客户端配置（远端可覆盖，除非在 ignore 列表中）
-	if v := configValue(CONFIG, "ipw-ws-url"); v != "" && !ignored("ipw-ws-url") {
+	if v := configValue(CONFIG, "ws-url"); v != "" && !ignored("ws-url") {
 		WS_URL = v
 	}
-	if v := configValue(CONFIG, "ipw-node-id"); v != "" && !ignored("ipw-node-id") {
+	if v := configValue(CONFIG, "node-id"); v != "" && !ignored("node-id") {
 		WS_NODE_ID = v
 	}
-	if v := configValue(CONFIG, "ipw-node-key"); v != "" && !ignored("ipw-node-key") {
+	if v := configValue(CONFIG, "node-key"); v != "" && !ignored("node-key") {
 		WS_NODE_KEY = v
 	}
 	// access_token 不在此覆盖：保持原有优先级（环境变量 > setting.json）
@@ -1099,18 +1099,18 @@ func readConfig() {
 	if REMOTE_CONFIG_URL == "" {
 		REMOTE_CONFIG_URL = viper.GetString("remote-config-url")
 	}
-	// WS 客户端（接入中间件 WS 通道）：IPW_WS_URL / IPW_NODE_ID / IPW_NODE_KEY，env 优先
-	WS_URL = os.Getenv("IPW_WS_URL")
+	// WS 客户端（接入中间件 WS 通道）：WS_URL / NODE_ID / NODE_KEY，env 优先
+	WS_URL = os.Getenv("WS_URL")
 	if WS_URL == "" {
-		WS_URL = viper.GetString("ipw-ws-url")
+		WS_URL = viper.GetString("ws-url")
 	}
-	WS_NODE_ID = os.Getenv("IPW_NODE_ID")
+	WS_NODE_ID = os.Getenv("NODE_ID")
 	if WS_NODE_ID == "" {
-		WS_NODE_ID = viper.GetString("ipw-node-id")
+		WS_NODE_ID = viper.GetString("node-id")
 	}
-	WS_NODE_KEY = os.Getenv("IPW_NODE_KEY")
+	WS_NODE_KEY = os.Getenv("NODE_KEY")
 	if WS_NODE_KEY == "" {
-		WS_NODE_KEY = viper.GetString("ipw-node-key")
+		WS_NODE_KEY = viper.GetString("node-key")
 	}
 	// REMOTE_INGORE_CONFIG：不被远端覆盖的配置项列表（JSON 数组字符串，env 优先）
 	if raw := os.Getenv("REMOTE_INGORE_CONFIG"); raw != "" {
@@ -1150,7 +1150,7 @@ func main() {
 
 	slog.Info("Starting server", "port", PORTS, "gh_proxy", GH_PROXY, "single_stack", SINGLE_STACK, "dns_server", DNS_SERVER, "CORS_ACCEPT", ACCEPT_DOMAINS)
 
-	// WS 客户端：接入中间件 WS 通道（配置 IPW_WS_URL 时启用，HTTP 接口不变）
+	// WS 客户端：接入中间件 WS 通道（配置 WS_URL 时启用，HTTP 接口不变）
 	if WS_URL != "" {
 		go wsClientLoop()
 		slog.Info("WS client enabled", "url", WS_URL, "nodeId", WS_NODE_ID)

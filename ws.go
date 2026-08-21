@@ -18,15 +18,15 @@ import (
 //
 // 配置（readConfig 解析，环境变量优先，其次 setting.json，远端配置可覆盖）：
 //
-//	IPW_WS_URL    ws://<中间件>:8092/ws,ws://<备中间件>:8092/ws   （逗号分隔多个中间件，主失败自动切换下一个；不配置 = 不启用）
-//	IPW_NODE_ID   节点 id（与中间件 apiKeys 键 / 前端配置 id 一致）
-//	IPW_NODE_KEY  注册 key（与中间件 apiKeys[节点id] 一致；中间件未配置该节点 key 时留空）
+//	WS_URL    ws://<中间件>:8092/ws,ws://<备中间件>:8092/ws   （逗号分隔多个中间件，主失败自动切换下一个；不配置 = 不启用）
+//	NODE_ID   节点 id（与中间件 apiKeys 键 / 前端配置 id 一致）
+//	NODE_KEY  注册 key（与中间件 apiKeys[节点id] 一致；中间件未配置该节点 key 时留空）
 //
 // 与 HTTP handler 共用同一批 webtest 探针函数和缓存：收到 probe 后按 apiType 取数（带缓存），
 // 返回处理在本文件内完成，结果经 probe_result 上报。节点 HTTP 接口完全不变。
 //
 // 心跳：NODE 与 MIDDLEWARE 双向心跳。本端每 10s 发一次 ping，发送失败重试，连续失败 3 次
-// 判定当前中间件不可用，断开并切换下一个 IPW_WS_URL；收到中间件 ping 回 pong。
+// 判定当前中间件不可用，断开并切换下一个 WS_URL；收到中间件 ping 回 pong。
 
 // wsProbe 学 HTTP handler：从函数拿数据 + 缓存，返回 (status, body)。
 // raw 与 query 来自中间件 probe 消息（等价于路由参数）。
@@ -360,17 +360,17 @@ const (
 	wsHeartbeatTimeout  = 5 * time.Second
 )
 
-// wsClientOnce 连接并服务单个中间件 URL：
-//   - 连接/注册失败 → 返回 true（上层切换下一个中间件）
-//   - 心跳连续失败 wsHeartbeatRetry 次 → 主动断开，返回 true（切换下一个中间件）
-//   - 读循环断开 → 返回 true
-//   - 返回 false = 配置缺失（不再重试）
-func wsClientOnce(url string) bool {
+// wsClientOnce 连接并服务单个中间件 URL，返回下次重试前的等待时长：
+//   - 连接/读循环断开 → 3s（切换下一个中间件）
+//   - 注册被拒（register_error）→ 30s（多为 key 配置错误，加大间隔避免空转刷日志）
+//   - 心跳连续失败 wsHeartbeatRetry 次 → 主动断开，3s
+//   - 返回 0 = 配置缺失（不再重试）
+func wsClientOnce(url string) time.Duration {
 	ctx := context.Background()
 	c, _, err := websocket.Dial(ctx, url, nil)
 	if err != nil {
 		slog.Warn("ws client dial failed", "url", url, "error", err)
-		return true
+		return 3 * time.Second
 	}
 	defer c.CloseNow()
 
@@ -383,19 +383,19 @@ func wsClientOnce(url string) bool {
 	_, data, err := c.Read(ctx)
 	if err != nil {
 		slog.Warn("ws client register read failed", "url", url, "error", err)
-		return true
+		return 3 * time.Second
 	}
 	var m wsMsg
 	if json.Unmarshal(data, &m) != nil {
-		return true
+		return 3 * time.Second
 	}
 	if m.Type == "register_error" {
 		slog.Warn("ws client register rejected", "nodeId", WS_NODE_ID, "url", url, "data", string(m.Data))
-		return true
+		return 30 * time.Second
 	}
 	if m.Type != "register_ok" {
 		slog.Warn("ws client unexpected message", "type", m.Type)
-		return true
+		return 3 * time.Second
 	}
 	slog.Info("ws client registered", "nodeId", WS_NODE_ID, "url", url)
 
@@ -428,7 +428,7 @@ func wsClientOnce(url string) bool {
 		_, data, err := c.Read(ctx)
 		if err != nil {
 			slog.Warn("ws client disconnected", "url", url, "error", err)
-			return true
+			return 3 * time.Second
 		}
 		var msg wsMsg
 		if json.Unmarshal(data, &msg) != nil {
@@ -446,21 +446,21 @@ func wsClientOnce(url string) bool {
 }
 
 // wsClientLoop 主循环：依次尝试所有配置的中间件 URL（逗号分隔，第一个为主），
-// 当前中间件连接失败或心跳超时 → 3s 后切换下一个；全部失败循环重试。
+// 当前中间件连接失败或心跳超时 → 3s 后切换下一个；注册被拒 → 30s；全部失败循环重试。
 func wsClientLoop() {
 	urls := splitWSURLs(WS_URL)
 	if len(urls) == 0 {
-		slog.Info("ws client disabled (IPW_WS_URL not set)")
+		slog.Info("ws client disabled (WS_URL not set)")
 		return
 	}
 	for {
 		for _, url := range urls {
-			shouldRetry := wsClientOnce(url)
-			if !shouldRetry {
+			retryDelay := wsClientOnce(url)
+			if retryDelay == 0 {
 				slog.Info("ws client stopped")
 				return
 			}
-			time.Sleep(3 * time.Second)
+			time.Sleep(retryDelay)
 		}
 	}
 }

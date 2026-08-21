@@ -677,7 +677,7 @@ func main() {
 	// WS 服务端（端口由配置 wsPort / 环境变量 WS_PORT 决定，缺省 8092，0 = 关闭；统一走 readConfig）。
 	// 后端节点作为 WS 客户端连入；节点配置 "ws": true 时拨测请求改走 WS 通道。现有 HTTP 路由不受影响。
 	if WS_PORT > 0 {
-		wsSrv = newWSServer(handleWSCommand)
+		wsSrv = newWSServer()
 		go wsSrv.Start(fmt.Sprintf(":%d", WS_PORT))
 		go wsSrv.maintenanceLoop()
 		log.Printf("[ws] ws channel enabled on port %d (node flag \"ws\": true to use)", WS_PORT)

@@ -199,7 +199,7 @@ apiBaseUrls: [
 - **敏感凭据强制忽略，永远不被远端覆盖**（代码写死，无需配置）：
   - 后端 `access_token`：不随远端覆盖（保持 环境变量 > setting.json），远端里的 `access_token` 会被忽略
   - 中间件 `apiKeys`：不随远端覆盖，远端里的 `apiKeys` 会被忽略
-- `remote-ingore-config`（后端键名 `remote-ingore-config` / env `REMOTE_INGORE_CONFIG`）：额外指定**不被远端覆盖的配置项列表**，数组中的键即使远端下发也不生效。适用于 access_token / apiKeys 之外的敏感项（如 `ipw-node-key`、`dns-server` 等），也可覆盖"非空才覆盖"规则
+- `remote-ingore-config`（后端键名 `remote-ingore-config` / env `REMOTE_INGORE_CONFIG`）：额外指定**不被远端覆盖的配置项列表**，数组中的键即使远端下发也不生效。适用于 access_token / apiKeys 之外的敏感项（如 `node-key`、`dns-server` 等），也可覆盖"非空才覆盖"规则
 
 **拉取行为**：
 
@@ -256,7 +256,7 @@ systemd 中同样用 `Environment="REMOTE_CONFIG_URL=..."` 配置。
 
 **安全与排查**：
 
-- **⚠️ 敏感凭据不得上传远端**：远端配置（Gist / 对象存储 / 静态托管等）**禁止包含任何密钥**——`apiKeys`、`access_token`、节点 key（`ipw-node-key`）等。这些值会被强制忽略，但远端文件本身一旦泄露等于直接暴露凭据；凭据一律放本地 `setting.json` 或环境变量注入
+- **⚠️ 敏感凭据不得上传远端**：远端配置（Gist / 对象存储 / 静态托管等）**禁止包含任何密钥**——`apiKeys`、`access_token`、节点 key（`node-key`）等。这些值会被强制忽略，但远端文件本身一旦泄露等于直接暴露凭据；凭据一律放本地 `setting.json` 或环境变量注入
 - 远端 URL 必须能被节点访问；优先使用 **HTTPS** 地址
 - 远端配置文件如果放在公开可访问的位置（公开 Gist、无鉴权对象存储），即便不含密钥，也等于把节点拓扑、节点 id 等敏感信息公之于众，建议放在私有仓库 / 带鉴权的对象存储 / 内部服务上
 - 常见失败排查：

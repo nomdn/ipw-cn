@@ -7,9 +7,9 @@
     "block-private-ips": true,
     "ipdb": true,
     "cors": "",
-    "remote-config-url": "",
+    "remote-config-url": "ws://localhost",
     "remote-ingore-config": [],
     "access_token": "",
-    "ipw-ws-url": "",
-    "ipw-node-id": ""
+    "ws-url": "ws://localhost:8092/ws",
+    "node-id": "test"
 }

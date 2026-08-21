@@ -64,9 +64,6 @@ type wsServer struct {
 	probeMu   sync.Mutex
 	probeWait map[string]chan wsProbeResult
 
-	// 指令回调（后端节点下发 command 时触发），由 main 注入
-	onCommand func(cmd wsCommand)
-
 	// 统计
 	statMu    sync.Mutex
 	totalReqs int64
@@ -74,11 +71,10 @@ type wsServer struct {
 	startedAt time.Time
 }
 
-func newWSServer(onCommand func(cmd wsCommand)) *wsServer {
+func newWSServer() *wsServer {
 	return &wsServer{
 		peers:     make(map[string]*wsPeer),
 		probeWait: make(map[string]chan wsProbeResult),
-		onCommand: onCommand,
 		startedAt: time.Now(),
 	}
 }
@@ -181,20 +177,6 @@ func (s *wsServer) Handler(w http.ResponseWriter, r *http.Request) {
 			// 节点主动心跳：回 pong
 			if registered {
 				s.sendJSON(c, wsMessage{Type: "pong", NodeID: peer.id, TS: time.Now().Unix()})
-			}
-
-		case "command":
-			if !registered {
-				continue
-			}
-			var cmd wsCommand
-			if err := json.Unmarshal(msg.Data, &cmd); err != nil {
-				log.Printf("[ws] bad command from %s: %v", peer.id, err)
-				continue
-			}
-			log.Printf("[ws] command from %s: %s", peer.id, cmd.Command)
-			if s.onCommand != nil {
-				s.onCommand(cmd)
 			}
 
 		default:
@@ -346,23 +328,4 @@ func wsProbeTimeout() time.Duration {
 		t = 30
 	}
 	return time.Duration(t) * time.Second
-}
-
-// handleWSCommand 处理后端节点经 WS 下发的指令（配置/指令下发）。
-// 注意：reload_config 会整体重写配置全局变量，运行中重载期间存在与并发请求的竞态，
-// 生产环境仍建议以重启方式应用配置；此命令主要用于调试与低峰期热更新。
-func handleWSCommand(cmd wsCommand) {
-	switch cmd.Command {
-	case "reload_config":
-		log.Printf("[ws] command reload_config received, reloading config...")
-		if err := readConfig(); err != nil {
-			log.Printf("[ws] reload_config FAILED: %v", err)
-			return
-		}
-		log.Printf("[ws] config reloaded from %s", CONFIG_SOURCE)
-	case "ping":
-		// 兼容节点发来的 ping（视为心跳）
-	default:
-		log.Printf("[ws] unknown command: %s", cmd.Command)
-	}
 }
