@@ -53,7 +53,48 @@ go build -o lemonipw main.go
 ./lemonipw
 ```
 
-首次启动自动下载 IP 数据库（约 200MB），之后每 24 小时自动更新一次。需要守护运行时，参考 [快速入门](/guide/getting-started) 中的 systemd 配置。
+首次启动自动下载 IP 数据库（约 200MB），之后每 24 小时自动更新一次。需要守护运行时，可参考下方「方案五」生成的 systemd 服务，或手动创建 service 文件（`ExecStart` 指向二进制，`WorkingDirectory` 指向 `setting.json` 所在目录）。
+
+## 方案五：一键安装（install.sh）
+
+仓库根目录提供 `install.sh` 一键安装脚本：自动检测架构 → 下载最新 release 二进制 → **交互式输入配置**（无需准备 setting.json，配置以环境变量注入）→ 生成 systemd 服务并守护进程。
+
+```bash
+sudo bash install.sh
+```
+
+**交互式配置项**（直接回车使用默认值）：
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| 安装目录 | `/opt/lemon-ipw` | 二进制与工作目录 |
+| 监听端口 | `8080` | `PORTS` |
+| access_token | 留空 | 留空 = 不启用鉴权 |
+| DNS 服务器 | `119.28.28.28:53` | 主从逗号分隔（`119.28.28.28:53,223.5.5.5:53`） |
+| DNSSEC 专用 DNS | 留空 | 留空 = 沿用 dns-server |
+| IP 数据库 | `Y` | `IPDB`，首次启动下载约 200MB |
+| CORS | 留空 | 逗号分隔允许来源 |
+| 远端配置地址 | 留空 | `REMOTE_CONFIG_URL` |
+| WS 通道接入 | `N` | 选 `y` 后继续输入 WS_URL / NODE_ID / NODE_KEY |
+| 其他环境变量 | 无 | 每行一个 `K=V`，空行结束 |
+
+**WS 接入特殊规则**：
+
+- `WS_URL` 留空时自动使用默认值 `wss://middleware-1.api-ipw.wsmdn.top`（可改填自己的中间件地址，逗号分隔多备）
+- `NODE_ID` **强制自动生成 UUID**（无需输入，如 `4580ea9d-2a16-4b8e-8090-5f2e7f0a2229`），适合作为节点唯一标识
+- `NODE_KEY` **必填**：不加 key 禁止启用 WS（中间件 `apiKeys` 必须包含该节点，否则注册被拒 401）；安装完成后脚本会提示把 `"<NODE_ID>": "<NODE_KEY>"` 加入中间件 setting.json 的 `apiKeys`
+
+**安装完成后自动生成并启动 systemd 服务**（`lemon-ipw.service`），配置以 `Environment="K=V"` 注入，无需 setting.json。常用管理命令：
+
+```bash
+systemctl status lemon-ipw        # 状态
+journalctl -u lemon-ipw -f        # 日志
+sudo systemctl restart lemon-ipw  # 重启（改配置后）
+```
+
+修改配置：`sudo systemctl edit --full lemon-ipw` 编辑环境变量，保存后 `sudo systemctl daemon-reload && sudo systemctl restart lemon-ipw` 生效。
+
+> **版本兼容提醒**：v1.1.0 及更早的 release 二进制读的是旧环境变量名 `IPW_WS_URL` / `IPW_NODE_ID` / `IPW_NODE_KEY`（8-20 及之前构建）。install.sh 生成的 service 用的是新名 `WS_URL` / `NODE_ID` / `NODE_KEY`——**旧二进制 + 新 service 会因读不到配置而完全不启用 WS**（启动日志无任何 ws 输出）。升级到包含改名后的新 release 即可；急用可临时把 service 环境变量改回 `IPW_` 前缀。
 
 ## 配置
 

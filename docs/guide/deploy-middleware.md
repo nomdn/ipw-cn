@@ -39,7 +39,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o middleware-go-linux-amd64 .
 
 所有配置可用环境变量覆盖（`API_BASE_URLS` / `IP_LOCATION_APIS` / `CORS` / `APIKEYS` / `RATE_LIMIT` 等，数组/对象用 JSON 字符串），优先级：**环境变量 > setting.json > 默认值**（远端配置 `REMOTE_CONFIG_URL` 高于两者，详见 [配置文件 - 远端配置](/guide/config#远端配置remoteconfigurl)）。
 
-需要守护运行时，参考 [快速入门](/guide/getting-started) 中的 systemd 配置（`WorkingDirectory` 指向 `middleware-go/setting.json` 所在目录）。
+需要守护运行时，参考 [后端节点部署 - 方案五：一键安装](/guide/deploy-node#方案五一键安装installsh) 的 systemd 管理方式（`ExecStart` 指向中间件二进制，`WorkingDirectory` 指向 `middleware-go/setting.json` 所在目录）。
 
 ## WS 通道（拨测数据经 WebSocket 传输）
 

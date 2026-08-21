@@ -14,7 +14,7 @@ Lemon IPW 采用前后端分离架构，**后端节点、独立中间件、前�
 
 ## 快速开始
 
-想用最低成本部署一套功能完整的测试站，直接看 [快速入门](/guide/getting-started)：后端构建 → 前端构建 → 配置文件 → systemd 守护。
+想用最低成本部署一套功能完整的测试站，直接看 [快速入门](/guide/getting-started)：交互式一键部署（install.sh）→ systemd 守护。
 
 ## CI/CD
 
