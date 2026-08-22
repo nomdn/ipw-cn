@@ -5,11 +5,12 @@
     "dns-server": "",
     "dnssec-server": "",
     "block-private-ips": true,
-    "ipdb": true,
+    "ipdb": "false",
     "cors": "",
     "remote-config-url": "",
     "remote-ingore-config": [],
     "access_token": "",
     "ws-url": "",
-    "node-id": ""
+    "node-id": "",
+    "node-key": ""
 }
