@@ -69,7 +69,11 @@ const loading = ref(false)
 const serverResults = ref<ServerResult[]>([])
 const userIP = ref('')
 
-const apiList = config.NSLookup
+const apiList = [
+  ...config.APIBaseURL.DualStack,
+  ...config.APIBaseURL.IPv4,
+  ...config.APIBaseURL.IPv6
+]
 
 const dnssecFetches = apiList.map((server) => {
   const url = computed(() => "/middleware/" + server.id + "/dnssec/" + tmpDomain.value)

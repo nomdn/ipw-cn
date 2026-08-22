@@ -65,7 +65,7 @@ interface SSLCheckItem {
   is_expired: boolean
   is_reachable: boolean
 }
-const apiList = config.apiBaseUrls
+const apiList = config.APIBaseURL.DualStack
 const currentApiIndex = ref(0)
 const backendID = computed(() => apiList[currentApiIndex.value]?.id || '')
 const tmpDomain = ref('https://www.zakoflare.com')

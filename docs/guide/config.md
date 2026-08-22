@@ -24,8 +24,11 @@
 - `ipdb`：IP 数据库开关（首次启动自动下载约 200MB，之后每 24h 更新）
 - `cors`：允许的请求来源（逗号分隔）
 - `access_token`：API 访问令牌，留空则不启用鉴权
+- `ws-url`：WS 通道地址——接入独立中间件的 WebSocket 地址（如 `"wss://middleware-1.api-ipw.wsmdn.top/ws"`，须含 `wss://` 前缀与 `/ws` 路径）；支持**逗号分隔多备**（第一个为主，主故障自动切换下一个）；留空 = 不启用 WS 客户端，走原 HTTP 接口
+- `node-id`：WS 节点 id（与中间件 `apiKeys` 键、前端配置的节点 `id` 一致；建议用 UUID 唯一标识）
+- `node-key`：WS 注册 key（与中间件 `apiKeys[节点id]` 一致；**必填**——节点未配置该 key 时中间件拒绝注册并返回 401）
 
-以上字段均可用环境变量覆盖（`PORTS` / `DNS_SERVER` / `DNSSEC_DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `IPDB` / `CORS` / `ACCESS_TOKEN`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）。
+以上字段均可用环境变量覆盖（`PORTS` / `DNS_SERVER` / `DNSSEC_DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `IPDB` / `CORS` / `ACCESS_TOKEN` / `WS_URL` / `NODE_ID` / `NODE_KEY`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）。
 
 ---
 
@@ -44,11 +47,8 @@
 | `ICP` / `GongAn` | string | 网站备案号（页脚展示） |
 | `noindex` | boolean | 全站是否禁止搜索引擎索引 |
 | `v4OnlyAPI` / `v6OnlyAPI` / `DualStackAPI` | string | IPv4 / IPv6 / 双栈 IP 查询接口 |
-| `apiBaseUrls` | 节点数组 | 基础 API 节点列表（detail / ssl / whois 等） |
-| `IPLocationAPIs` | 节点数组 | IP 归属地 / ASN 查询节点列表 |
-| `TCPing` | 节点分组 | TCPing 节点，按 `DualStack` / `IPv4` / `IPv6` 分组 |
-| `SpeedTest` | 节点分组 | 测速节点，按 `DualStack` / `IPv4` / `IPv6` 分组 |
-| `NSLookup` | 节点数组 | DNS 解析节点列表 |
+| `APIBaseURL` | 节点池 | 拨测上游节点池（whois / ssl / detail / dns / dnssec / tcping / speed），含 `DualStack` / `IPv4` / `IPv6` 三栈 |
+| `IPLocationAPI` | 节点数组 | IP 归属地 / ASN 查询节点池（纯数组，无栈区分） |
 
 完整模板（复制到 `frontend-ssr/config/index.ts`，替换占位值即可）：
 
@@ -75,32 +75,17 @@ const config = {
     v4OnlyAPI: "https://4.wsmdn.top",
     v6OnlyAPI: "https://6.wsmdn.top",
     DualStackAPI: "https://test.wsmdn.top",
-    // 基础 API 节点（detail / ssl / whois 等）
-    apiBaseUrls: [
-        { label: "节点显示名", id: "node-1", url: "https://node-1.example.com/" }
-    ],
-    // IP 归属地 / ASN 查询节点
-    IPLocationAPIs: [
-        { label: "节点显示名", id: "node-1", url: "https://node-1.example.com/" }
-    ],
-    // TCPing 节点：IPv4-only 节点只能放 IPv4 分组，不能放 DualStack / IPv6
-    TCPing: {
+    // 拨测节点池（whois / ssl / detail / dns / dnssec / tcping / speed）
+    // IPv4-only 节点只能放 IPv4 栈，IPv6-only 放 IPv6 栈，双栈放 DualStack
+    APIBaseURL: {
         DualStack: [],
         IPv4: [
             { label: "节点显示名", id: "node-1", url: "https://node-1.example.com/" }
         ],
         IPv6: []
     },
-    // 测速节点：同上，IPv4-only 节点只能放 IPv4 分组
-    SpeedTest: {
-        DualStack: [],
-        IPv4: [
-            { label: "节点显示名", id: "node-1", url: "https://node-1.example.com/" }
-        ],
-        IPv6: []
-    },
-    // DNS 解析节点
-    NSLookup: [
+    // IP 归属地 / ASN 查询节点池（纯数组，无栈区分）
+    IPLocationAPI: [
         { label: "节点显示名", id: "node-1", url: "https://node-1.example.com/" }
     ]
 }
@@ -112,12 +97,16 @@ export { config }
 节点数组项均为 `{ label, id, url }` 结构，例如：
 
 ```ts
-apiBaseUrls: [
-    { label: "中国 江苏 移动", id: "cn-jiangsu", url: "https://cn-jiangsu.api-ipw.wsmdn.top/" }
-]
+APIBaseURL: {
+    DualStack: [
+        { label: "中国 江苏 移动", id: "cn-jiangsu", url: "https://cn-jiangsu.api-ipw.wsmdn.top/" }
+    ],
+    IPv4: [],
+    IPv6: []
+}
 ```
 
-`label` 为节点展示名，`id` 为节点唯一标识（中间件 `apiKeys` 也按此 id 注入 key），`url` 为节点 base URL。`TCPing` / `SpeedTest` 节点再多一层 `DualStack` / `IPv4` / `IPv6` 分组，分别对应双栈 / 单栈测试时使用的节点列表。
+`label` 为节点展示名，`id` 为节点唯一标识（中间件 `apiKeys` 也按此 id 注入 key），`url` 为节点 base URL。节点池结构如下：`APIBaseURL` 为拨测节点池，含 `DualStack` / `IPv4` / `IPv6` 三栈（分别对应双栈 / 单栈测试时使用的节点列表，IPv4-only 节点只能放 `IPv4` 栈，IPv6-only 只能放 `IPv6` 栈，不能放 `DualStack`）；`IPLocationAPI` 为 IP 归属地 / ASN 查询节点池，为纯数组（无栈区分）。
 
 ### 出站 IP 检测接口（v4OnlyAPI / v6OnlyAPI / DualStackAPI）
 
@@ -165,7 +154,12 @@ apiBaseUrls: [
     "ws-port": 8092,
     "remote-config-url": "",
     "remote-ingore-config": [],
-    "apiBaseUrls": [ { "label": "中国 江苏 移动", "id": "cn-jiangsu", "url": "https://cn-jiangsu.api-ipw.wsmdn.top/" } ],
+    "APIBaseURL": {
+        "DualStack": [ { "label": "中国 江苏 移动", "id": "cn-jiangsu", "url": "https://cn-jiangsu.api-ipw.wsmdn.top/" } ],
+        "IPv4": [],
+        "IPv6": []
+    },
+    "IPLocationAPI": [ { "label": "中国 江苏 移动", "id": "cn-jiangsu", "url": "https://cn-jiangsu.api-ipw.wsmdn.top/" } ],
     "apiKeys": { "cn-jiangsu": "" }
 }
 ```
@@ -174,8 +168,22 @@ apiBaseUrls: [
 - `ws-port`：WS 服务端口，默认 `8092`，`0` 表示关闭 WS 通道（也可用环境变量 `WS_PORT` 覆盖；优先级：远端配置 > 环境变量 > setting.json）
 - `remote-config-url`：远端配置地址，也可用环境变量 `REMOTE_CONFIG_URL`（环境变量优先）
 - `remote-ingore-config`：**不被远端配置覆盖的配置项列表**（数组），如 `["port", "rate-limit"]`；也可用环境变量 `REMOTE_INGORE_CONFIG`（JSON 数组字符串，优先于 setting.json）
-- `apiKeys`：用于向后端注入 `Authorization: Bearer <key>`，优先级：setting.json `apiKeys` > 环境变量 `APIKEYS`（JSON 字符串）。**敏感凭据，强制忽略，不随远端配置覆盖**
-- 节点数组项（`apiBaseUrls` / `IPLocationAPIs` / `TCPing` / `SpeedTest` / `NSLookup`）与前端 `config/index.ts` 结构一致；节点加 `"ws": true` 可让该节点走 WS 通道通信，详见 [中间件部署 - WS 通道](/guide/deploy-middleware#ws-通道拨测数据经-websocket-传输)
+- `apiKeys`：用于向后端注入 `Authorization: Bearer <key>`，优先级：setting.json `apiKeys` > 环境变量 `APIKEYS`（JSON 字符串）。**敏感凭据，强制忽略，不随远端配置覆盖**。同时作为 **WS 注册校验表**：节点经 WS 注册时，`register` 消息的 `key` 必须与 `apiKeys[节点id]` 一致，否则返回 401 并断开
+- 节点池与前端 `config/index.ts` 结构一致：`APIBaseURL` 为拨测节点池（含 `DualStack` / `IPv4` / `IPv6` 三栈），`IPLocationAPI` 为 IP 归属地 / ASN 节点池（纯数组，无栈）；节点加 `"ws": true` 可让该节点走 WS 通道通信，详见 [中间件部署 - WS 通道](/guide/deploy-middleware#ws-通道拨测数据经-websocket-传输)
+
+### WS 通道配置一览
+
+WS 通道涉及**中间件（服务端）**与**后端节点（客户端）**两侧配置：
+
+| 角色 | 配置项 | 环境变量 | 说明 |
+|------|--------|----------|------|
+| 中间件（服务端） | `ws-port` | `WS_PORT` | WS 监听端口，默认 `8092`，`0`=关闭；节点连 `ws(s)://<中间件>:<ws-port>/ws` |
+| 中间件（服务端） | `apiKeys` | `APIKEYS` | 节点注册校验表：`{"<node-id>": "<key>"}`，节点 `register` 的 key 必须匹配 |
+| 节点（客户端） | `ws-url` | `WS_URL` | 中间件 WS 完整地址（含 `/ws` 路径），逗号分隔多备主备切换 |
+| 节点（客户端） | `node-id` | `NODE_ID` | 节点 id，与中间件 `apiKeys` 键一致（建议 UUID） |
+| 节点（客户端） | `node-key` | `NODE_KEY` | 注册 key，与中间件 `apiKeys[节点id]` 一致，**必填** |
+
+**链路**：中间件收到 `ws:true` 节点的拨测请求 → 经 WS 发 `probe` → 节点执行探针（直调 webtest 函数 + 缓存）→ `probe_result` 回传 → 中间件返回 HTTP 响应（`Content-Type: application/json`）。节点侧接入步骤见 [后端节点部署 - WS 通道接入](/guide/deploy-node#ws-通道接入可选)。
 
 ---
 
@@ -234,7 +242,11 @@ REMOTE_CONFIG_URL=https://example.com/ipw-config.json ./lemonipw
     "port": "8091",
     "cors": "",
     "rate-limit": 120,
-    "apiBaseUrls": [ { "label": "中国 江苏 移动", "id": "cn-jiangsu", "url": "https://cn-jiangsu.api-ipw.wsmdn.top/" } ]
+    "APIBaseURL": {
+        "DualStack": [ { "label": "中国 江苏 移动", "id": "cn-jiangsu", "url": "https://cn-jiangsu.api-ipw.wsmdn.top/" } ],
+        "IPv4": [],
+        "IPv6": []
+    }
 }
 ```
 

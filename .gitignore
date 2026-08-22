@@ -21,3 +21,4 @@ setting.json
 docs/.vitepress/.temp/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+tmp/

@@ -55,7 +55,7 @@ const result = ref<ASNResult | null>(null)
 const error = ref('')
 const userIP = ref('')
 
-const apiList = config.IPLocationAPIs
+const apiList = config.IPLocationAPI
 const currentApiIndex = ref(0)
 const backendID = computed(() => apiList[currentApiIndex.value]?.id || '')
 

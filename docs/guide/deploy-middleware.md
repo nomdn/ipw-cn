@@ -13,7 +13,7 @@
 > cp middleware.setting.json.example setting.json
 > ```
 >
-> 复制后按需修改 `apiBaseUrls` / `apiKeys` / `cors` 等配置项。
+> 复制后按需修改 `APIBaseURL` / `IPLocationAPI` / `apiKeys` / `cors` 等配置项。
 
 ## 方案一：Docker
 
@@ -27,7 +27,7 @@ docker run -d -p 8091:8091 \
   middleware-go
 ```
 
-配置通过挂载 `setting.json` 提供（`apiBaseUrls` / `apiKeys` / `cors` / `rate-limit` / `remote-config-url` 等；`rate-limit` 为单 IP 每分钟限流次数，默认 120，0 表示不限流，可用环境变量 `RATE_LIMIT` 覆盖；`remote-config-url` 为远端配置地址，可用环境变量 `REMOTE_CONFIG_URL` 覆盖；**`apiKeys` 为敏感凭据，不随远端配置覆盖**）。
+配置通过挂载 `setting.json` 提供（`APIBaseURL` / `IPLocationAPI` / `apiKeys` / `cors` / `rate-limit` / `remote-config-url` 等；`rate-limit` 为单 IP 每分钟限流次数，默认 120，0 表示不限流，可用环境变量 `RATE_LIMIT` 覆盖；`remote-config-url` 为远端配置地址，可用环境变量 `REMOTE_CONFIG_URL` 覆盖；**`apiKeys` 为敏感凭据，不随远端配置覆盖**）。
 
 ## 方案二：二进制
 
@@ -61,10 +61,11 @@ middleware-go 内置 WS 服务端，后端节点可作为 **WS 客户端**连入
 ```json
 {
     "port": "8091",
-    "apiBaseUrls": [
-        { "label": "上海 腾讯云 BGP", "id": "tencent-sh", "url": "", "ws": true }
-    ],
-    "TCPing": { "DualStack": [], "IPv4": [], "IPv6": [ { "label": "河北 秦皇岛 联通", "id": "cn-hebei-qinhuangdao", "url": "https://cn-hebei-qinhuangdao.api-ipw.wsmdn.top/", "ws": true } ] }
+    "APIBaseURL": {
+        "DualStack": [ { "label": "上海 腾讯云 BGP", "id": "tencent-sh", "url": "", "ws": true } ],
+        "IPv4": [],
+        "IPv6": [ { "label": "河北 秦皇岛 联通", "id": "cn-hebei-qinhuangdao", "url": "https://cn-hebei-qinhuangdao.api-ipw.wsmdn.top/", "ws": true } ]
+    }
 }
 ```
 

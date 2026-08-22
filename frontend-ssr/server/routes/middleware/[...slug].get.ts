@@ -98,25 +98,17 @@ export default defineEventHandler(async (event) => {
         let apiBaseUrls: Array<{ id: string, url: string ,label: string}> = []
         switch (apiType) {
             case 'whois':
-                apiBaseUrls = [...config.apiBaseUrls]
+            case 'ssl':
+            case 'detail':
+                apiBaseUrls = [...config.APIBaseURL.DualStack]
                 break
             case 'dns':
-                apiBaseUrls = [...config.NSLookup]
+            case 'dnssec':
+                apiBaseUrls = [...config.APIBaseURL.DualStack, ...config.APIBaseURL.IPv4, ...config.APIBaseURL.IPv6]
                 break
             case 'location':
-                apiBaseUrls = [...config.IPLocationAPIs]
-                break
-            case 'ssl':
-                apiBaseUrls = [...config.apiBaseUrls]
-                break
             case 'asn':
-                apiBaseUrls = [...config.IPLocationAPIs]
-                break
-            case 'dnssec':
-                apiBaseUrls = [...config.NSLookup]
-                break
-            case 'detail':
-                apiBaseUrls = [...config.apiBaseUrls]
+                apiBaseUrls = [...config.IPLocationAPI]
                 break
             default:
                 throw createError({ statusCode: 400, statusMessage: 'Invalid API type' })
@@ -151,21 +143,12 @@ export default defineEventHandler(async (event) => {
             })
         return data
     }else if (apiType === 'tcping' || apiType === 'udping' || apiType === 'speed') {
-        let apiBaseUrls:Array<{ id: string, url: string ,label: string}> = []
-        let apiTypeConfig: any = {}
-        switch (apiType) {
-            case 'tcping':
-                apiTypeConfig = config.TCPing
-                apiBaseUrls = [...apiTypeConfig.DualStack, ...apiTypeConfig.IPv4, ...apiTypeConfig.IPv6]
-                break
-            case 'speed':
-                apiTypeConfig = config.SpeedTest
-                apiBaseUrls = [...apiTypeConfig.DualStack, ...apiTypeConfig.IPv4, ...apiTypeConfig.IPv6]
-                break
-            default:
-                throw createError({ statusCode: 400, statusMessage: 'Invalid API type' })
-
-        }
+        // tcping/udping/speed 统一走 APIBaseURL 节点池（平铺三栈）
+        const apiBaseUrls: Array<{ id: string, url: string ,label: string}> = [
+            ...config.APIBaseURL.DualStack,
+            ...config.APIBaseURL.IPv4,
+            ...config.APIBaseURL.IPv6
+        ]
         const map = new Map<string, string>(apiBaseUrls.map(api => [api.id, api.url]))
         if (!map.has(backendID)) {
             throw createError({ statusCode: 400, statusMessage: 'Invalid backend ID' })

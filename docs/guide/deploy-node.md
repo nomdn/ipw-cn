@@ -28,7 +28,7 @@ npx edgeone pages deploy -n ipw-cn -t $EDGEONE_API_TOKEN
 > **Serverless 节点均为 IPv4-only**（EdgeOne、Vercel 等平台的出站网络只提供 IPv4）。部署后需要：
 >
 > 1. 给节点配置 `SINGLE_STACK=ipv4`（声明节点为 IPv4 单栈），跳过 IPv6 相关测试，避免无意义的错误日志与超时
-> 2. 在前端配置 `config/index.ts` 中，**该节点只能填入 `TCPing.IPv4` / `SpeedTest.IPv4` 等 IPv4 分组**，不要放进 `DualStack` / `IPv6` 分组
+> 2. 在前端配置 `config/index.ts` 中，**该节点只能填入 `APIBaseURL.IPv4`**（拨测节点池的 IPv4 栈），不要放进 `DualStack` / `IPv6` 栈
 
 ## 方案三：Docker
 
@@ -113,7 +113,7 @@ sudo systemctl restart lemon-ipw  # 重启（改配置后）
 
 ```bash
 WS_URL=ws://<中间件IP>:8092/ws \
-NODE_ID=<节点id，与中间件 apiBaseUrls 的节点 id 一致> \
+NODE_ID=<节点id，与中间件 APIBaseURL / IPLocationAPI 池的节点 id 一致> \
 NODE_KEY=<注册key，与中间件 apiKeys[节点id] 一致；节点未配置 key 可留空> \
 ./lemonipw
 ```
@@ -123,4 +123,4 @@ NODE_KEY=<注册key，与中间件 apiKeys[节点id] 一致；节点未配置 ke
 - 收到 `probe` 后节点直调探针函数（带缓存）并回 `probe_result`，结果与 HTTP 通道一致
 - 节点注册带 `NODE_KEY`：中间件 `apiKeys` 里配了 key 就必须传对，否则返回 401 并断开；未配置 key 的节点开放注册
 
-**注意**：`NODE_ID` 必须与中间件 `apiBaseUrls` / `TCPing` / `SpeedTest` 等配置中的节点 `id` 一致，且该节点需配置 `"ws": true` 才会走 WS 通道。未连接中间件时，`ws:true` 节点的拨测会返回 502。
+**注意**：`NODE_ID` 必须与中间件 `APIBaseURL` / `IPLocationAPI` 池中的节点 `id` 一致，且该节点需配置 `"ws": true` 才会走 WS 通道。未连接中间件时，`ws:true` 节点的拨测会返回 502。

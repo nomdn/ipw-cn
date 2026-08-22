@@ -72,7 +72,11 @@ const recordTypes = [
   { value: 'ptr', label: 'PTR 记录' }
 ]
 
-const dnsServerFetches = config.NSLookup.map((server) => {
+const dnsServerFetches = [
+  ...config.APIBaseURL.DualStack,
+  ...config.APIBaseURL.IPv4,
+  ...config.APIBaseURL.IPv6
+].map((server) => {
   const url = computed(() => "/middleware/" + server.id + "/dns/" + recordType.value + "/" + domain.value);
   const { data, error, execute } = useMiddlewareFetch(url, {
     immediate: false,

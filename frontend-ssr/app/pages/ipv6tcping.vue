@@ -79,8 +79,8 @@ const loading = ref(false)
 const serverResults = ref<ServerResult[]>([])
 
 const allServers = [
-  ...config.TCPing.DualStack.map((s: ServerConfig) => ({ ...s, type: 'DualStack' })),
-  ...config.TCPing.IPv6.map((s: ServerConfig) => ({ ...s, type: 'IPv6' }))
+  ...config.APIBaseURL.DualStack.map((s: ServerConfig) => ({ ...s, type: 'DualStack' })),
+  ...config.APIBaseURL.IPv6.map((s: ServerConfig) => ({ ...s, type: 'IPv6' }))
 ];
 
 const tcpingFetches = allServers.map((server) => {
@@ -95,7 +95,7 @@ const tcpingFetches = allServers.map((server) => {
 function initServerResults() {
   const results: ServerResult[] = []
   
-  config.TCPing.DualStack.forEach((server: ServerConfig) => {
+  config.APIBaseURL.DualStack.forEach((server: ServerConfig) => {
     results.push({
       label: server.label,
       loading: false,
@@ -103,7 +103,7 @@ function initServerResults() {
     })
   })
   
-  config.TCPing.IPv6.forEach((server: ServerConfig) => {
+  config.APIBaseURL.IPv6.forEach((server: ServerConfig) => {
     results.push({
       label: server.label,
       loading: false,

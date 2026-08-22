@@ -43,7 +43,7 @@ curl ${config.v6OnlyAPI}
 curl ${config.DualStackAPI}
 `.trim();
 const html = ref('');
-const apiList = config.IPLocationAPIs
+const apiList = config.IPLocationAPI
 const currentApiIndex = ref(0)
 const backendID = computed(() => apiList[currentApiIndex.value]!.id)
 const ipAddress = ref('');

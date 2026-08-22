@@ -32,9 +32,8 @@ pnpm dev
 |--------|------|
 | `siteUrl` | 站点对外地址 |
 | `siteName` | 站点名称（页面标题 / 描述 / 页脚品牌） |
-| `apiBaseUrls` | 后端上游节点列表（whois / ssl / detail） |
-| `IPLocationAPIs` | IP 归属地 / ASN 上游节点列表 |
-| `TCPing` / `SpeedTest` / `NSLookup` | 对应功能的多节点候选（DualStack / IPv4 / IPv6） |
+| `APIBaseURL` | 拨测上游节点池（whois / ssl / detail / dns / dnssec / tcping / speed），含 `DualStack` / `IPv4` / `IPv6` 三栈 |
+| `IPLocationAPI` | IP 归属地 / ASN 上游节点池（纯数组，无栈区分） |
 | `Middleware` | 外部独立中间件 base URL 列表，`/middleware/*` 请求依次尝试、失败重试下一个 |
 | `EnableInternalMiddleware` | 是否启用前端内置中间件（本地转发，作为候选列表最后一位兜底），默认 `true` |
 | `rateLimitPerMinute` | 内置中间件单 IP 限流次数（次/分钟），默认 `120`，`0` 表示不限流 |

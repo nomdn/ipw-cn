@@ -21,7 +21,7 @@ import (
 
 // ==================== 全局变量 ====================
 
-// apiInfo 对应 setting.json apiBaseUrls 等数组中的 { label, id, url } 配置项
+// apiInfo 对应 setting.json 节点池中的 { label, id, url } 配置项
 type apiInfo struct {
 	Label string `json:"label"`
 	ID    string `json:"id"`
@@ -49,7 +49,7 @@ func (w *wsFlag) UnmarshalJSON(b []byte) error {
 // UseWS 判断该节点是否走 WS 通道
 func (a *apiInfo) UseWS() bool { return a != nil && bool(a.WS) }
 
-// stackConfig 对应 setting.json TCPing / SpeedTest
+// stackConfig 对应节点池中的 { DualStack, IPv4, IPv6 } 三栈
 type stackConfig struct {
 	DualStack []apiInfo `json:"DualStack"`
 	IPv4      []apiInfo `json:"IPv4"`
@@ -57,20 +57,20 @@ type stackConfig struct {
 }
 
 // middlewareConfig 仅用于解析 setting.json（JSON 键名统一用连接线，如 http-timeout-seconds）
+// 节点池结构：APIBaseURL 含 {IPv6,IPv4,DualStack} 三栈；IPLocationAPI 为纯数组（无栈区分）。
+// 原 apiBaseUrls/whois·ssl·detail、NSLookup/dns·dnssec、TCPing、SpeedTest 统一并入 APIBaseURL，
+// 原 IPLocationAPI/location·asn 并入 IPLocationAPI。
 type middlewareConfig struct {
-	Port               stringOrNumber    `json:"port"`
-	HTTPTimeoutSeconds int               `json:"http-timeout-seconds"`
-	RateLimit          *int              `json:"rate-limit"` // 单 IP 每分钟限流次数；缺省=默认120，0=不限流
-	WSPort             stringOrNumber   `json:"ws-port"`    // WS 服务端口：兼容 "8092" 与 8092；缺省=8092，"0"/0=关闭 WS 通道
-	RemoteConfigURL    string            `json:"remote-config-url"`
-	RemoteIngoreConfig []string          `json:"remote-ingore-config"` // 不被远端覆盖的配置项列表
-	Cors               string            `json:"cors"`
-	APIBaseURLs        []apiInfo         `json:"apiBaseUrls"`
-	IPLocationAPIs     []apiInfo         `json:"IPLocationAPIs"`
-	TCPing             stackConfig       `json:"TCPing"`
-	SpeedTest          stackConfig       `json:"SpeedTest"`
-	NSLookup           []apiInfo         `json:"NSLookup"`
-	APIKeys            map[string]string `json:"apiKeys"`
+	Port            stringOrNumber    `json:"port"`
+	HTTPTimeoutSeconds int            `json:"http-timeout-seconds"`
+	RateLimit       *int              `json:"rate-limit"` // 单 IP 每分钟限流次数；缺省=默认120，0=不限流
+	WSPort          stringOrNumber   `json:"ws-port"`    // WS 端口：兼容 "8092" 与 8092；缺省=8092，"0"/0=关闭 WS 通道
+	RemoteConfigURL string            `json:"remote-config-url"`
+	RemoteIngoreConfig []string       `json:"remote-ingore-config"` // 不被远端覆盖的配置项列表
+	Cors            string            `json:"cors"`
+	APIBaseURL      stackConfig       `json:"APIBaseURL"` // whois/ssl/detail/dns/dnssec/tcping/speed 上游节点池
+	IPLocationAPI   []apiInfo         `json:"IPLocationAPI"` // location/asn 上游节点池（纯数组，无栈）
+	APIKeys         map[string]string `json:"apiKeys"`
 }
 
 // stringOrNumber 兼容 JSON 中的字符串与数字（如 "8080" 或 8080）
@@ -85,11 +85,8 @@ var (
 	HTTP_TIMEOUT     int               // 上游请求超时（秒）
 	CORS             string            // CORS 配置原始字符串（逗号分隔的允许域名，可空）
 	ACCEPT_DOMAINS   []string          // 允许跨域的域名列表（由 CORS 拆分而来，空则允许所有）
-	API_BASE_URLS    []apiInfo         // whois/ssl/detail 上游列表
-	IP_LOCATION_APIS []apiInfo         // location/asn 上游列表
-	TCPING           stackConfig       // tcping 上游列表（DualStack/IPv4/IPv6）
-	SPEED_TEST       stackConfig       // speed 上游列表（DualStack/IPv4/IPv6）
-	NS_LOOKUP        []apiInfo         // dns/dnssec 上游列表
+	API_BASE_URLS    stackConfig       // whois/ssl/detail/dns/dnssec/tcping/speed 上游节点池（DualStack/IPv4/IPv6）
+	IP_LOCATION_APIS []apiInfo         // location/asn 上游节点池（纯数组，无栈）
 	API_KEYS         map[string]string // backendID → token
 	CONFIG_SOURCE    string            // 配置文件路径
 	RATE_LIMIT       int               // 单 IP 每分钟限流次数（0 表示不限流），默认 120
@@ -172,6 +169,20 @@ func findNode(list []apiInfo, id string) *apiInfo {
 		}
 	}
 	return nil
+}
+
+// flattenStack 将节点池三栈展开为一个节点列表（DualStack + IPv4 + IPv6）
+func flattenStack(s stackConfig) []apiInfo {
+	out := make([]apiInfo, 0, len(s.DualStack)+len(s.IPv4)+len(s.IPv6))
+	out = append(out, s.DualStack...)
+	out = append(out, s.IPv4...)
+	out = append(out, s.IPv6...)
+	return out
+}
+
+// stackNonEmpty 判断节点池三栈是否至少有一项
+func stackNonEmpty(s stackConfig) bool {
+	return len(s.DualStack) > 0 || len(s.IPv4) > 0 || len(s.IPv6) > 0
 }
 
 func keysOf(m map[string]string) []string {
@@ -299,14 +310,13 @@ func middlewareHandler(c fiber.Ctx) error {
 
 	switch apiType {
 	case "whois", "dns", "location", "ssl", "asn", "dnssec", "detail":
+		// 节点池结构：location/asn 走 IPLocationAPI（纯数组，无栈），其余走 APIBaseURL（三栈平铺）
 		var apiBaseUrls []apiInfo
 		switch apiType {
-		case "whois", "ssl", "detail":
-			apiBaseUrls = API_BASE_URLS
-		case "dns", "dnssec":
-			apiBaseUrls = NS_LOOKUP
 		case "location", "asn":
 			apiBaseUrls = IP_LOCATION_APIS
+		default:
+			apiBaseUrls = flattenStack(API_BASE_URLS)
 		}
 
 		node := findNode(apiBaseUrls, backendID)
@@ -331,20 +341,8 @@ func middlewareHandler(c fiber.Ctx) error {
 		return forwardUpstream(c, apiBaseUrl, apiBaseUrl+"v1/"+apiType+"/"+raw, authHeaders, nil)
 
 	case "tcping", "udping", "speed":
-		var apiTypeConfig stackConfig
-		switch apiType {
-		case "tcping":
-			apiTypeConfig = TCPING
-		case "speed":
-			apiTypeConfig = SPEED_TEST
-		default:
-			return badRequest(c, "Invalid API type")
-		}
-
-		apiBaseUrls := make([]apiInfo, 0, len(apiTypeConfig.DualStack)+len(apiTypeConfig.IPv4)+len(apiTypeConfig.IPv6))
-		apiBaseUrls = append(apiBaseUrls, apiTypeConfig.DualStack...)
-		apiBaseUrls = append(apiBaseUrls, apiTypeConfig.IPv4...)
-		apiBaseUrls = append(apiBaseUrls, apiTypeConfig.IPv6...)
+		// tcping/udping/speed 统一走 APIBaseURL 节点池
+		apiBaseUrls := flattenStack(API_BASE_URLS)
 
 		// 转发 query 参数（过滤空值，等价于 TS 中 URLSearchParams 过滤 undefined）
 		queryString := url.Values{}
@@ -458,20 +456,12 @@ func applyRemoteConfig(mw *middlewareConfig) error {
 	if !ignored("cors") && remote.Cors != "" {
 		mw.Cors = remote.Cors
 	}
-	if !ignored("apiBaseUrls") && len(remote.APIBaseURLs) > 0 {
-		mw.APIBaseURLs = remote.APIBaseURLs
+	// 节点池结构：APIBaseURL 与 IPLocationAPI（远端非空栈时覆盖本地）
+	if !ignored("APIBaseURL") && stackNonEmpty(remote.APIBaseURL) {
+		mw.APIBaseURL = remote.APIBaseURL
 	}
-	if !ignored("IPLocationAPIs") && len(remote.IPLocationAPIs) > 0 {
-		mw.IPLocationAPIs = remote.IPLocationAPIs
-	}
-	if !ignored("TCPing") && (len(remote.TCPing.DualStack) > 0 || len(remote.TCPing.IPv4) > 0 || len(remote.TCPing.IPv6) > 0) {
-		mw.TCPing = remote.TCPing
-	}
-	if !ignored("SpeedTest") && (len(remote.SpeedTest.DualStack) > 0 || len(remote.SpeedTest.IPv4) > 0 || len(remote.SpeedTest.IPv6) > 0) {
-		mw.SpeedTest = remote.SpeedTest
-	}
-	if !ignored("NSLookup") && len(remote.NSLookup) > 0 {
-		mw.NSLookup = remote.NSLookup
+	if !ignored("IPLocationAPI") && len(remote.IPLocationAPI) > 0 {
+		mw.IPLocationAPI = remote.IPLocationAPI
 	}
 	// apiKeys 强制忽略：密钥凭据不随远端配置覆盖（与后端 access_token 一致），只从本地 setting.json / env 读取
 	log.Printf("[middleware] remote config applied from %s", url)
@@ -553,45 +543,21 @@ func readConfig() error {
 		mw.RemoteIngoreConfig = viper.GetStringSlice("remote-ingore-config")
 	}
 
-	// 数组/对象类配置：先 Getenv（JSON 字符串），再 viper.Get（经 JSON 中转反序列化到 typed 结构）
-	if err := envJSON("API_BASE_URLS", &mw.APIBaseURLs); err != nil {
+	// 节点池结构：APIBaseURL 与 IPLocationAPI（env JSON > setting.json）
+	if err := envJSON("API_BASE_URLS", &mw.APIBaseURL); err != nil {
 		return err
 	}
-	if len(mw.APIBaseURLs) == 0 {
-		if err := viperValue("apiBaseUrls", &mw.APIBaseURLs); err != nil {
-			return fmt.Errorf("parse apiBaseUrls: %w", err)
+	if !stackNonEmpty(mw.APIBaseURL) && viper.Get("APIBaseURL") != nil {
+		if err := viperValue("APIBaseURL", &mw.APIBaseURL); err != nil {
+			return fmt.Errorf("parse APIBaseURL: %w", err)
 		}
 	}
-	if err := envJSON("IP_LOCATION_APIS", &mw.IPLocationAPIs); err != nil {
+	if err := envJSON("IP_LOCATION_APIS", &mw.IPLocationAPI); err != nil {
 		return err
 	}
-	if len(mw.IPLocationAPIs) == 0 {
-		if err := viperValue("IPLocationAPIs", &mw.IPLocationAPIs); err != nil {
-			return fmt.Errorf("parse IPLocationAPIs: %w", err)
-		}
-	}
-	if err := envJSON("TCPING", &mw.TCPing); err != nil {
-		return err
-	}
-	if viper.Get("TCPing") != nil && len(mw.TCPing.DualStack)+len(mw.TCPing.IPv4)+len(mw.TCPing.IPv6) == 0 {
-		if err := viperValue("TCPing", &mw.TCPing); err != nil {
-			return fmt.Errorf("parse TCPing: %w", err)
-		}
-	}
-	if err := envJSON("SPEED_TEST", &mw.SpeedTest); err != nil {
-		return err
-	}
-	if viper.Get("SpeedTest") != nil && len(mw.SpeedTest.DualStack)+len(mw.SpeedTest.IPv4)+len(mw.SpeedTest.IPv6) == 0 {
-		if err := viperValue("SpeedTest", &mw.SpeedTest); err != nil {
-			return fmt.Errorf("parse SpeedTest: %w", err)
-		}
-	}
-	if err := envJSON("NS_LOOKUP", &mw.NSLookup); err != nil {
-		return err
-	}
-	if len(mw.NSLookup) == 0 {
-		if err := viperValue("NSLookup", &mw.NSLookup); err != nil {
-			return fmt.Errorf("parse NSLookup: %w", err)
+	if len(mw.IPLocationAPI) == 0 && viper.Get("IPLocationAPI") != nil {
+		if err := viperValue("IPLocationAPI", &mw.IPLocationAPI); err != nil {
+			return fmt.Errorf("parse IPLocationAPI: %w", err)
 		}
 	}
 	if err := envJSON("APIKEYS", &mw.APIKeys); err != nil {
@@ -609,11 +575,8 @@ func readConfig() error {
 	}
 
 	// 校验配置存在（防止在错误的文件上静默空跑）
-	hasEndpoints := len(mw.APIBaseURLs) > 0 || len(mw.NSLookup) > 0 || len(mw.IPLocationAPIs) > 0 ||
-		len(mw.TCPing.DualStack) > 0 || len(mw.TCPing.IPv4) > 0 || len(mw.TCPing.IPv6) > 0 ||
-		len(mw.SpeedTest.DualStack) > 0 || len(mw.SpeedTest.IPv4) > 0 || len(mw.SpeedTest.IPv6) > 0
-	if !hasEndpoints {
-		return fmt.Errorf("invalid config in %s: missing endpoint lists (expected flat middleware config)", path)
+	if !stackNonEmpty(mw.APIBaseURL) && len(mw.IPLocationAPI) == 0 {
+		return fmt.Errorf("invalid config in %s: missing endpoint pools (expected APIBaseURL / IPLocationAPI node pools)", path)
 	}
 
 	// 将配置内容写入全局变量
@@ -641,11 +604,8 @@ func readConfig() error {
 	if CORS != "" {
 		ACCEPT_DOMAINS = strings.Split(CORS, ",")
 	}
-	API_BASE_URLS = mw.APIBaseURLs
-	IP_LOCATION_APIS = mw.IPLocationAPIs
-	TCPING = mw.TCPing
-	SPEED_TEST = mw.SpeedTest
-	NS_LOOKUP = mw.NSLookup
+	API_BASE_URLS = mw.APIBaseURL
+	IP_LOCATION_APIS = mw.IPLocationAPI
 	API_KEYS = mw.APIKeys
 	CONFIG_SOURCE = viper.ConfigFileUsed()
 	return nil

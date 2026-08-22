@@ -68,7 +68,7 @@ const serverResults = ref<ServerResult[]>([])
 // =============================================
 
 /** 双栈服务器：同时支持 IPv4/IPv6 的节点 */
-const dualStackFetches = config.SpeedTest.DualStack.map((server) => {
+const dualStackFetches = config.APIBaseURL.DualStack.map((server) => {
   const url = computed(() => "/middleware/" + server.id + "/speed/v4/" + domain.value);
   const { data, error: fetchError, execute } = useMiddlewareFetch(url, {
     immediate: false,
@@ -78,7 +78,7 @@ const dualStackFetches = config.SpeedTest.DualStack.map((server) => {
 });
 
 /** IPv4 专用服务器：仅支持 IPv4 的节点 */
-const ipv4Fetches = config.SpeedTest.IPv4.map((server) => {
+const ipv4Fetches = config.APIBaseURL.IPv4.map((server) => {
   const url = computed(() => "/middleware/" + server.id + "/speed/v4/" + domain.value);
   const { data, error: fetchError, execute } = useMiddlewareFetch(url, {
     immediate: false,

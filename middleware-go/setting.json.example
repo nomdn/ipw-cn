@@ -6,21 +6,7 @@
     "remote-config-url": "",
     "remote-ingore-config": [],
     "cors": "",
-    "apiBaseUrls": [
-        {
-            "label": "中国 江苏 移动",
-            "id": "cn-jiangsu",
-            "url": "https://cn-jiangsu.api-ipw.wsmdn.top/"
-        }
-    ],
-    "IPLocationAPIs": [
-        {
-            "label": "中国 江苏 移动",
-            "id": "cn-jiangsu",
-            "url": "https://cn-jiangsu.api-ipw.wsmdn.top/"
-        }
-    ],
-    "TCPing": {
+    "APIBaseURL": {
         "DualStack": [
             {
                 "label": "中国 江苏 移动",
@@ -31,18 +17,7 @@
         "IPv4": [],
         "IPv6": []
     },
-    "SpeedTest": {
-        "DualStack": [
-            {
-                "label": "中国 江苏 移动",
-                "id": "cn-jiangsu",
-                "url": "https://cn-jiangsu.api-ipw.wsmdn.top/"
-            }
-        ],
-        "IPv4": [],
-        "IPv6": []
-    },
-    "NSLookup": [
+    "IPLocationAPI": [
         {
             "label": "中国 江苏 移动",
             "id": "cn-jiangsu",

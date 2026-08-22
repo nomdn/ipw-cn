@@ -35,25 +35,9 @@ const config = {
     v4OnlyAPI: "https://4.wsmdn.top",
     v6OnlyAPI: "https://6.wsmdn.top",
     DualStackAPI: "https://test.wsmdn.top",
-    apiBaseUrls: [
-        {
-            label: "中国 江苏 移动",
-            id: "cn-jiangsu",
-            url: "https://cn-jiangsu.api-ipw.wsmdn.top/"
-        },
-        {
-            label: "中国 广东 深圳 龙岗 坪地街道 中国移动",
-            id: "cn-shenzhen",
-            url: "https://cn-shenzhen.api-ipw.wsmdn.top/"
-        },
-        // IP 直连新节点：URL 留空，仅经独立中间件转发
-        {
-            label: "上海 腾讯云 BGP",
-            id: "tencent-sh",
-            url: ""
-        }
-    ],
-    IPLocationAPIs: [
+    // ---- 节点池结构 ----
+    // IPLocationAPI：IP 归属查询（location / asn）上游节点池（纯数组，无栈区分）
+    IPLocationAPI: [
         {
             label: "中国 江苏 移动",
             id: "cn-jiangsu",
@@ -65,283 +49,101 @@ const config = {
             url: "https://cn2-sichuan.api-ipw.wsmdn.top/"
         }
     ],
-    TCPing:{
-        DualStack: [
+    // APIBaseURL：其余拨测（whois / ssl / detail / dns / dnssec / tcping / speed）上游节点池，含 { IPv6, IPv4, DualStack } 三栈
+    APIBaseURL: {
+        IPv6: [
             {
-                label: "中国 江苏 移动",
-                id: "cn-jiangsu",
-                url :"https://cn-jiangsu.api-ipw.wsmdn.top/",
+                label: "中国 四川 沙渠 电信[ZFC]",
+                id: "cn2-sichuan",
+                url: "https://cn2-sichuan.api-ipw.wsmdn.top/"
             },
             {
-                label: "中国 广东 深圳 龙岗 坪地街道 中国移动",
-                id: "cn-shenzhen",
-                url :"https://cn-shenzhen.api-ipw.wsmdn.top/",
+                label: "中国 香港 九龙城区 旺角东 Cloudie[ZFC]",
+                id: "lntl-cn-hk-kowloon",
+                url: "https://lntl-cn-hk-kowloon.api-ipw.wsmdn.top/"
             },
-            // IP 直连新节点：URL 留空，仅经独立中间件转发
             {
-                label: "上海 腾讯云 BGP",
-                id: "tencent-sh",
-                url :"",
-            },
+                label: "中国 河北 秦皇岛 联通",
+                id: "cn-hebei-qinhuangdao",
+                url: "https://cn-hebei-qinhuangdao.api-ipw.wsmdn.top/"
+            }
         ],
         IPv4: [
             {
                 label: "中国 广东 广州 腾讯云",
                 id: "cn-guangzhou",
-                url :"https://cn-guangzhou.api-ipw.wsmdn.top/",
+                url: "https://cn-guangzhou.api-ipw.wsmdn.top/"
             },
             {
                 label: "新加坡 腾讯云",
                 id: "sg-1",
-                url :"https://sg-1.api-ipw.wsmdn.top/",
+                url: "https://sg-1.api-ipw.wsmdn.top/"
             },
             {
                 label: "中国 香港 新界 西贡区 将军澳 MICC[ZFC]",
                 id: "hk-shatin",
-                url :"https://china-hk-kowloon-shatindistrict-newcloud.ipwapi.zfap.wsmdn.top/",
+                url: "https://china-hk-kowloon-shatindistrict-newcloud.ipwapi.zfap.wsmdn.top/"
             },
             {
                 label: "中国 陕西 西安 北经济技术开发区 未央区凤城 中国电信[ZFC]",
                 id: "cn-xian",
-                url :"https://cn-xian-shaanxiprovince.api-ipw.wsmdn.top/",
+                url: "https://cn-xian-shaanxiprovince.api-ipw.wsmdn.top/"
             },
             {
-                label: "美国/加利福尼亚州/洛杉矶/蒙特雷帕克/USCD[ZFC]",
+                label: "美国/加利福尼亚州/洛杉矶/蒙特利奇帕克/USCD[ZFC]",
                 id: "us-la",
-                url :"https://america-california-losangeles.ipwapi.zfap.wsmdn.top/",
+                url: "https://america-california-losangeles.ipwapi.zfap.wsmdn.top/"
             },
             // IP 直连新节点：URL 留空，仅经独立中间件转发
             {
                 label: "山东 枣庄 双线",
                 id: "zaozhuang",
-                url :"",
+                url: ""
             },
             {
                 label: "湖北 十堰 电信",
                 id: "shiyan",
-                url :"",
+                url: ""
             },
             {
                 label: "香港 VpsQuan",
                 id: "hongkong2",
-                url :"",
+                url: ""
             },
             {
                 label: "北京 京东云 BGP",
                 id: "jdcloud",
-                url :"",
+                url: ""
             },
             {
                 label: "陕西 西安二 电信",
                 id: "xian2",
-                url :"",
+                url: ""
             },
             {
                 label: "香港 Cogent",
                 id: "hongkong",
-                url :"",
+                url: ""
             }
         ],
-        IPv6: [
-            {
-                label: "中国 四川 沙渠 电信[ZFC]",
-                id: "cn2-sichuan",
-                url:"https://cn2-sichuan.api-ipw.wsmdn.top/",
-            },
-            {
-                label: "中国 香港 九龙城区 旺角东 Cloudie[ZFC]",
-                id: "lntl-cn-hk-kowloon",
-                url:"https://lntl-cn-hk-kowloon.api-ipw.wsmdn.top/",
-            },
-            {
-                label: "中国 河北 秦皇岛 联通",
-                id: "cn-hebei-qinhuangdao",
-                url :"https://cn-hebei-qinhuangdao.api-ipw.wsmdn.top/",
-            }
-        ]
-    },
-    SpeedTest:{
         DualStack: [
             {
                 label: "中国 江苏 移动",
                 id: "cn-jiangsu",
-                url :"https://cn-jiangsu.api-ipw.wsmdn.top/",
+                url: "https://cn-jiangsu.api-ipw.wsmdn.top/"
             },
             {
                 label: "中国 广东 深圳 龙岗 坪地街道 中国移动",
                 id: "cn-shenzhen",
-                url :"https://cn-shenzhen.api-ipw.wsmdn.top/",
+                url: "https://cn-shenzhen.api-ipw.wsmdn.top/"
             },
-            // IP 直连新节点：URL 留空，仅经独立中间件转发
+            // IP 直连的节点：URL 留空，仅经独立中间件转发
             {
                 label: "上海 腾讯云 BGP",
                 id: "tencent-sh",
-                url :"",
-            },
-        ],
-        IPv4: [
-            {
-                label: "中国 广东 广州 腾讯云",
-                id: "cn-guangzhou",
-                url :"https://cn-guangzhou.api-ipw.wsmdn.top/",
-            },
-            {
-                label: "新加坡 腾讯云",
-                id: "sg-1",
-                url :"https://sg-1.api-ipw.wsmdn.top/",
-            },
-            {
-                label: "中国 香港 新界 西贡区 将军澳 MICC[ZFC]",
-                id: "hk-shatin",
-                url :"https://china-hk-kowloon-shatindistrict-newcloud.ipwapi.zfap.wsmdn.top/",
-            },
-            {
-                label: "中国 陕西 西安 北经济技术开发区 未央区凤城 中国电信[ZFC]",
-                id: "cn-xian",
-                url :"https://cn-xian-shaanxiprovince.api-ipw.wsmdn.top/",
-            },
-            {
-                label: "美国/加利福尼亚州/洛杉矶/蒙特雷帕克/USCD[ZFC]",
-                id: "us-la",
-                url :"https://america-california-losangeles.ipwapi.zfap.wsmdn.top/",
-            },
-            // IP 直连新节点：URL 留空，仅经独立中间件转发
-            {
-                label: "山东 枣庄 双线",
-                id: "zaozhuang",
-                url :"",
-            },
-            {
-                label: "湖北 十堰 电信",
-                id: "shiyan",
-                url :"",
-            },
-            {
-                label: "香港 VpsQuan",
-                id: "hongkong2",
-                url :"",
-            },
-            {
-                label: "北京 京东云 BGP",
-                id: "jdcloud",
-                url :"",
-            },
-            {
-                label: "陕西 西安二 电信",
-                id: "xian2",
-                url :"",
-            },
-            {
-                label: "香港 Cogent",
-                id: "hongkong",
-                url :"",
-            }
-        ],
-        IPv6: [
-            {
-                label: "中国 四川 沙渠 电信[ZFC]",
-                id: "cn2-sichuan",
-                url:"https://cn2-sichuan.api-ipw.wsmdn.top/",
-            },
-            {
-                label: "中国 香港 九龙城区 旺角东 Cloudie[ZFC]",
-                id: "lntl-cn-hk-kowloon",
-                url:"https://lntl-cn-hk-kowloon.api-ipw.wsmdn.top/",
-            },
-            {
-                label: "中国 河北 秦皇岛 联通",
-                id: "cn-hebei-qinhuangdao",
-                url :"https://cn-hebei-qinhuangdao.api-ipw.wsmdn.top/",
+                url: ""
             }
         ]
-    },
-    NSLookup:[
-        {
-            label: "中国 江苏 移动",
-            id: "cn-jiangsu",
-            url :"https://cn-jiangsu.api-ipw.wsmdn.top/",
-        },
-        {
-            label: "中国 广州 腾讯云",
-            id: "cn-guangzhou",
-            url :"https://cn-guangzhou.api-ipw.wsmdn.top/",
-        },
-        {
-            label: "新加坡 腾讯云",
-            id: "sg-1",
-            url :"https://sg-1.api-ipw.wsmdn.top/",
-        },
-        {
-            label: "中国 四川 沙渠 电信[ZFC]",
-            id: "cn2-sichuan",
-            url:"https://cn2-sichuan.api-ipw.wsmdn.top/",
-        },
-        {
-            label: "中国 陕西 西安 北经济技术开发区 未央区凤城 中国电信[ZFC]",
-            id: "cn-xian",
-            url :"https://cn-xian-shaanxiprovince.api-ipw.wsmdn.top/",
-        },
-        {
-            label: "中国 香港 新界 西贡区 将军澳 MICC[ZFC]",
-            id: "hk-shatin",
-            url :"https://china-hk-kowloon-shatindistrict-newcloud.ipwapi.zfap.wsmdn.top/",
-        },
-        {
-            label: "中国 香港 九龙城区 旺角东 Cloudie[ZFC]",
-            id: "lntl-cn-hk-kowloon",
-            url:"https://lntl-cn-hk-kowloon.api-ipw.wsmdn.top/",
-        },
-        {
-            label: "中国 广东 深圳 龙岗 坪地街道 中国移动",
-            id: "cn-shenzhen",
-            url :"https://cn-shenzhen.api-ipw.wsmdn.top/",
-        },
-        {
-            label: "美国/加利福尼亚州/洛杉矶/蒙特雷帕克/USCD[ZFC]",
-            id: "us-la",
-            url :"https://america-california-losangeles.ipwapi.zfap.wsmdn.top/",
-        },
-        // IP 直连新节点：URL 留空，仅经独立中间件转发
-        {
-            label: "上海 腾讯云 BGP",
-            id: "tencent-sh",
-            url :"",
-        },
-        {
-            label: "山东 枣庄 双线",
-            id: "zaozhuang",
-            url :"",
-        },
-        {
-            label: "湖北 十堰 电信",
-            id: "shiyan",
-            url :"",
-        },
-        {
-            label: "香港 VpsQuan",
-            id: "hongkong2",
-            url :"",
-        },
-        {
-            label: "北京 京东云 BGP",
-            id: "jdcloud",
-            url :"",
-        },
-        {
-            label: "陕西 西安二 电信",
-            id: "xian2",
-            url :"",
-        },
-        {
-            label: "香港 Cogent",
-            id: "hongkong",
-            url :"",
-        },
-        {
-            label: "中国 河北 秦皇岛 联通",
-            id: "cn-hebei-qinhuangdao",
-            url :"https://cn-hebei-qinhuangdao.api-ipw.wsmdn.top/",
-        }
-    ]
+    }
 }
 export { config }

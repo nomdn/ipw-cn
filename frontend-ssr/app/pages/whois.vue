@@ -64,7 +64,7 @@ const result = ref<any>(null)
 const error = ref('')
 const userIP = ref('')
 
-const apiList = config.apiBaseUrls
+const apiList = config.APIBaseURL.DualStack
 const currentApiIndex = ref(0)
 const backendID = computed(() => apiList[currentApiIndex.value]?.id || '')
 const whoisUrl = computed(() => '/middleware/' + backendID.value + '/whois/' + domain.value)
