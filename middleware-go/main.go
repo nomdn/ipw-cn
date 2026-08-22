@@ -70,7 +70,8 @@ type middlewareConfig struct {
 	Cors            string            `json:"cors"`
 	APIBaseURL      stackConfig       `json:"APIBaseURL"` // whois/ssl/detail/dns/dnssec/tcping/speed 上游节点池
 	IPLocationAPI   []apiInfo         `json:"IPLocationAPI"` // location/asn 上游节点池（纯数组，无栈）
-	APIKeys         map[string]string `json:"apiKeys"`
+	APIKeys         map[string]string `json:"apiKeys"` // HTTP 转发鉴权：backendID → token（注入 Authorization: Bearer）
+	WSKeys          map[string]string `json:"wsKeys"`  // WS 注册校验：nodeID → key（节点 register 的 key 须匹配）
 }
 
 // stringOrNumber 兼容 JSON 中的字符串与数字（如 "8080" 或 8080）
@@ -87,7 +88,8 @@ var (
 	ACCEPT_DOMAINS   []string          // 允许跨域的域名列表（由 CORS 拆分而来，空则允许所有）
 	API_BASE_URLS    stackConfig       // whois/ssl/detail/dns/dnssec/tcping/speed 上游节点池（DualStack/IPv4/IPv6）
 	IP_LOCATION_APIS []apiInfo         // location/asn 上游节点池（纯数组，无栈）
-	API_KEYS         map[string]string // backendID → token
+	API_KEYS         map[string]string // backendID → HTTP 转发 token（注入 Authorization: Bearer）
+	WS_KEYS          map[string]string // backendID → WS 注册校验 key
 	CONFIG_SOURCE    string            // 配置文件路径
 	RATE_LIMIT       int               // 单 IP 每分钟限流次数（0 表示不限流），默认 120
 	WS_PORT          int               // WS 服务端口（0 = 关闭），缺省 8092，由 readConfig 统一解析
@@ -251,6 +253,26 @@ func lookupAPIKey(backendID string) string {
 	apiKey := apiKeys[backendID]
 
 	return apiKey
+}
+
+// lookupWSKey 查找 nodeID 对应的 WS 注册校验 key。
+// 优先级: setting.json wsKeys > 环境变量 WSKEYS (JSON 字符串)
+// 与 lookupAPIKey 相互独立：apiKeys 用于 HTTP 转发鉴权，wsKeys 用于 WS 注册校验。
+func lookupWSKey(nodeID string) string {
+	var wsKeys map[string]string
+	if len(WS_KEYS) > 0 {
+		wsKeys = WS_KEYS
+	} else if raw := os.Getenv("WSKEYS"); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &wsKeys); err != nil {
+			return ""
+		}
+	} else {
+		return ""
+	}
+
+	wsKey := wsKeys[nodeID]
+
+	return wsKey
 }
 
 // ==================== 业务接口 ====================
@@ -463,7 +485,7 @@ func applyRemoteConfig(mw *middlewareConfig) error {
 	if !ignored("IPLocationAPI") && len(remote.IPLocationAPI) > 0 {
 		mw.IPLocationAPI = remote.IPLocationAPI
 	}
-	// apiKeys 强制忽略：密钥凭据不随远端配置覆盖（与后端 access_token 一致），只从本地 setting.json / env 读取
+	// apiKeys / wsKeys 强制忽略：密钥凭据不随远端配置覆盖（与后端 access_token 一致），只从本地 setting.json / env 读取
 	log.Printf("[middleware] remote config applied from %s", url)
 	return nil
 }
@@ -568,6 +590,15 @@ func readConfig() error {
 			return fmt.Errorf("parse apiKeys: %w", err)
 		}
 	}
+	// wsKeys：WS 注册校验表（nodeID → key），优先级 env WSKEYS > setting.json wsKeys，与 apiKeys 相互独立
+	if err := envJSON("WSKEYS", &mw.WSKeys); err != nil {
+		return err
+	}
+	if len(mw.WSKeys) == 0 {
+		if err := viperValue("wsKeys", &mw.WSKeys); err != nil {
+			return fmt.Errorf("parse wsKeys: %w", err)
+		}
+	}
 
 	// 远端配置（最高优先级）：REMOTE_CONFIG_URL 拉取后覆盖（优先级：远端 > 环境变量 > setting.json）
 	if err := applyRemoteConfig(&mw); err != nil {
@@ -607,6 +638,7 @@ func readConfig() error {
 	API_BASE_URLS = mw.APIBaseURL
 	IP_LOCATION_APIS = mw.IPLocationAPI
 	API_KEYS = mw.APIKeys
+	WS_KEYS = mw.WSKeys
 	CONFIG_SOURCE = viper.ConfigFileUsed()
 	return nil
 }

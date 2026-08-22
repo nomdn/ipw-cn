@@ -86,7 +86,7 @@ sudo bash install.sh
 
 - `WS_URL` 留空时自动使用默认值 `wss://middleware-1.api-ipw.wsmdn.top/ws`；填写自己的中间件地址时须为**完整路径**（含 `wss://` 前缀与 `/ws` 路径，如 `wss://host:8092/ws`），逗号分隔多备
 - `NODE_ID` **强制自动生成 UUID**（无需输入，如 `4580ea9d-2a16-4b8e-8090-5f2e7f0a2229`），适合作为节点唯一标识
-- `NODE_KEY` **必填**：不加 key 禁止启用 WS（中间件 `apiKeys` 必须包含该节点，否则注册被拒 401）；安装完成后脚本会提示把 `"<NODE_ID>": "<NODE_KEY>"` 加入中间件 setting.json 的 `apiKeys`
+- `NODE_KEY` **必填**：不加 key 禁止启用 WS（中间件 `wsKeys` 必须包含该节点，否则注册被拒 401）；安装完成后脚本会提示把 `"<NODE_ID>": "<NODE_KEY>"` 加入中间件 setting.json 的 `wsKeys`
 
 **安装完成后自动生成并启动 systemd 服务**（`lemon-ipw.service`），配置以 `Environment="K=V"` 注入，无需 setting.json。常用管理命令：
 
@@ -114,13 +114,13 @@ sudo systemctl restart lemon-ipw  # 重启（改配置后）
 ```bash
 WS_URL=ws://<中间件IP>:8092/ws \
 NODE_ID=<节点id，与中间件 APIBaseURL / IPLocationAPI 池的节点 id 一致> \
-NODE_KEY=<注册key，与中间件 apiKeys[节点id] 一致；节点未配置 key 可留空> \
+NODE_KEY=<注册key，与中间件 wsKeys[节点id] 一致；节点未配置 key 可留空> \
 ./lemonipw
 ```
 
 - `WS_URL` 支持**逗号分隔多个中间件**（`ws://主:8092/ws,ws://备:8092/ws`），第一个为主，主故障自动切换下一个
 - **双向心跳**：节点每 10s 发 ping，中间件回 pong；心跳发送连续失败 3 次判定中间件不可用，断开后 3s 重试（注册被拒 30s 重试）
 - 收到 `probe` 后节点直调探针函数（带缓存）并回 `probe_result`，结果与 HTTP 通道一致
-- 节点注册带 `NODE_KEY`：中间件 `apiKeys` 里配了 key 就必须传对，否则返回 401 并断开；未配置 key 的节点开放注册
+- 节点注册带 `NODE_KEY`：中间件 `wsKeys` 里配了 key 就必须传对，否则返回 401 并断开；未配置 key 的节点开放注册
 
 **注意**：`NODE_ID` 必须与中间件 `APIBaseURL` / `IPLocationAPI` 池中的节点 `id` 一致，且该节点需配置 `"ws": true` 才会走 WS 通道。未连接中间件时，`ws:true` 节点的拨测会返回 502。

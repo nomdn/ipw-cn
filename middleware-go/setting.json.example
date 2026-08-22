@@ -24,5 +24,6 @@
             "url": "https://cn-jiangsu.api-ipw.wsmdn.top/"
         }
     ],
-    "apiKeys": {}
+    "apiKeys": {},
+    "wsKeys": {}
 }

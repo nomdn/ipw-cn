@@ -19,8 +19,8 @@ import (
 // 配置（readConfig 解析，环境变量优先，其次 setting.json，远端配置可覆盖）：
 //
 //	WS_URL    ws://<中间件>:8092/ws,ws://<备中间件>:8092/ws   （逗号分隔多个中间件，主失败自动切换下一个；不配置 = 不启用）
-//	NODE_ID   节点 id（与中间件 apiKeys 键 / 前端配置 id 一致）
-//	NODE_KEY  注册 key（与中间件 apiKeys[节点id] 一致；中间件未配置该节点 key 时留空）
+//	NODE_ID   节点 id（与中间件 wsKeys 键 / 前端配置 id 一致）
+//	NODE_KEY  注册 key（与中间件 wsKeys[节点id] 一致；中间件未配置该节点 key 时留空）
 //
 // 与 HTTP handler 共用同一批 webtest 探针函数和缓存：收到 probe 后按 apiType 取数（带缓存），
 // 返回处理在本文件内完成，结果经 probe_result 上报。节点 HTTP 接口完全不变。

@@ -25,8 +25,8 @@
 - `cors`：允许的请求来源（逗号分隔）
 - `access_token`：API 访问令牌，留空则不启用鉴权
 - `ws-url`：WS 通道地址——接入独立中间件的 WebSocket 地址（如 `"wss://middleware-1.api-ipw.wsmdn.top/ws"`，须含 `wss://` 前缀与 `/ws` 路径）；支持**逗号分隔多备**（第一个为主，主故障自动切换下一个）；留空 = 不启用 WS 客户端，走原 HTTP 接口
-- `node-id`：WS 节点 id（与中间件 `apiKeys` 键、前端配置的节点 `id` 一致；建议用 UUID 唯一标识）
-- `node-key`：WS 注册 key（与中间件 `apiKeys[节点id]` 一致；**必填**——节点未配置该 key 时中间件拒绝注册并返回 401）
+- `node-id`：WS 节点 id（与中间件 `apiKeys`/`wsKeys` 键、前端配置的节点 `id` 一致；建议用 UUID 唯一标识）
+- `node-key`：WS 注册 key（与中间件 `wsKeys[节点id]` 一致；**必填**——节点未配置该 key 时中间件拒绝注册并返回 401）
 
 以上字段均可用环境变量覆盖（`PORTS` / `DNS_SERVER` / `DNSSEC_DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `IPDB` / `CORS` / `ACCESS_TOKEN` / `WS_URL` / `NODE_ID` / `NODE_KEY`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）。
 
@@ -92,7 +92,7 @@ const config = {
 export { config }
 ```
 
-> 节点 `id` 需与后端节点 / 中间件 `apiKeys` 的键保持一致，中间件按 `id` 注入 `Authorization: Bearer <key>`。
+> 节点 `id` 需与后端节点 / 中间件 `apiKeys` 的键保持一致，中间件按 `id` 注入 `Authorization: Bearer <key>`；WS 通道的节点注册校验另见中间件 `wsKeys`（与后端 `node-key` 对应）。
 
 节点数组项均为 `{ label, id, url }` 结构，例如：
 
@@ -106,7 +106,7 @@ APIBaseURL: {
 }
 ```
 
-`label` 为节点展示名，`id` 为节点唯一标识（中间件 `apiKeys` 也按此 id 注入 key），`url` 为节点 base URL。节点池结构如下：`APIBaseURL` 为拨测节点池，含 `DualStack` / `IPv4` / `IPv6` 三栈（分别对应双栈 / 单栈测试时使用的节点列表，IPv4-only 节点只能放 `IPv4` 栈，IPv6-only 只能放 `IPv6` 栈，不能放 `DualStack`）；`IPLocationAPI` 为 IP 归属地 / ASN 查询节点池，为纯数组（无栈区分）。
+`label` 为节点展示名，`id` 为节点唯一标识（中间件 `apiKeys` 按此 id 注入 HTTP 转发 key，WS 注册校验另见 `wsKeys`），`url` 为节点 base URL。节点池结构如下：`APIBaseURL` 为拨测节点池，含 `DualStack` / `IPv4` / `IPv6` 三栈（分别对应双栈 / 单栈测试时使用的节点列表，IPv4-only 节点只能放 `IPv4` 栈，IPv6-only 只能放 `IPv6` 栈，不能放 `DualStack`）；`IPLocationAPI` 为 IP 归属地 / ASN 查询节点池，为纯数组（无栈区分）。
 
 ### 出站 IP 检测接口（v4OnlyAPI / v6OnlyAPI / DualStackAPI）
 
@@ -160,7 +160,8 @@ APIBaseURL: {
         "IPv6": []
     },
     "IPLocationAPI": [ { "label": "中国 江苏 移动", "id": "cn-jiangsu", "url": "https://cn-jiangsu.api-ipw.wsmdn.top/" } ],
-    "apiKeys": { "cn-jiangsu": "" }
+    "apiKeys": { "cn-jiangsu": "" },
+    "wsKeys": { "cn-jiangsu": "" }
 }
 ```
 
@@ -168,7 +169,8 @@ APIBaseURL: {
 - `ws-port`：WS 服务端口，默认 `8092`，`0` 表示关闭 WS 通道（也可用环境变量 `WS_PORT` 覆盖；优先级：远端配置 > 环境变量 > setting.json）
 - `remote-config-url`：远端配置地址，也可用环境变量 `REMOTE_CONFIG_URL`（环境变量优先）
 - `remote-ingore-config`：**不被远端配置覆盖的配置项列表**（数组），如 `["port", "rate-limit"]`；也可用环境变量 `REMOTE_INGORE_CONFIG`（JSON 数组字符串，优先于 setting.json）
-- `apiKeys`：用于向后端注入 `Authorization: Bearer <key>`，优先级：setting.json `apiKeys` > 环境变量 `APIKEYS`（JSON 字符串）。**敏感凭据，强制忽略，不随远端配置覆盖**。同时作为 **WS 注册校验表**：节点经 WS 注册时，`register` 消息的 `key` 必须与 `apiKeys[节点id]` 一致，否则返回 401 并断开
+- `apiKeys`：用于向后端注入 `Authorization: Bearer <key>`，优先级：setting.json `apiKeys` > 环境变量 `APIKEYS`（JSON 字符串）。**敏感凭据，强制忽略，不随远端配置覆盖**
+- `wsKeys`：WS 注册校验表（`节点id → key`）：节点经 WS 注册时，`register` 消息的 `key` 必须与 `wsKeys[节点id]` 一致，否则返回 401 并断开；优先级：setting.json `wsKeys` > 环境变量 `WSKEYS`（JSON 字符串）。**敏感凭据，强制忽略，不随远端配置覆盖**。与 `apiKeys` **相互独立**——`apiKeys` 管 HTTP 转发鉴权，`wsKeys` 管 WS 注册校验，可分别配置不同 key（例如 WS 节点单独换 key 不影响 HTTP 转发）
 - 节点池与前端 `config/index.ts` 结构一致：`APIBaseURL` 为拨测节点池（含 `DualStack` / `IPv4` / `IPv6` 三栈），`IPLocationAPI` 为 IP 归属地 / ASN 节点池（纯数组，无栈）；节点加 `"ws": true` 可让该节点走 WS 通道通信，详见 [中间件部署 - WS 通道](/guide/deploy-middleware#ws-通道拨测数据经-websocket-传输)
 
 ### WS 通道配置一览
@@ -178,10 +180,10 @@ WS 通道涉及**中间件（服务端）**与**后端节点（客户端）**两
 | 角色 | 配置项 | 环境变量 | 说明 |
 |------|--------|----------|------|
 | 中间件（服务端） | `ws-port` | `WS_PORT` | WS 监听端口，默认 `8092`，`0`=关闭；节点连 `ws(s)://<中间件>:<ws-port>/ws` |
-| 中间件（服务端） | `apiKeys` | `APIKEYS` | 节点注册校验表：`{"<node-id>": "<key>"}`，节点 `register` 的 key 必须匹配 |
+| 中间件（服务端） | `wsKeys` | `WSKEYS` | WS 注册校验表：`{"<node-id>": "<key>"}`，节点 `register` 的 key 必须匹配 |
 | 节点（客户端） | `ws-url` | `WS_URL` | 中间件 WS 完整地址（含 `/ws` 路径），逗号分隔多备主备切换 |
-| 节点（客户端） | `node-id` | `NODE_ID` | 节点 id，与中间件 `apiKeys` 键一致（建议 UUID） |
-| 节点（客户端） | `node-key` | `NODE_KEY` | 注册 key，与中间件 `apiKeys[节点id]` 一致，**必填** |
+| 节点（客户端） | `node-id` | `NODE_ID` | 节点 id，与中间件 `apiKeys`/`wsKeys` 键一致（建议 UUID） |
+| 节点（客户端） | `node-key` | `NODE_KEY` | 注册 key，与中间件 `wsKeys[节点id]` 一致，**必填** |
 
 **链路**：中间件收到 `ws:true` 节点的拨测请求 → 经 WS 发 `probe` → 节点执行探针（直调 webtest 函数 + 缓存）→ `probe_result` 回传 → 中间件返回 HTTP 响应（`Content-Type: application/json`）。节点侧接入步骤见 [后端节点部署 - WS 通道接入](/guide/deploy-node#ws-通道接入可选)。
 
@@ -206,8 +208,8 @@ WS 通道涉及**中间件（服务端）**与**后端节点（客户端）**两
 - 部分字段缺省不会冲掉本地配置——远端只需包含要覆盖的字段
 - **敏感凭据强制忽略，永远不被远端覆盖**（代码写死，无需配置）：
   - 后端 `access_token`：不随远端覆盖（保持 环境变量 > setting.json），远端里的 `access_token` 会被忽略
-  - 中间件 `apiKeys`：不随远端覆盖，远端里的 `apiKeys` 会被忽略
-- `remote-ingore-config`（后端键名 `remote-ingore-config` / env `REMOTE_INGORE_CONFIG`）：额外指定**不被远端覆盖的配置项列表**，数组中的键即使远端下发也不生效。适用于 access_token / apiKeys 之外的敏感项（如 `node-key`、`dns-server` 等），也可覆盖"非空才覆盖"规则
+  - 中间件 `apiKeys` / `wsKeys`：不随远端覆盖，远端里的 `apiKeys`/`wsKeys` 会被忽略
+- `remote-ingore-config`（后端键名 `remote-ingore-config` / env `REMOTE_INGORE_CONFIG`）：额外指定**不被远端覆盖的配置项列表**，数组中的键即使远端下发也不生效。适用于 access_token / apiKeys / wsKeys 之外的敏感项（如 `node-key`、`dns-server` 等），也可覆盖"非空才覆盖"规则
 
 **拉取行为**：
 
@@ -251,7 +253,7 @@ REMOTE_CONFIG_URL=https://example.com/ipw-config.json ./lemonipw
 ```
 
 > [!WARNING]
-> 敏感凭据不得上传远端：`apiKeys`（及后端 `access_token`、节点 key 等密钥）**禁止**写入远端配置——即使写了也会被强制忽略。凭据只放本地 setting.json 或环境变量。
+> 敏感凭据不得上传远端：`apiKeys`/`wsKeys`（及后端 `access_token`、节点 key 等密钥）**禁止**写入远端配置——即使写了也会被强制忽略。凭据只放本地 setting.json 或环境变量。
 
 部署时：
 
@@ -269,7 +271,7 @@ systemd 中同样用 `Environment="REMOTE_CONFIG_URL=..."` 配置。
 
 **安全与排查**：
 
-- **敏感凭据不得上传远端**：远端配置（Gist / 对象存储 / 静态托管等）**禁止包含任何密钥**——`apiKeys`、`access_token`、节点 key（`node-key`）等。这些值会被强制忽略，但远端文件本身一旦泄露等于直接暴露凭据；凭据一律放本地 `setting.json` 或环境变量注入
+- **敏感凭据不得上传远端**：远端配置（Gist / 对象存储 / 静态托管等）**禁止包含任何密钥**——`apiKeys`/`wsKeys`、`access_token`、节点 key（`node-key`）等。这些值会被强制忽略，但远端文件本身一旦泄露等于直接暴露凭据；凭据一律放本地 `setting.json` 或环境变量注入
 - 远端 URL 必须能被节点访问；优先使用 **HTTPS** 地址
 - 远端配置文件如果放在公开可访问的位置（公开 Gist、无鉴权对象存储），即便不含密钥，也等于把节点拓扑、节点 id 等敏感信息公之于众，建议放在私有仓库 / 带鉴权的对象存储 / 内部服务上
 - 常见失败排查：

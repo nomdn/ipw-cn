@@ -236,8 +236,8 @@ var (
 	REMOTE_CONFIG_URL  string
 	REMOTE_INGORE_CONFIG []string // 不被远端配置覆盖的配置项列表（remote-ingore-config / REMOTE_INGORE_CONFIG）
 	WS_URL             string // WS 客户端：中间件 WS 地址（ws://host:port/ws）
-	WS_NODE_ID         string // WS 客户端：节点 id（与中间件 apiKeys 键一致）
-	WS_NODE_KEY        string // WS 客户端：注册 key（与中间件 apiKeys[节点id] 一致，可空）
+	WS_NODE_ID         string // WS 客户端：节点 id（与中间件 wsKeys 键一致）
+	WS_NODE_KEY        string // WS 客户端：注册 key（与中间件 wsKeys[节点id] 一致，可空）
 	VERSION            string
 	COMMIT             string
 	BUILD_TIME         string

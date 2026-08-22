@@ -110,7 +110,7 @@ case "${WS_CHOICE,,}" in
         NODE_ID=$(gen_uuid)
         echo "  节点 id（自动生成 UUID）: $NODE_ID"
         while [ -z "$NODE_KEY" ]; do
-            read -r -p "  注册 key（必填，中间件 apiKeys 必须包含此节点，否则注册被拒 401）: " NODE_KEY
+            read -r -p "  注册 key（必填，中间件 wsKeys 必须包含此节点，否则注册被拒 401）: " NODE_KEY
             if [ -z "$NODE_KEY" ]; then
                 echo "  错误：不加 key 禁止启用 WS，必须提供注册 key"
             fi
@@ -248,7 +248,7 @@ echo "  systemctl restart lemon-ipw     # 重启（改配置后）"
 echo "验证：curl http://127.0.0.1:$PORTS/ 应返回 {\"status\":\"ok\"}"
 if [ -n "$WS_URL" ]; then
     echo ""
-    echo "WS 通道已启用，请把节点注册信息加入中间件 setting.json 的 apiKeys："
+    echo "WS 通道已启用，请把节点注册信息加入中间件 setting.json 的 wsKeys："
     echo "  \"$NODE_ID\": \"$NODE_KEY\""
 fi
 if [ -n "$WS_USED_DEFAULT" ]; then

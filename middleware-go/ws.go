@@ -117,7 +117,7 @@ func (s *wsServer) Handler(w http.ResponseWriter, r *http.Request) {
 		case "register":
 			var reg struct {
 				NodeID string `json:"nodeId"`
-				Key    string `json:"key"` // 注册凭证：与 setting.json apiKeys 配置比对
+				Key    string `json:"key"` // 注册凭证：与 setting.json wsKeys 配置比对
 			}
 			_ = json.Unmarshal(msg.Data, &reg)
 			if reg.NodeID == "" {
@@ -128,9 +128,9 @@ func (s *wsServer) Handler(w http.ResponseWriter, r *http.Request) {
 				s.sendJSON(c, wsMessage{Type: "register_error", Data: mustRaw(wsCommand{Command: "already registered"})})
 				continue
 			}
-			// 注册 key 校验：节点配置了 apiKeys[节点id] 就必须传对 key，否则 401 并断开；
+			// 注册 key 校验：节点配置了 wsKeys[节点id] 就必须传对 key，否则 401 并断开；
 			// 未配置 key 的节点（开放）无需传 key
-			if expected := lookupAPIKey(reg.NodeID); expected != "" && reg.Key != expected {
+			if expected := lookupWSKey(reg.NodeID); expected != "" && reg.Key != expected {
 				log.Printf("[ws] AUTH FAILED for node %s: invalid key", reg.NodeID)
 				s.sendJSON(c, wsMessage{Type: "register_error", Data: mustRaw(struct {
 					Code    int    `json:"code"`
