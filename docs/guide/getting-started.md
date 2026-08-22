@@ -45,7 +45,7 @@ sudo bash install.sh
 
 **WS 通道接入规则**（选 `y` 时）：
 
-- `WS_URL` 留空自动使用默认值 `wss://middleware-1.api-ipw.wsmdn.top`，可改填自己的中间件地址
+- `WS_URL` 留空自动使用默认值 `wss://middleware-1.api-ipw.wsmdn.top/ws`；填写自己的中间件地址须为完整路径（`wss://host:8092/ws` 形式）
 - `NODE_ID` **强制自动生成 UUID**（无需输入）
 - `NODE_KEY` **必填**：不加 key 禁止启用 WS；安装完成后脚本会提示把 `"<NODE_ID>": "<NODE_KEY>"` 加入中间件 `apiKeys`
 

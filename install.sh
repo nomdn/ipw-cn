@@ -100,9 +100,9 @@ NODE_KEY=""
 WS_USED_DEFAULT=""
 case "${WS_CHOICE,,}" in
     y|yes)
-        read -r -p "  中间件 WS 地址（留空=默认 wss://middleware-1.api-ipw.wsmdn.top，逗号分隔可多备）: " WS_URL
+        read -r -p "  中间件 WS 完整地址（含 wss:// 前缀与 /ws 路径，如 wss://host:8092/ws；留空=默认 wss://middleware-1.api-ipw.wsmdn.top/ws；逗号分隔可多备）: " WS_URL
         if [ -z "$WS_URL" ]; then
-            WS_URL="wss://middleware-1.api-ipw.wsmdn.top"
+            WS_URL="wss://middleware-1.api-ipw.wsmdn.top/ws"
             WS_USED_DEFAULT="true"
         fi
         NODE_ID=$(gen_uuid)
@@ -256,6 +256,7 @@ if [ -n "$WS_USED_DEFAULT" ]; then
     echo "  监听端口:     $PORTS"
     echo "  access_token: ${ACCESS_TOKEN:+已设置 (隐藏)}"
     echo "  CORS:         ${CORS:-不限}"
+    echo "  地区-运营商    请自行填写"
     echo "========================================"
 fi
 echo "========================================"

@@ -80,7 +80,7 @@ sudo bash install.sh
 
 **WS 接入特殊规则**：
 
-- `WS_URL` 留空时自动使用默认值 `wss://middleware-1.api-ipw.wsmdn.top`（可改填自己的中间件地址，逗号分隔多备）
+- `WS_URL` 留空时自动使用默认值 `wss://middleware-1.api-ipw.wsmdn.top/ws`；填写自己的中间件地址时须为**完整路径**（含 `wss://` 前缀与 `/ws` 路径，如 `wss://host:8092/ws`），逗号分隔多备
 - `NODE_ID` **强制自动生成 UUID**（无需输入，如 `4580ea9d-2a16-4b8e-8090-5f2e7f0a2229`），适合作为节点唯一标识
 - `NODE_KEY` **必填**：不加 key 禁止启用 WS（中间件 `apiKeys` 必须包含该节点，否则注册被拒 401）；安装完成后脚本会提示把 `"<NODE_ID>": "<NODE_KEY>"` 加入中间件 setting.json 的 `apiKeys`
 
