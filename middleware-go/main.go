@@ -485,7 +485,7 @@ func applyRemoteConfig(mw *middlewareConfig) error {
 	if !ignored("IPLocationAPI") && len(remote.IPLocationAPI) > 0 {
 		mw.IPLocationAPI = remote.IPLocationAPI
 	}
-	// apiKeys / wsKeys 强制忽略：密钥凭据不随远端配置覆盖（与后端 access_token 一致），只从本地 setting.json / env 读取
+	// apiKeys / wsKeys 强制忽略：密钥凭据不随远端配置覆盖（与后端 access-token 一致），只从本地 setting.json / env 读取
 	log.Printf("[middleware] remote config applied from %s", url)
 	return nil
 }

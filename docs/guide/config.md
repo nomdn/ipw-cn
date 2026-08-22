@@ -13,7 +13,7 @@
     "block-private-ips": true,
     "ipdb": true,
     "cors": "",
-    "access_token": ""
+    "access-token": ""
 }
 ```
 
@@ -23,7 +23,7 @@
 - `block-private-ips`：SSRF 防护开关
 - `ipdb`：IP 数据库开关（首次启动自动下载约 200MB，之后每 24h 更新）
 - `cors`：允许的请求来源（逗号分隔）
-- `access_token`：API 访问令牌，留空则不启用鉴权
+- `access-token`：API 访问令牌，留空则不启用鉴权
 - `ws-url`：WS 通道地址——接入独立中间件的 WebSocket 地址（如 `"wss://middleware-1.api-ipw.wsmdn.top/ws"`，须含 `wss://` 前缀与 `/ws` 路径）；支持**逗号分隔多备**（第一个为主，主故障自动切换下一个）；留空 = 不启用 WS 客户端，走原 HTTP 接口
 - `node-id`：WS 节点 id（与中间件 `apiKeys`/`wsKeys` 键、前端配置的节点 `id` 一致；建议用 UUID 唯一标识）
 - `node-key`：WS 注册 key（与中间件 `wsKeys[节点id]` 一致；**必填**——节点未配置该 key 时中间件拒绝注册并返回 401）
@@ -207,9 +207,9 @@ WS 通道涉及**中间件（服务端）**与**后端节点（客户端）**两
 - 远端 JSON 中**非空的字段才覆盖**本地值：字符串非空、数组非空、数字非 0（`rate-limit` 为指针语义，缺省=不覆盖，显式 0=不限流）
 - 部分字段缺省不会冲掉本地配置——远端只需包含要覆盖的字段
 - **敏感凭据强制忽略，永远不被远端覆盖**（代码写死，无需配置）：
-  - 后端 `access_token`：不随远端覆盖（保持 环境变量 > setting.json），远端里的 `access_token` 会被忽略
+  - 后端 `access-token`：不随远端覆盖（保持 环境变量 > setting.json），远端里的 `access-token` 会被忽略
   - 中间件 `apiKeys` / `wsKeys`：不随远端覆盖，远端里的 `apiKeys`/`wsKeys` 会被忽略
-- `remote-ingore-config`（后端键名 `remote-ingore-config` / env `REMOTE_INGORE_CONFIG`）：额外指定**不被远端覆盖的配置项列表**，数组中的键即使远端下发也不生效。适用于 access_token / apiKeys / wsKeys 之外的敏感项（如 `node-key`、`dns-server` 等），也可覆盖"非空才覆盖"规则
+- `remote-ingore-config`（后端键名 `remote-ingore-config` / env `REMOTE_INGORE_CONFIG`）：额外指定**不被远端覆盖的配置项列表**，数组中的键即使远端下发也不生效。适用于 access-token / apiKeys / wsKeys 之外的敏感项（如 `node-key`、`dns-server` 等），也可覆盖"非空才覆盖"规则
 
 **拉取行为**：
 
@@ -253,7 +253,7 @@ REMOTE_CONFIG_URL=https://example.com/ipw-config.json ./lemonipw
 ```
 
 > [!WARNING]
-> 敏感凭据不得上传远端：`apiKeys`/`wsKeys`（及后端 `access_token`、节点 key 等密钥）**禁止**写入远端配置——即使写了也会被强制忽略。凭据只放本地 setting.json 或环境变量。
+> 敏感凭据不得上传远端：`apiKeys`/`wsKeys`（及后端 `access-token`、节点 key 等密钥）**禁止**写入远端配置——即使写了也会被强制忽略。凭据只放本地 setting.json 或环境变量。
 
 部署时：
 
@@ -271,7 +271,7 @@ systemd 中同样用 `Environment="REMOTE_CONFIG_URL=..."` 配置。
 
 **安全与排查**：
 
-- **敏感凭据不得上传远端**：远端配置（Gist / 对象存储 / 静态托管等）**禁止包含任何密钥**——`apiKeys`/`wsKeys`、`access_token`、节点 key（`node-key`）等。这些值会被强制忽略，但远端文件本身一旦泄露等于直接暴露凭据；凭据一律放本地 `setting.json` 或环境变量注入
+- **敏感凭据不得上传远端**：远端配置（Gist / 对象存储 / 静态托管等）**禁止包含任何密钥**——`apiKeys`/`wsKeys`、`access-token`、节点 key（`node-key`）等。这些值会被强制忽略，但远端文件本身一旦泄露等于直接暴露凭据；凭据一律放本地 `setting.json` 或环境变量注入
 - 远端 URL 必须能被节点访问；优先使用 **HTTPS** 地址
 - 远端配置文件如果放在公开可访问的位置（公开 Gist、无鉴权对象存储），即便不含密钥，也等于把节点拓扑、节点 id 等敏感信息公之于众，建议放在私有仓库 / 带鉴权的对象存储 / 内部服务上
 - 常见失败排查：

@@ -23,12 +23,12 @@ curl -fsSL https://raw.githubusercontent.com/nomdn/ipw-cn/main/install.sh -o ins
 ```
 ipw-cn/
 ├── main.go            # Go 后端入口（Gin，自托管）
-├── middleware-go/     # 独立转发中间件（Fiber v3，多节点候选）
+├── webtest/           # NODE模块 网络测试工具库
+├── ipdb/              # NODE模块 IP 数据库模块
+├── ssrf/              # NODE模块 SSRF 防护
+├── middleware-go/     # 独立组件 转发中间件（Fiber v3，多节点候选）
+├── edgeone/           # 独立组件 腾讯 EdgeOne 边缘函数后端
 ├── frontend-ssr/      # Nuxt 4 SSR 前端
-├── edgeone/           # 腾讯 EdgeOne 边缘函数后端
-├── webtest/           # 网络测试工具库
-├── ipdb/              # IP 数据库模块
-├── ssrf/              # SSRF 防护
 ├── docs/              # 文档站
 └── install.sh         # 一键安装脚本
 ```

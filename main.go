@@ -980,7 +980,7 @@ func configValue(CONFIG map[string]any, key string) string {
 // applyRemoteConfig 从远端配置 URL（REMOTE_CONFIG_URL，可由环境变量或 setting.json
 // 的 remote-config-url 提供）拉取配置并覆盖本地配置。
 // 优先级：远端配置 > 环境变量 > setting.json。
-// access_token 例外：保持原有优先级（环境变量 > setting.json），不随远端配置覆盖。
+// access-token 例外：保持原有优先级（环境变量 > setting.json），不随远端配置覆盖。
 func applyRemoteConfig() {
 	url := REMOTE_CONFIG_URL
 	if url == "" {
@@ -1035,7 +1035,7 @@ func applyRemoteConfig() {
 	if v := configValue(CONFIG, "node-key"); v != "" && !ignored("node-key") {
 		WS_NODE_KEY = v
 	}
-	// access_token 不在此覆盖：保持原有优先级（环境变量 > setting.json）
+	// access-token 不在此覆盖：保持原有优先级（环境变量 > setting.json）
 	if CORS != "" {
 		ACCEPT_DOMAINS = strings.Split(CORS, ",")
 	}
@@ -1092,7 +1092,7 @@ func readConfig() {
 		ACCEPT_DOMAINS = strings.Split(CORS, ",")
 	}
 	if ACCESS_TOKEN == "" {
-		ACCESS_TOKEN = viper.GetString("access_token")
+		ACCESS_TOKEN = viper.GetString("access-token")
 	}
 	// REMOTE_CONFIG_URL 优先级：环境变量 > setting.json 的 remote-config-url
 	REMOTE_CONFIG_URL = os.Getenv("REMOTE_CONFIG_URL")

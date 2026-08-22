@@ -9,7 +9,7 @@
     "cors": "",
     "remote-config-url": "",
     "remote-ingore-config": [],
-    "access_token": "",
+    "access-token": "",
     "ws-url": "",
     "node-id": "",
     "node-key": ""

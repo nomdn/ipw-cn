@@ -76,7 +76,7 @@ PORTS=${PORTS:-8080}
 
 read -r -p "单栈模式 SINGLE_STACK（留空=双栈，ipv4 或 ipv6）: " SINGLE_STACK
 
-read -r -p "访问令牌 access_token（留空=不启用鉴权）: " ACCESS_TOKEN
+read -r -p "访问令牌 access-token（留空=不启用鉴权）: " ACCESS_TOKEN
 
 read -r -p "DNS 服务器 [119.28.28.28:53]（主从逗号分隔，如 119.28.28.28:53,223.5.5.5:53）: " DNS_SERVER
 DNS_SERVER=${DNS_SERVER:-119.28.28.28:53}
@@ -142,7 +142,7 @@ echo "安装目录:     $INSTALL_DIR"
 echo "服务名:       lemon-ipw"
 echo "监听端口:     $PORTS"
 echo "单栈模式:     ${SINGLE_STACK:-双栈}"
-echo "access_token: ${ACCESS_TOKEN:+已设置 (隐藏)}"
+echo "access-token: ${ACCESS_TOKEN:+已设置 (隐藏)}"
 echo "DNS:          $DNS_SERVER"
 echo "ipdb:         $IPDB"
 echo "WS 接入:      ${WS_URL:+$WS_URL (id=$NODE_ID, key=${NODE_KEY:+已设置})}${WS_URL:-未启用}"
@@ -260,7 +260,7 @@ if [ -n "$WS_USED_DEFAULT" ]; then
     echo "  WS 地址:      $WS_URL"
     echo "  监听端口:     $PORTS"
     echo "  单栈模式:     ${SINGLE_STACK:-双栈}"
-    echo "  access_token: ${ACCESS_TOKEN:+已设置 (隐藏)}"
+    echo "  access-token: ${ACCESS_TOKEN:+已设置 (隐藏)}"
     echo "  CORS:         ${CORS:-不限}"
     echo "  地区-运营商    请自行填写"
     echo "========================================"
