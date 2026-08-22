@@ -74,6 +74,8 @@ INSTALL_DIR=${INSTALL_DIR:-/opt/lemon-ipw}
 read -r -p "监听端口 [8080]: " PORTS
 PORTS=${PORTS:-8080}
 
+read -r -p "单栈模式 SINGLE_STACK（留空=双栈，ipv4 或 ipv6）: " SINGLE_STACK
+
 read -r -p "访问令牌 access_token（留空=不启用鉴权）: " ACCESS_TOKEN
 
 read -r -p "DNS 服务器 [119.28.28.28:53]（主从逗号分隔，如 119.28.28.28:53,223.5.5.5:53）: " DNS_SERVER
@@ -139,6 +141,7 @@ echo "========================================"
 echo "安装目录:     $INSTALL_DIR"
 echo "服务名:       lemon-ipw"
 echo "监听端口:     $PORTS"
+echo "单栈模式:     ${SINGLE_STACK:-双栈}"
 echo "access_token: ${ACCESS_TOKEN:+已设置 (隐藏)}"
 echo "DNS:          $DNS_SERVER"
 echo "ipdb:         $IPDB"
@@ -181,6 +184,8 @@ SERVICE_FILE="/etc/systemd/system/lemon-ipw.service"
 # 收集环境变量（仅非空的写入，避免空值覆盖默认）
 ENV_LINES=""
 [ -n "$PORTS" ]             && ENV_LINES="${ENV_LINES}Environment=\"PORTS=$PORTS\"
+"
+[ -n "$SINGLE_STACK" ]      && ENV_LINES="${ENV_LINES}Environment=\"SINGLE_STACK=$SINGLE_STACK\"
 "
 [ -n "$ACCESS_TOKEN" ]      && ENV_LINES="${ENV_LINES}Environment=\"ACCESS_TOKEN=$ACCESS_TOKEN\"
 "
@@ -254,6 +259,7 @@ if [ -n "$WS_USED_DEFAULT" ]; then
     echo "  注册 key:     $NODE_KEY"
     echo "  WS 地址:      $WS_URL"
     echo "  监听端口:     $PORTS"
+    echo "  单栈模式:     ${SINGLE_STACK:-双栈}"
     echo "  access_token: ${ACCESS_TOKEN:+已设置 (隐藏)}"
     echo "  CORS:         ${CORS:-不限}"
     echo "  地区-运营商    请自行填写"
