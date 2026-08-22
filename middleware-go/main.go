@@ -319,7 +319,8 @@ func middlewareHandler(c fiber.Ctx) error {
 			if err != nil {
 				return c.Status(fiber.StatusBadGateway).SendString("WS probe failed: " + err.Error())
 			}
-			return c.Status(status).Send(body)
+			// 节点上报的 body 为 JSON，显式指定类型（fiber 默认 text/plain）
+			return c.Status(status).Type("json").Send(body)
 		}
 		apiBaseUrl := node.URL
 		if !strings.HasSuffix(apiBaseUrl, "/") {
@@ -365,7 +366,8 @@ func middlewareHandler(c fiber.Ctx) error {
 			if err != nil {
 				return c.Status(fiber.StatusBadGateway).SendString("WS probe failed: " + err.Error())
 			}
-			return c.Status(status).Send(body)
+			// 节点上报的 body 为 JSON，显式指定类型（fiber 默认 text/plain）
+			return c.Status(status).Type("json").Send(body)
 		}
 		apiBaseUrl := node.URL
 		if !strings.HasSuffix(apiBaseUrl, "/") {
