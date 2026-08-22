@@ -15,10 +15,10 @@ lemon-ipw
 *.tmp
 *.log
 node_modules/
-setting.json
 .workbuddy/
 # VitePress 构建产物
 docs/.vitepress/.temp/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 tmp/
+setting.json
