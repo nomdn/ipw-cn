@@ -60,6 +60,10 @@ go build -o lemonipw main.go
 仓库根目录提供 `install.sh` 一键安装脚本：自动检测架构 → 下载最新 release 二进制 → **交互式输入配置**（无需准备 setting.json，配置以环境变量注入）→ 生成 systemd 服务并守护进程。
 
 ```bash
+# 先下载脚本到本地（勿用 curl | bash 管道执行，避免下载中断导致语法解析错误）
+git clone https://github.com/nomdn/ipw-cn && cd ipw-cn   # 或
+curl -fsSL https://raw.githubusercontent.com/nomdn/ipw-cn/main/install.sh -o install.sh
+
 sudo bash install.sh
 ```
 
@@ -94,6 +98,7 @@ sudo systemctl restart lemon-ipw  # 重启（改配置后）
 
 修改配置：`sudo systemctl edit --full lemon-ipw` 编辑环境变量，保存后 `sudo systemctl daemon-reload && sudo systemctl restart lemon-ipw` 生效。
 
+> [!WARNING]
 > **版本兼容提醒**：v1.1.0 及更早的 release 二进制读的是旧环境变量名 `IPW_WS_URL` / `IPW_NODE_ID` / `IPW_NODE_KEY`（8-20 及之前构建）。install.sh 生成的 service 用的是新名 `WS_URL` / `NODE_ID` / `NODE_KEY`——**旧二进制 + 新 service 会因读不到配置而完全不启用 WS**（启动日志无任何 ws 输出）。升级到包含改名后的新 release 即可；急用可临时把 service 环境变量改回 `IPW_` 前缀。
 
 ## 配置

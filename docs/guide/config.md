@@ -238,7 +238,8 @@ REMOTE_CONFIG_URL=https://example.com/ipw-config.json ./lemonipw
 }
 ```
 
-> **⚠️ 敏感凭据不得上传远端**：`apiKeys`（及后端 `access_token`、节点 key 等密钥）**禁止**写入远端配置——即使写了也会被强制忽略。凭据只放本地 setting.json 或环境变量。
+> [!WARNING]
+> 敏感凭据不得上传远端：`apiKeys`（及后端 `access_token`、节点 key 等密钥）**禁止**写入远端配置——即使写了也会被强制忽略。凭据只放本地 setting.json 或环境变量。
 
 部署时：
 
@@ -256,7 +257,7 @@ systemd 中同样用 `Environment="REMOTE_CONFIG_URL=..."` 配置。
 
 **安全与排查**：
 
-- **⚠️ 敏感凭据不得上传远端**：远端配置（Gist / 对象存储 / 静态托管等）**禁止包含任何密钥**——`apiKeys`、`access_token`、节点 key（`node-key`）等。这些值会被强制忽略，但远端文件本身一旦泄露等于直接暴露凭据；凭据一律放本地 `setting.json` 或环境变量注入
+- **敏感凭据不得上传远端**：远端配置（Gist / 对象存储 / 静态托管等）**禁止包含任何密钥**——`apiKeys`、`access_token`、节点 key（`node-key`）等。这些值会被强制忽略，但远端文件本身一旦泄露等于直接暴露凭据；凭据一律放本地 `setting.json` 或环境变量注入
 - 远端 URL 必须能被节点访问；优先使用 **HTTPS** 地址
 - 远端配置文件如果放在公开可访问的位置（公开 Gist、无鉴权对象存储），即便不含密钥，也等于把节点拓扑、节点 id 等敏感信息公之于众，建议放在私有仓库 / 带鉴权的对象存储 / 内部服务上
 - 常见失败排查：

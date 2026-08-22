@@ -7,7 +7,7 @@ ipw.cn 替代品，提供 IP 查询、网站检测、SSL 检查、DNS 解析、T
 ## 快速开始
 
 ```bash
-curl -o- https://raw.githubusercontent.com/nomdn/ipw-cn/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/nomdn/ipw-cn/main/install.sh -o install.sh && sudo bash install.sh
 ```
 
 完整部署（后端节点 / 独立中间件 / 前端）与配置说明见 [文档](https://github.com/nomdn/ipw-cn/tree/main/docs)：

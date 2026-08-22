@@ -20,11 +20,14 @@
 ```bash
 # 获取安装脚本（任选其一）
 git clone https://github.com/nomdn/ipw-cn && cd ipw-cn   # 或
-curl -LO https://raw.githubusercontent.com/nomdn/ipw-cn/main/install.sh
+curl -fsSL https://raw.githubusercontent.com/nomdn/ipw-cn/main/install.sh -o install.sh
 
 # 执行安装（root 权限）
 sudo bash install.sh
 ```
+
+> [!WARNING]
+> 请勿使用 `curl ... | sudo bash` 管道方式执行：脚本经管道边下载边执行，网络慢/抖动时 bash 会读到不完整的脚本内容，报 `syntax error near unexpected token` 类错误（脚本本身无语法问题）。务必**先下载完整文件再执行**。
 
 脚本会自动完成：检测架构 → 下载最新 release 二进制 → **交互式输入配置** → 生成并启动 systemd 守护进程。
 
