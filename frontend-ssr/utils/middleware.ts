@@ -64,9 +64,12 @@ export function useMiddlewareFetch<T = any>(url: MaybeRefOrGetter<string>, optio
         try {
             for (let i = 0; i < candidates.value.length; i++) {
                 if (id !== requestId) return undefined // 已被更新的请求取代
+                const candidate = candidates.value[i]
+                // noUncheckedIndexedAccess 下索引访问为 string | undefined，防御性跳过
+                if (candidate === undefined) continue
                 try {
                     // $fetch 为 Nuxt 全局注入；候选失败会抛 FetchError（含 status）
-                    const res = await $fetch<T>(candidates.value[i], fetchOptions)
+                    const res = await $fetch<T>(candidate, fetchOptions)
                     if (id !== requestId) return undefined
                     data.value = res
                     return res
