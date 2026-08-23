@@ -83,7 +83,6 @@ jobs:
             - name: Prepare config files for release
               run: |
                 # 后端：发布真实 setting.json（重命名为 setting.json.example）；中间件：只发布 setting.json.example
-                cp setting.json.example setting.json.example
                 cp middleware-go/setting.json.example middleware.setting.json.example
             - name: Release
               uses: softprops/action-gh-release@v3
