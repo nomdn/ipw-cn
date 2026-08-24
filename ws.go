@@ -18,7 +18,7 @@ import (
 //
 // 配置（readConfig 解析，环境变量优先，其次 setting.json，远端配置可覆盖）：
 //
-//	WS_URL    ws://<中间件>:8092/ws,ws://<备中间件>:8092/ws   （逗号分隔多个中间件，主失败自动切换下一个；不配置 = 不启用）
+//	WS_URL    ws://<中间件>:8092/ws,ws://<备中间件>:8092/ws   （逗号分隔多个中间件，同时连接全部，多活；不配置 = 不启用）
 //	NODE_ID   节点 id（与中间件 wsKeys 键 / 前端配置 id 一致）
 //	NODE_KEY  注册 key（与中间件 wsKeys[节点id] 一致；中间件未配置该节点 key 时留空）
 //
@@ -26,7 +26,7 @@ import (
 // 返回处理在本文件内完成，结果经 probe_result 上报。节点 HTTP 接口完全不变。
 //
 // 心跳：NODE 与 MIDDLEWARE 双向心跳。本端每 10s 发一次 ping，发送失败重试，连续失败 3 次
-// 判定当前中间件不可用，断开并切换下一个 WS_URL；收到中间件 ping 回 pong。
+// 判定当前中间件不可用，断开该连接并按同一 URL 独立重连（不影响其他中间件连接）。
 
 // wsProbe 学 HTTP handler：从函数拿数据 + 缓存，返回 (status, body)。
 // raw 与 query 来自中间件 probe 消息（等价于路由参数）。
@@ -360,8 +360,8 @@ const (
 	wsHeartbeatTimeout  = 5 * time.Second
 )
 
-// wsClientOnce 连接并服务单个中间件 URL，返回下次重试前的等待时长：
-//   - 连接/读循环断开 → 3s（切换下一个中间件）
+// wsClientOnce 连接并服务单个中间件 URL，返回下次重试前的等待时长（由 per-URL 连接循环调用）：
+//   - 连接/读循环断开 → 3s（重试同一 URL）
 //   - 注册被拒（register_error）→ 30s（多为 key 配置错误，加大间隔避免空转刷日志）
 //   - 心跳连续失败 wsHeartbeatRetry 次 → 主动断开，3s
 //   - 返回 0 = 配置缺失（不再重试）
@@ -399,7 +399,7 @@ func wsClientOnce(url string) time.Duration {
 	}
 	slog.Info("ws client registered", "nodeId", WS_NODE_ID, "url", url)
 
-	// 心跳 goroutine：每 10s 发 ping，失败重试，连续 3 次失败主动断开（上层切换下一个中间件）
+	// 心跳 goroutine：每 10s 发 ping，失败重试，连续 3 次失败主动断开（per-URL 循环重连同一中间件）
 	stopHeartbeat := make(chan struct{})
 	go func() {
 		fail := 0
@@ -413,7 +413,7 @@ func wsClientOnce(url string) time.Duration {
 				fail++
 				slog.Warn("ws heartbeat send failed", "url", url, "fail", fail, "error", err)
 				if fail >= wsHeartbeatRetry {
-					slog.Warn("ws heartbeat failed too many times, switching middleware", "url", url)
+					slog.Warn("ws heartbeat failed too many times, closing connection (will retry same url)", "url", url)
 					c.Close(websocket.StatusPolicyViolation, "heartbeat timeout")
 					return
 				}
@@ -445,23 +445,35 @@ func wsClientOnce(url string) time.Duration {
 	}
 }
 
-// wsClientLoop 主循环：依次尝试所有配置的中间件 URL（逗号分隔，第一个为主），
-// 当前中间件连接失败或心跳超时 → 3s 后切换下一个；注册被拒 → 30s；全部失败循环重试。
+// wsClientLoop 同时连接所有配置的中间件 URL（逗号分隔，多活）：
+// 每个 URL 由独立 goroutine 负责，各自注册并保持连接，任一断开只重连自己，不影响其他中间件。
+// 注意：多个 URL 指向同一中间件实例时，中间件按 nodeId 单连接，后注册的连接会顶掉先前的。
 func wsClientLoop() {
 	urls := splitWSURLs(WS_URL)
 	if len(urls) == 0 {
 		slog.Info("ws client disabled (WS_URL not set)")
 		return
 	}
+	var wg sync.WaitGroup
+	for _, url := range urls {
+		wg.Add(1)
+		go func(u string) {
+			defer wg.Done()
+			wsClientOnceLoop(u)
+		}(url)
+	}
+	wg.Wait()
+}
+
+// wsClientOnceLoop 单个中间件 URL 的持续连接循环：连接 → 注册 → 心跳/读循环 → 断开重试
+func wsClientOnceLoop(url string) {
 	for {
-		for _, url := range urls {
-			retryDelay := wsClientOnce(url)
-			if retryDelay == 0 {
-				slog.Info("ws client stopped")
-				return
-			}
-			time.Sleep(retryDelay)
+		retryDelay := wsClientOnce(url)
+		if retryDelay == 0 {
+			slog.Info("ws client stopped", "url", url)
+			return
 		}
+		time.Sleep(retryDelay)
 	}
 }
 

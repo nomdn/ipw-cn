@@ -24,7 +24,7 @@
 - `ipdb`：IP 数据库开关（首次启动自动下载约 200MB，之后每 24h 更新）
 - `cors`：允许的请求来源（逗号分隔）
 - `access-token`：API 访问令牌，留空则不启用鉴权
-- `ws-url`：WS 通道地址——接入独立中间件的 WebSocket 地址（如 `"wss://middleware-1.api-ipw.wsmdn.top/ws"`，须含 `wss://` 前缀与 `/ws` 路径）；支持**逗号分隔多备**（第一个为主，主故障自动切换下一个）；留空 = 不启用 WS 客户端，走原 HTTP 接口
+- `ws-url`：WS 通道地址——接入独立中间件的 WebSocket 地址（如 `"wss://middleware-1.api-ipw.wsmdn.top/ws"`，须含 `wss://` 前缀与 `/ws` 路径）；支持**逗号分隔多个中间件，同时连接全部（多活）**，任一断开只重连自己，不影响其他连接；留空 = 不启用 WS 客户端，走原 HTTP 接口
 - `node-id`：WS 节点 id（与中间件 `apiKeys`/`wsKeys` 键、前端配置的节点 `id` 一致；建议用 UUID 唯一标识）
 - `node-key`：WS 注册 key（与中间件 `wsKeys[节点id]` 一致；**必填**——节点未配置该 key 时中间件拒绝注册并返回 401）
 
@@ -181,7 +181,7 @@ WS 通道涉及**中间件（服务端）**与**后端节点（客户端）**两
 |------|--------|----------|------|
 | 中间件（服务端） | `ws-port` | `WS_PORT` | WS 监听端口，默认 `8092`，`0`=关闭；节点连 `ws(s)://<中间件>:<ws-port>/ws` |
 | 中间件（服务端） | `wsKeys` | `WSKEYS` | WS 注册校验表：`{"<node-id>": "<key>"}`，节点 `register` 的 key 必须匹配 |
-| 节点（客户端） | `ws-url` | `WS_URL` | 中间件 WS 完整地址（含 `/ws` 路径），逗号分隔多备主备切换 |
+| 节点（客户端） | `ws-url` | `WS_URL` | 中间件 WS 完整地址（含 `/ws` 路径），逗号分隔多个则**同时连接全部（多活）** |
 | 节点（客户端） | `node-id` | `NODE_ID` | 节点 id，与中间件 `apiKeys`/`wsKeys` 键一致（建议 UUID） |
 | 节点（客户端） | `node-key` | `NODE_KEY` | 注册 key，与中间件 `wsKeys[节点id]` 一致，**必填** |
 

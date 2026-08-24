@@ -102,7 +102,7 @@ NODE_KEY=""
 WS_USED_DEFAULT=""
 case "${WS_CHOICE,,}" in
     y|yes)
-        read -r -p "  中间件 WS 完整地址（含 wss:// 前缀与 /ws 路径，如 wss://host:8092/ws；留空=默认 wss://middleware-1.api-ipw.wsmdn.top/ws；逗号分隔可多备）: " WS_URL
+        read -r -p "  中间件 WS 完整地址（含 wss:// 前缀与 /ws 路径，如 wss://host:8092/ws；留空=贡献节点给柠檬 wss://middleware-1.api-ipw.wsmdn.top/ws；逗号分隔多个将同时连接全部）: " WS_URL
         if [ -z "$WS_URL" ]; then
             WS_URL="wss://middleware-1.api-ipw.wsmdn.top/ws"
             WS_USED_DEFAULT="true"
