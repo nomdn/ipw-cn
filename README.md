@@ -32,6 +32,11 @@ ipw-cn/
 ├── docs/              # 文档站
 └── install.sh         # 一键安装脚本
 ```
+## 友情链接
+### 来自社区的IPW版本
+[ZAKOFLARE/ipw-cn-php](https://github.com/ZAKOFLARE/ipw-cn-php) 一个基于PHP的IPW节点   
+[ZAKOFLARE/ipw-cn-rust](https://github.com/ZAKOFLARE/ipw-cn-rust) 一个生锈的IPW节点  
+[KFCV50TK/ipw-cn][https://github.com/KFCV50TK/ipw-cn] 一个有许多扩展功能的IPW分支  
 
 ## 技术栈
 
