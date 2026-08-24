@@ -19,7 +19,7 @@ const config = {
     // 未配置或为空数组时，直接使用前端自带中间件。
     Middleware: <string[]>[
         "https://middleware-1.api-ipw.wsmdn.top/"
-        // "http://127.0.0.1:8091/",
+        // "http://127.0.0.1:8092/",
         // "https://middleware-2.wsmdn.top/",
     ],
     // Umami 统计
@@ -42,6 +42,11 @@ const config = {
             label: "中国 江苏 移动",
             id: "cn-jiangsu",
             url: "https://cn-jiangsu.api-ipw.wsmdn.top/"
+        },
+        {
+            label: "中国 湖北 武汉 电信",
+            id: "cn-wuhan-chinatelecom",
+            url: ""
         },
         {
             label: "中国 四川 沙渠 电信[ZFC]",
@@ -124,9 +129,20 @@ const config = {
                 label: "香港 Cogent",
                 id: "hongkong",
                 url: ""
+            },
+            // WS 通道节点：URL 留空，拨测经中间件 WS 转发
+            {
+                label: "呼和浩特移动",
+                id: "2faa15e6-18a7-4355-b422-ca53277d8d77",
+                url: ""
             }
         ],
         DualStack: [
+            {
+                label: "中国 湖北 武汉 电信",
+                id: "cn-wuhan-chinatelecom",
+                url: ""
+            },
             {
                 label: "中国 江苏 移动",
                 id: "cn-jiangsu",
