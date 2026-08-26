@@ -66,12 +66,12 @@ type middlewareConfig struct {
 	RateLimit       *int              `json:"rate-limit"` // 单 IP 每分钟限流次数；缺省=默认120，0=不限流
 	WSPort          stringOrNumber   `json:"ws-port"`    // WS 端口：兼容 "8092" 与 8092；缺省=8092，"0"/0=关闭 WS 通道
 	RemoteConfigURL string            `json:"remote-config-url"`
-	RemoteIngoreConfig []string       `json:"remote-ingore-config"` // 不被远端覆盖的配置项列表
+	RemoteIgnoreConfig []string       `json:"remote-ignore-config"` // 不被远端覆盖的配置项列表
 	Cors            string            `json:"cors"`
-	APIBaseURL      stackConfig       `json:"APIBaseURL"` // whois/ssl/detail/dns/dnssec/tcping/speed 上游节点池
-	IPLocationAPI   []apiInfo         `json:"IPLocationAPI"` // location/asn 上游节点池（纯数组，无栈）
-	APIKeys         map[string]string `json:"apiKeys"` // HTTP 转发鉴权：backendID → token（注入 Authorization: Bearer）
-	WSKeys          map[string]string `json:"wsKeys"`  // WS 注册校验：nodeID → key（节点 register 的 key 须匹配）
+	APIBaseURL      stackConfig       `json:"api-base-url"` // whois/ssl/detail/dns/dnssec/tcping/speed 上游节点池
+	IPLocationAPI   []apiInfo         `json:"ip-location-api"` // location/asn 上游节点池（纯数组，无栈）
+	APIKeys         map[string]string `json:"api-keys"` // HTTP 转发鉴权：backendID → token（注入 Authorization: Bearer）
+	WSKeys          map[string]string `json:"ws-keys"`  // WS 注册校验：nodeID → key（节点 register 的 key 须匹配）
 }
 
 // stringOrNumber 兼容 JSON 中的字符串与数字（如 "8080" 或 8080）
@@ -93,7 +93,7 @@ var (
 	CONFIG_SOURCE    string            // 配置文件路径
 	RATE_LIMIT       int               // 单 IP 每分钟限流次数（0 表示不限流），默认 120
 	WS_PORT          int               // WS 服务端口（0 = 关闭），缺省 8092，由 readConfig 统一解析
-	REMOTE_INGORE_CONFIG []string      // 不被远端覆盖的配置项列表（remote-ingore-config / REMOTE_INGORE_CONFIG）
+	REMOTE_IGNORE_CONFIG []string      // 不被远端覆盖的配置项列表（remote-ignore-config / REMOTE_IGNORE_CONFIG）
 )
 
 // HTTP_CLIENT 用于转发上游请求（等价于 TS 中的 $fetch），超时由 HTTP_TIMEOUT 决定
@@ -237,12 +237,12 @@ func forwardUpstream(c fiber.Ctx, apiBaseUrl string, target string, headers map[
 }
 
 // lookupAPIKey 查找 backendID 对应的 token。
-// 优先级: setting.json apiKeys > 环境变量 APIKEYS (JSON 字符串)
+// 优先级: setting.json api-keys > 环境变量 API_KEYS (JSON 字符串)
 func lookupAPIKey(backendID string) string {
 	var apiKeys map[string]string
 	if len(API_KEYS) > 0 {
 		apiKeys = API_KEYS
-	} else if raw := os.Getenv("APIKEYS"); raw != "" {
+	} else if raw := os.Getenv("API_KEYS"); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &apiKeys); err != nil {
 			return ""
 		}
@@ -256,13 +256,13 @@ func lookupAPIKey(backendID string) string {
 }
 
 // lookupWSKey 查找 nodeID 对应的 WS 注册校验 key。
-// 优先级: setting.json wsKeys > 环境变量 WSKEYS (JSON 字符串)
-// 与 lookupAPIKey 相互独立：apiKeys 用于 HTTP 转发鉴权，wsKeys 用于 WS 注册校验。
+// 优先级: setting.json ws-keys > 环境变量 WS_KEYS (JSON 字符串)
+// 与 lookupAPIKey 相互独立：api-keys 用于 HTTP 转发鉴权，ws-keys 用于 WS 注册校验。
 func lookupWSKey(nodeID string) string {
 	var wsKeys map[string]string
 	if len(WS_KEYS) > 0 {
 		wsKeys = WS_KEYS
-	} else if raw := os.Getenv("WSKEYS"); raw != "" {
+	} else if raw := os.Getenv("WS_KEYS"); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &wsKeys); err != nil {
 			return ""
 		}
@@ -321,7 +321,7 @@ func middlewareHandler(c fiber.Ctx) error {
 
 	query := c.Queries()
 
-	// 从 API_KEYS 查找 token，未配置时回退到环境变量 APIKEYS (JSON 字符串)
+	// 从 API_KEYS 查找 token，未配置时回退到环境变量 API_KEYS (JSON 字符串)
 	apiKey := lookupAPIKey(backendID)
 
 	// 构造转发给上游的请求头：不透传客户端 Origin，避免上游 CORS 误判
@@ -453,7 +453,7 @@ func applyRemoteConfig(mw *middlewareConfig) error {
 	}
 	// ignore 列表：数组中的配置项不被远端覆盖（逐键判断跳过）
 	ignored := func(key string) bool {
-		for _, k := range mw.RemoteIngoreConfig {
+		for _, k := range mw.RemoteIgnoreConfig {
 			if k == key {
 				return true
 			}
@@ -478,14 +478,14 @@ func applyRemoteConfig(mw *middlewareConfig) error {
 	if !ignored("cors") && remote.Cors != "" {
 		mw.Cors = remote.Cors
 	}
-	// 节点池结构：APIBaseURL 与 IPLocationAPI（远端非空栈时覆盖本地）
-	if !ignored("APIBaseURL") && stackNonEmpty(remote.APIBaseURL) {
+	// 节点池结构：api-base-url 与 ip-location-api（远端非空栈时覆盖本地）
+	if !ignored("api-base-url") && stackNonEmpty(remote.APIBaseURL) {
 		mw.APIBaseURL = remote.APIBaseURL
 	}
-	if !ignored("IPLocationAPI") && len(remote.IPLocationAPI) > 0 {
+	if !ignored("ip-location-api") && len(remote.IPLocationAPI) > 0 {
 		mw.IPLocationAPI = remote.IPLocationAPI
 	}
-	// apiKeys / wsKeys 强制忽略：密钥凭据不随远端配置覆盖（与后端 access-token 一致），只从本地 setting.json / env 读取
+	// api-keys / ws-keys 强制忽略：密钥凭据不随远端配置覆盖（与后端 access-token 一致），只从本地 setting.json / env 读取
 	log.Printf("[middleware] remote config applied from %s", url)
 	return nil
 }
@@ -554,49 +554,49 @@ func readConfig() error {
 	} else if viper.IsSet("ws-port") {
 		mw.WSPort = stringOrNumber(viper.GetString("ws-port"))
 	}
-	// remote-ingore-config：不被远端覆盖的配置项列表（env JSON 数组 > setting.json 数组）
-	if raw := os.Getenv("REMOTE_INGORE_CONFIG"); raw != "" {
+	// remote-ignore-config：不被远端覆盖的配置项列表（env JSON 数组 > setting.json 数组）
+	if raw := os.Getenv("REMOTE_IGNORE_CONFIG"); raw != "" {
 		var list []string
 		if err := json.Unmarshal([]byte(raw), &list); err != nil {
-			return fmt.Errorf("parse env REMOTE_INGORE_CONFIG: %w", err)
+			return fmt.Errorf("parse env REMOTE_IGNORE_CONFIG: %w", err)
 		}
-		mw.RemoteIngoreConfig = list
+		mw.RemoteIgnoreConfig = list
 	} else {
-		mw.RemoteIngoreConfig = viper.GetStringSlice("remote-ingore-config")
+		mw.RemoteIgnoreConfig = viper.GetStringSlice("remote-ignore-config")
 	}
 
-	// 节点池结构：APIBaseURL 与 IPLocationAPI（env JSON > setting.json）
+	// 节点池结构：api-base-url 与 ip-location-api（env JSON > setting.json）
 	if err := envJSON("API_BASE_URLS", &mw.APIBaseURL); err != nil {
 		return err
 	}
-	if !stackNonEmpty(mw.APIBaseURL) && viper.Get("APIBaseURL") != nil {
-		if err := viperValue("APIBaseURL", &mw.APIBaseURL); err != nil {
-			return fmt.Errorf("parse APIBaseURL: %w", err)
+	if !stackNonEmpty(mw.APIBaseURL) && viper.Get("api-base-url") != nil {
+		if err := viperValue("api-base-url", &mw.APIBaseURL); err != nil {
+			return fmt.Errorf("parse api-base-url: %w", err)
 		}
 	}
 	if err := envJSON("IP_LOCATION_APIS", &mw.IPLocationAPI); err != nil {
 		return err
 	}
-	if len(mw.IPLocationAPI) == 0 && viper.Get("IPLocationAPI") != nil {
-		if err := viperValue("IPLocationAPI", &mw.IPLocationAPI); err != nil {
-			return fmt.Errorf("parse IPLocationAPI: %w", err)
+	if len(mw.IPLocationAPI) == 0 && viper.Get("ip-location-api") != nil {
+		if err := viperValue("ip-location-api", &mw.IPLocationAPI); err != nil {
+			return fmt.Errorf("parse ip-location-api: %w", err)
 		}
 	}
-	if err := envJSON("APIKEYS", &mw.APIKeys); err != nil {
+	if err := envJSON("API_KEYS", &mw.APIKeys); err != nil {
 		return err
 	}
 	if len(mw.APIKeys) == 0 {
-		if err := viperValue("apiKeys", &mw.APIKeys); err != nil {
-			return fmt.Errorf("parse apiKeys: %w", err)
+		if err := viperValue("api-keys", &mw.APIKeys); err != nil {
+			return fmt.Errorf("parse api-keys: %w", err)
 		}
 	}
-	// wsKeys：WS 注册校验表（nodeID → key），优先级 env WSKEYS > setting.json wsKeys，与 apiKeys 相互独立
-	if err := envJSON("WSKEYS", &mw.WSKeys); err != nil {
+	// ws-keys：WS 注册校验表（nodeID → key），优先级 env WS_KEYS > setting.json ws-keys，与 api-keys 相互独立
+	if err := envJSON("WS_KEYS", &mw.WSKeys); err != nil {
 		return err
 	}
 	if len(mw.WSKeys) == 0 {
-		if err := viperValue("wsKeys", &mw.WSKeys); err != nil {
-			return fmt.Errorf("parse wsKeys: %w", err)
+		if err := viperValue("ws-keys", &mw.WSKeys); err != nil {
+			return fmt.Errorf("parse ws-keys: %w", err)
 		}
 	}
 
@@ -607,7 +607,7 @@ func readConfig() error {
 
 	// 校验配置存在（防止在错误的文件上静默空跑）
 	if !stackNonEmpty(mw.APIBaseURL) && len(mw.IPLocationAPI) == 0 {
-		return fmt.Errorf("invalid config in %s: missing endpoint pools (expected APIBaseURL / IPLocationAPI node pools)", path)
+		return fmt.Errorf("invalid config in %s: missing endpoint pools (expected api-base-url / ip-location-api node pools)", path)
 	}
 
 	// 将配置内容写入全局变量
@@ -629,7 +629,7 @@ func readConfig() error {
 		}
 		WS_PORT = n
 	}
-	REMOTE_INGORE_CONFIG = mw.RemoteIngoreConfig
+	REMOTE_IGNORE_CONFIG = mw.RemoteIgnoreConfig
 	CORS = mw.Cors
 	// 逗号分隔的 CORS 域名列表（对齐根 main.go 的 ACCEPT_DOMAINS 用法）
 	if CORS != "" {

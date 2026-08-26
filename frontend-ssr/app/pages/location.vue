@@ -182,10 +182,10 @@ onMounted(async () => {
                   </span>
                 </td>
               </tr>
-              <tr v-if="IPLocation.ip2region && IPLocation.ip2region.split('|').length >= 4">
+              <tr v-if="IPLocation.ip2region && typeof IPLocation.ip2region === 'object' && (IPLocation.ip2region.administrative_area || IPLocation.ip2region.city)">
                 <td class="table-label">IP2Region</td>
-                <td class="table-value">{{ IPLocation.ip2region?.split("|")[0] }}&nbsp;{{ IPLocation.ip2region?.split("|")[1] }}&nbsp;{{ IPLocation.ip2region?.split("|")[2] }}</td>
-                <td class="table-value">{{ IPLocation.ip2region?.split("|")[3] }}</td>
+                <td class="table-value">{{ IPLocation.ip2region?.country }}&nbsp;{{ IPLocation.ip2region?.administrative_area }}&nbsp;{{ IPLocation.ip2region?.city }}</td>
+                <td class="table-value">{{ IPLocation.ip2region?.isp }}</td>
               </tr>
               <tr v-if="IPLocation.geocn && (IPLocation.geocn.administrative_area || IPLocation.geocn.city || IPLocation.geocn.district)">
                 <td class="table-label">GeoCN(仅中国大陆)</td>

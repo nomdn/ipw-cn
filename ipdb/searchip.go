@@ -645,7 +645,8 @@ func SearchIP(ip string, databases ...string) map[string]interface{} {
 				if err != nil {
 					result["ip2region"] = "error: " + err.Error()
 				} else {
-					result["ip2region"] = region
+					// 预分割为结构化 JSON，前端无需再按 "|" 拆字符串
+					result["ip2region"] = parseIP2Region(region)
 				}
 			} else {
 				result["ip2region"] = "not loaded"
@@ -726,4 +727,33 @@ func SearchIP(ip string, databases ...string) map[string]interface{} {
 	}
 
 	return result
+}
+
+// parseIP2Region 将 ip2region 的 "国家|区域|省份|城市|ISP" 管道分隔串预分割为结构化 JSON。
+// 兼容 5 段（标准）与 4 段（无区域段）格式；区域段（通常为 "0"）丢弃。
+// 输出字段与 bilibili / geocn / maxmind_city 对齐：country / administrative_area / city / isp。
+func parseIP2Region(s string) map[string]string {
+	parts := strings.Split(s, "|")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	get := func(i int) string {
+		if i < len(parts) {
+			return parts[i]
+		}
+		return ""
+	}
+	res := map[string]string{"country": get(0)}
+	if len(parts) >= 5 {
+		// 标准格式：国家|区域|省份|城市|ISP
+		res["administrative_area"] = get(2)
+		res["city"] = get(3)
+		res["isp"] = get(4)
+	} else {
+		// 4 段及以下：国家|省份|城市|ISP（无区域段）
+		res["administrative_area"] = get(1)
+		res["city"] = get(2)
+		res["isp"] = get(3)
+	}
+	return res
 }

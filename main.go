@@ -234,10 +234,10 @@ var (
 	ACCEPT_DOMAINS     []string
 	ACCESS_TOKEN       string
 	REMOTE_CONFIG_URL  string
-	REMOTE_INGORE_CONFIG []string // 不被远端配置覆盖的配置项列表（remote-ingore-config / REMOTE_INGORE_CONFIG）
+	REMOTE_IGNORE_CONFIG []string // 不被远端配置覆盖的配置项列表（remote-ignore-config / REMOTE_IGNORE_CONFIG）
 	WS_URL             string // WS 客户端：中间件 WS 地址（ws://host:port/ws）
-	WS_NODE_ID         string // WS 客户端：节点 id（与中间件 wsKeys 键一致）
-	WS_NODE_KEY        string // WS 客户端：注册 key（与中间件 wsKeys[节点id] 一致，可空）
+	WS_NODE_ID         string // WS 客户端：节点 id（与中间件 ws-keys 键一致）
+	WS_NODE_KEY        string // WS 客户端：注册 key（与中间件 ws-keys[节点id] 一致，可空）
 	VERSION            string
 	COMMIT             string
 	BUILD_TIME         string
@@ -993,7 +993,7 @@ func applyRemoteConfig() {
 	}
 	// ignore 列表：数组中的配置项不被远端覆盖（逐键判断跳过）
 	ignored := func(key string) bool {
-		for _, k := range REMOTE_INGORE_CONFIG {
+		for _, k := range REMOTE_IGNORE_CONFIG {
 			if k == key {
 				return true
 			}
@@ -1112,16 +1112,16 @@ func readConfig() {
 	if WS_NODE_KEY == "" {
 		WS_NODE_KEY = viper.GetString("node-key")
 	}
-	// REMOTE_INGORE_CONFIG：不被远端覆盖的配置项列表（JSON 数组字符串，env 优先）
-	if raw := os.Getenv("REMOTE_INGORE_CONFIG"); raw != "" {
+	// REMOTE_IGNORE_CONFIG：不被远端覆盖的配置项列表（JSON 数组字符串，env 优先）
+	if raw := os.Getenv("REMOTE_IGNORE_CONFIG"); raw != "" {
 		var list []string
 		if err := json.Unmarshal([]byte(raw), &list); err == nil {
-			REMOTE_INGORE_CONFIG = list
+			REMOTE_IGNORE_CONFIG = list
 		} else {
-			slog.Warn("invalid REMOTE_INGORE_CONFIG, ignored", "error", err)
+			slog.Warn("invalid REMOTE_IGNORE_CONFIG, ignored", "error", err)
 		}
 	} else {
-		REMOTE_INGORE_CONFIG = viper.GetStringSlice("remote-ingore-config")
+		REMOTE_IGNORE_CONFIG = viper.GetStringSlice("remote-ignore-config")
 	}
 	applyRemoteConfig()
 	slog.Info("SSRF protection initialized", "blockPrivateIPs", ssrf.Enabled())

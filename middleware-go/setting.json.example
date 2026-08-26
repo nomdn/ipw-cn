@@ -4,9 +4,9 @@
     "rate-limit": 120,
     "ws-port": 8092,
     "remote-config-url": "",
-    "remote-ingore-config": [],
+    "remote-ignore-config": [],
     "cors": "",
-    "APIBaseURL": {
+    "api-base-url": {
         "DualStack": [
             {
                 "label": "中国 江苏 移动",
@@ -17,13 +17,13 @@
         "IPv4": [],
         "IPv6": []
     },
-    "IPLocationAPI": [
+    "ip-location-api": [
         {
             "label": "中国 江苏 移动",
             "id": "cn-jiangsu",
             "url": "https://cn-jiangsu.api-ipw.wsmdn.top/"
         }
     ],
-    "apiKeys": {},
-    "wsKeys": {}
+    "api-keys": {},
+    "ws-keys": {}
 }

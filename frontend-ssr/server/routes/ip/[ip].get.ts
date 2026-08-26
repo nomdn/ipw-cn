@@ -71,12 +71,8 @@ function formatLocationText(data: any, ip: string): string {
     for (const [name, value] of sources) {
         if (value === undefined || value === null) continue
         if (typeof value === 'string') {
-            // ip2region 为 "国家|省份|城市|运营商" 管道分隔格式
-            if (value.includes('|')) {
-                const text = value.split('|').filter(Boolean).join(' ')
-                if (text) lines.push(`${name}: ${text}`)
-            } else if (value && value !== 'not loaded') {
-                // 纯字符串结果（error 等）原样输出，"not loaded" 跳过
+            // 纯字符串结果（error 等）原样输出，"not loaded" 跳过
+            if (value && value !== 'not loaded') {
                 lines.push(`${name}: ${value}`)
             }
             continue

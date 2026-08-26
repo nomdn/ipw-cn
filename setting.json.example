@@ -8,7 +8,7 @@
     "ipdb": "false",
     "cors": "",
     "remote-config-url": "",
-    "remote-ingore-config": [],
+    "remote-ignore-config": [],
     "access-token": "",
     "ws-url": "",
     "node-id": "",
