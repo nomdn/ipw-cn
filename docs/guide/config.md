@@ -197,8 +197,8 @@ WS 通道涉及**中间件（服务端）**与**后端节点（客户端）**两
 
 | 组件 | 触发方式 | 远端配置格式 |
 |------|----------|--------------|
-| 后端（主线 `main.go`） | `REMOTE_CONFIG_URL` 或 setting.json 的 `remote-config-url` | 后端 `setting.json` 格式 |
-| 后端（`edgeone/`） | `REMOTE_CONFIG_URL` | 后端 `setting.json` 格式 |
+| 后端（主线 `src/main.go`） | `REMOTE_CONFIG_URL` 或 setting.json 的 `remote-config-url` | 后端 `setting.json` 格式 |
+| 后端（`serverless/edgeone/`） | `REMOTE_CONFIG_URL` | 后端 `setting.json` 格式 |
 | 独立中间件（middleware-go） | `REMOTE_CONFIG_URL` 或 setting.json 的 `remote-config-url` | 中间件 `setting.json` 格式 |
 
 **合并规则**（重要，逐字段生效）：

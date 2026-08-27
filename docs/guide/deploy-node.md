@@ -4,25 +4,25 @@
 
 ## 方案一：EdgeOne
 
-腾讯云 EdgeOne 支持 Go 边缘函数，点击下方按钮通过 **EdgeOne Makers** 一键部署 `edgeone/` 版本（无需本地构建）：
+腾讯云 EdgeOne 支持 Go 边缘函数，点击下方按钮通过 **EdgeOne Makers** 一键部署 `serverless/edgeone/` 版本（无需本地构建）：
 
-[![使用 EdgeOne Makers 部署](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://console.cloud.tencent.com/edgeone/makers/new?repository-url=https%3A%2F%2Fgithub.com%2Fnomdn%2Fipw-cn&root-directory=edgeone)
+[![使用 EdgeOne Makers 部署](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://console.cloud.tencent.com/edgeone/makers/new?repository-url=https%3A%2F%2Fgithub.com%2Fnomdn%2Fipw-cn&root-directory=serverless%2Fedgeone)
 
 
 也可以使用 EdgeOne CLI 手动部署：
 
 ```bash
-cd edgeone
+cd serverless/edgeone
 npx edgeone pages deploy -n ipw-cn -t $EDGEONE_API_TOKEN
 ```
 
-`edgeone/` 版本的配置来源为 环境变量 + 远端配置（`REMOTE_CONFIG_URL`）。
+`serverless/edgeone/` 版本的配置来源为 环境变量 + 远端配置（`REMOTE_CONFIG_URL`）。
 
 ## 方案二：Vercel
 
-点击下方按钮一键导入仓库（部署目标为 `edgeone/cloud-functions` 目录，即 Go 边缘函数版本）：
+点击下方按钮一键导入仓库（部署目标为 `serverless/edgeone/cloud-functions` 目录，即 Go 边缘函数版本）：
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fnomdn%2Fipw-cn&root-directory=edgeone%2Fcloud-functions)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fnomdn%2Fipw-cn&root-directory=serverless%2Fedgeone%2Fcloud-functions)
 
 > [!IMPORTANT]
 > **Serverless 节点均为 IPv4-only**（EdgeOne、Vercel 等平台的出站网络只提供 IPv4）。部署后需要：
@@ -46,8 +46,8 @@ docker run -d -p 8080:8080 \
 ## 方案四：二进制
 
 ```bash
-# 编译
-go build -o lemonipw main.go
+# 编译（Go 后端在 src/ 目录）
+cd src && go build -o lemonipw .
 
 # 运行（与 setting.json 同目录）
 ./lemonipw

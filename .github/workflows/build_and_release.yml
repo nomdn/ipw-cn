@@ -25,31 +25,35 @@ jobs:
                 echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
 
             - name: Build for Linux
+              working-directory: src
               run: |
                 LDFLAGS="-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BUILD_TIME=${BUILD_TIME}"
-                CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -ldflags "$LDFLAGS" -o lemonipw-linux-386
-                CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o lemonipw-linux-amd64
-                CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o lemonipw-linux-arm64
-                CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "$LDFLAGS" -o lemonipw-linux-armv7
-                CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -ldflags "$LDFLAGS" -o lemonipw-linux-armv6
-                CGO_ENABLED=0 GOOS=linux GOARCH=loong64 go build -ldflags "$LDFLAGS" -o lemonipw-linux-loong64
+                CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -ldflags "$LDFLAGS" -o ../lemonipw-linux-386
+                CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ../lemonipw-linux-amd64
+                CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../lemonipw-linux-arm64
+                CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "$LDFLAGS" -o ../lemonipw-linux-armv7
+                CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -ldflags "$LDFLAGS" -o ../lemonipw-linux-armv6
+                CGO_ENABLED=0 GOOS=linux GOARCH=loong64 go build -ldflags "$LDFLAGS" -o ../lemonipw-linux-loong64
             - name: Build for Windows
+              working-directory: src
               run: |
                 LDFLAGS="-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BUILD_TIME=${BUILD_TIME}"
-                CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -ldflags "$LDFLAGS" -o lemonipw-windows-386.exe
-                CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o lemonipw-windows-amd64.exe
-                CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -ldflags "$LDFLAGS" -o lemonipw-windows-arm64.exe
+                CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -ldflags "$LDFLAGS" -o ../lemonipw-windows-386.exe
+                CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ../lemonipw-windows-amd64.exe
+                CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../lemonipw-windows-arm64.exe
             - name: Build for macOS
+              working-directory: src
               run: |
                 LDFLAGS="-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BUILD_TIME=${BUILD_TIME}"
-                CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o lemonipw-darwin-amd64
-                CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o lemonipw-darwin-arm64
+                CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ../lemonipw-darwin-amd64
+                CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../lemonipw-darwin-arm64
             - name: Build for FreeBSD
+              working-directory: src
               run: |
                 LDFLAGS="-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BUILD_TIME=${BUILD_TIME}"
-                CGO_ENABLED=0 GOOS=freebsd GOARCH=386 go build -ldflags "$LDFLAGS" -o lemonipw-freebsd-386
-                CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -ldflags "$LDFLAGS" -o lemonipw-freebsd-amd64
-                CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build -ldflags "$LDFLAGS" -o lemonipw-freebsd-arm64
+                CGO_ENABLED=0 GOOS=freebsd GOARCH=386 go build -ldflags "$LDFLAGS" -o ../lemonipw-freebsd-386
+                CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ../lemonipw-freebsd-amd64
+                CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../lemonipw-freebsd-arm64
             - name: Build middleware-go for Linux
               working-directory: middleware-go
               run: |
@@ -82,7 +86,8 @@ jobs:
                 CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../middleware-go-freebsd-arm64
             - name: Prepare config files for release
               run: |
-                # 后端：发布真实 setting.json（重命名为 setting.json.example）；中间件：只发布 setting.json.example
+                # 后端：发布 src/ 下的 setting.json.example；中间件：只发布 setting.json.example
+                cp src/setting.json.example setting.json.example
                 cp middleware-go/setting.json.example middleware.setting.json.example
             - name: Release
               uses: softprops/action-gh-release@v3

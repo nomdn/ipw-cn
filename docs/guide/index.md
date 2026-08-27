@@ -23,5 +23,5 @@ Lemon IPW 采用前后端分离架构，**后端节点、独立中间件、前�
 | 工作流 | 部署目标 |
 |--------|----------|
 | `frontend-ssr.yml` | SSR 前端 → Cloudflare Workers |
-| `edgeone-backend.yml` | `edgeone/` → EdgeOne Pages |
+| `edgeone-backend.yml` | `serverless/edgeone/` → EdgeOne Pages |
 | `build_and_release.yml` | 后端多平台构建与发布（Release 附带配置文件） |

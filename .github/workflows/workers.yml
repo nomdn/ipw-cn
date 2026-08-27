@@ -4,7 +4,7 @@ on:
   push:
     branches: ['main']
     paths:
-      - 'lemon-getip/**'
+      - 'serverless/lemon-getip/**'
   workflow_dispatch:
 jobs:
   deploy:
@@ -25,6 +25,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          cd lemon-getip
+          cd serverless/lemon-getip
           npm install
           npm run deploy
