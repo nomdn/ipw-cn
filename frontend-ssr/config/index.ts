@@ -111,16 +111,6 @@ const config = {
                 url: ""
             },
             {
-                label: "香港 VpsQuan",
-                id: "hongkong2",
-                url: ""
-            },
-            {
-                label: "北京 京东云 BGP",
-                id: "jdcloud",
-                url: ""
-            },
-            {
                 label: "陕西 西安二 电信",
                 id: "xian2",
                 url: ""
@@ -138,11 +128,7 @@ const config = {
             }
         ],
         DualStack: [
-            {
-                label: "中国 湖北 武汉 电信",
-                id: "cn-wuhan-chinatelecom",
-                url: ""
-            },
+
             {
                 label: "中国 江苏 移动",
                 id: "cn-jiangsu",
@@ -152,6 +138,11 @@ const config = {
                 label: "中国 广东 深圳 龙岗 坪地街道 中国移动",
                 id: "cn-shenzhen",
                 url: "https://cn-shenzhen.api-ipw.wsmdn.top/"
+            },
+            {
+                label: "中国 湖北 武汉 电信",
+                id: "cn-wuhan-chinatelecom",
+                url: ""
             },
             // IP 直连的节点：URL 留空，仅经独立中间件转发
             {
