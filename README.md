@@ -35,7 +35,7 @@ ipw-cn/
 ## 友情链接
 ### 来自社区的IPW版本
 [ZAKOFLARE/ipw-cn-php](https://github.com/ZAKOFLARE/ipw-cn-php) 一个基于PHP的IPW节点   
-[ZAKOFLARE/ipw-cn-rust](https://github.com/ZAKOFLARE/ipw-cn-rust) 一个生锈的IPW节点  
+[ZAKOFLARE/ipw-cn-rust](https://github.com/ZAKOFLARE/ipw-cn-rust) 一个生锈的IPW节点[开发成本过高,已存档]  
 [KFCV50TK/ipw-cn](https://github.com/KFCV50TK/ipw-cn) 一个有许多扩展功能的IPW分支  
 
 ## 技术栈
