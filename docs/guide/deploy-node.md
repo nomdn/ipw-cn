@@ -53,7 +53,7 @@ cd src && go build -o lemonipw .
 ./lemonipw
 ```
 
-首次启动自动下载 IP 数据库（约 200MB），之后每 24 小时自动更新一次。需要守护运行时，可参考下方「方案五」生成的 systemd 服务，或手动创建 service 文件（`ExecStart` 指向二进制，`WorkingDirectory` 指向 `setting.json` 所在目录）。
+首次启动自动下载 IP 数据库（约 450MB），之后每 24 小时自动更新一次。需要守护运行时，可参考下方「方案五」生成的 systemd 服务，或手动创建 service 文件（`ExecStart` 指向二进制，`WorkingDirectory` 指向 `setting.json` 所在目录）。
 
 ## 方案五：一键安装（install.sh）
 
