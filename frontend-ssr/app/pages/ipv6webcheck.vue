@@ -275,6 +275,12 @@ onMounted(() => {
       <h2>...</h2>
       <el-image src="/jingya.jpg"></el-image>
     </div>
+    <div v-else-if="result && result.ipv4 && result.ipv6 && !result.ipv4.is_reachable && result.ipv6.is_reachable">
+      <h3>结论：<CircleCloseFilled style="width: 1.3em;color: red;"/>网站{{ extractHost(testDomain) }} 不支持IPv4访问 </h3>
+      <h2>全球来看，越南、捷克等部分国家已提出了单栈发展目标。尽管我国网络IPv6流量占比大幅提升，但网络中仍存在大量的NAT（网络地址转换）设备和IPv4依赖应用。</h2>
+      <h2 style="text-align: right;">----中国《IPv6发展报告》2026</h2>
+      <el-image src="/jingya.jpg"></el-image>
+    </div>
     <blockquote>
       网站不支持 IPv6可能原因：<br/>
       <br/>
