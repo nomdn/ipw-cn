@@ -210,8 +210,9 @@ func checkOTAUpdate(ghproxy string) {
 		return
 	}
 
-	// 下载到同目录，保证与目标同分区（rename 原子替换）
-	tmpPath := exePath + ".ota.tmp"
+	// 下载到同目录（保证与目标同分区，rename 原子替换），
+	// 临时文件使用远端资产名（如 lemonipw-linux-amd64）+ .tmp 后缀，避免与运行中的 exe 冲突
+	tmpPath := filepath.Join(filepath.Dir(exePath), assetName+".tmp")
 	if err := downloadOTA(ghproxy+assetURL, tmpPath); err != nil {
 		slog.Error("OTA download failed", "error", err)
 		os.Remove(tmpPath)
