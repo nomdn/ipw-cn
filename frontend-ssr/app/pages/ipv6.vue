@@ -25,6 +25,8 @@ interface IPLocationType {
   ip?: string;
   geocn?: any;
   ip2region?: any;
+  ip2location?: any;
+  ip2location_asn?: any;
   maxmind_asn?: any;
   maxmind_city?: any;
   qqwry?: any;
@@ -151,7 +153,8 @@ onMounted(async () => {
               </tr>
               <tr v-if="IPLocation.ip2location && typeof IPLocation.ip2location === 'object' && (IPLocation.ip2location.administrative_area || IPLocation.ip2location.city)">
                 <td class="table-label">IP2Location</td>
-                <td class="table-value" colspan="2">{{ IPLocation.ip2location?.country }}&nbsp;{{ IPLocation.ip2location?.administrative_area }}&nbsp;{{ IPLocation.ip2location?.city }}</td>
+                <td class="table-value">{{ IPLocation.ip2location?.country }}&nbsp;{{ IPLocation.ip2location?.administrative_area }}&nbsp;{{ IPLocation.ip2location?.city }}</td>
+                <td class="table-value">{{ IPLocation.ip2location_asn?.as }}</td>
               </tr>
               <tr v-if="IPLocation.geocn && (IPLocation.geocn.administrative_area || IPLocation.geocn.city || IPLocation.geocn.district)">
                 <td class="table-label">GeoCN(仅中国大陆)</td>
