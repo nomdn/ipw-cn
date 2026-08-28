@@ -26,6 +26,8 @@ var (
 	ip2regionMu   sync.RWMutex
 	ip2locDB      *ip2location.DB
 	ip2locMu      sync.RWMutex
+	ip2locASNDB   *ip2location.DB
+	ip2locASNMu   sync.RWMutex
 	qqwryDB       *ipdbgo.City
 	qqwryMu       sync.RWMutex
 	mmdbDBs       map[string]*maxminddb.Reader
@@ -206,6 +208,27 @@ func loadIP2Location() error {
 	}
 	ip2locDB = db
 	slog.Info("ip2location loaded successfully")
+	return nil
+}
+
+// loadIP2LocationASN 加载 IP2Location LITE ASN 数据库（仅 asn / as 字段）
+func loadIP2LocationASN() error {
+	ip2locASNMu.Lock()
+	defer ip2locASNMu.Unlock()
+
+	if ip2locASNDB != nil {
+		ip2locASNDB.Close()
+		ip2locASNDB = nil
+		slog.Info("Previous ip2location asn closed")
+	}
+
+	db, err := ip2location.OpenDB("./IP2LOCATION-LITE-ASN.IPV6.BIN")
+	if err != nil {
+		slog.Error("failed to open ip2location asn db", "error", err)
+		return err
+	}
+	ip2locASNDB = db
+	slog.Info("ip2location asn loaded successfully")
 	return nil
 }
 
@@ -582,6 +605,13 @@ func closeAllDBs() {
 	}
 	ip2locMu.Unlock()
 
+	ip2locASNMu.Lock()
+	if ip2locASNDB != nil {
+		ip2locASNDB.Close()
+		ip2locASNDB = nil
+	}
+	ip2locASNMu.Unlock()
+
 	qqwryMu.Lock()
 	qqwryDB = nil
 	qqwryMu.Unlock()
@@ -601,6 +631,9 @@ func reloadAll() {
 	}
 	if err := loadIP2Location(); err != nil {
 		slog.Error("Error loading ip2location", "error", err)
+	}
+	if err := loadIP2LocationASN(); err != nil {
+		slog.Error("Error loading ip2location asn", "error", err)
 	}
 	if err := reloadQQWry(); err != nil {
 		slog.Error("Error reloading qqwry.ipdb", "error", err)
@@ -622,6 +655,10 @@ func Init(ghproxy string) {
 	}
 	if err := loadIP2Location(); err != nil {
 		slog.Warn("Local ip2location not available", "error", err)
+		localOK = false
+	}
+	if err := loadIP2LocationASN(); err != nil {
+		slog.Warn("Local ip2location asn not available", "error", err)
 		localOK = false
 	}
 	if err := loadQQWry(); err != nil {
@@ -664,7 +701,7 @@ func Init(ghproxy string) {
 	}()
 }
 
-var allDatabases = []string{"ip2region", "ip2location", "qqwry", "maxmind_city", "maxmind_asn", "dbip_asn", "geocn", "dbip_city", "bilibili"}
+var allDatabases = []string{"ip2region", "ip2location", "ip2location_asn", "qqwry", "maxmind_city", "maxmind_asn", "dbip_asn", "geocn", "dbip_city", "bilibili"}
 
 func SearchIP(ip string, databases ...string) map[string]interface{} {
 	if len(databases) == 0 {
@@ -726,6 +763,29 @@ func SearchIP(ip string, databases ...string) map[string]interface{} {
 				result["ip2location"] = "not loaded"
 			}
 			ip2locMu.RUnlock()
+
+		case "ip2location_asn":
+			ip2locASNMu.RLock()
+			if ip2locASNDB != nil {
+				rec, err := ip2locASNDB.Get_all(ip)
+				if err != nil {
+					result["ip2location_asn"] = "error: " + err.Error()
+				} else {
+					clean := func(s string) string {
+						if s == "" || strings.HasPrefix(s, "This parameter is unavailable") {
+							return ""
+						}
+						return s
+					}
+					result["ip2location_asn"] = map[string]string{
+						"asn": clean(rec.Asn),
+						"as":  clean(rec.As),
+					}
+				}
+			} else {
+				result["ip2location_asn"] = "not loaded"
+			}
+			ip2locASNMu.RUnlock()
 
 		case "qqwry":
 			qqwryMu.RLock()

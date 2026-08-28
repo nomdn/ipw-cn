@@ -33,6 +33,7 @@ func PullDatabase(ghproxy string) error {
 		{ghproxy + "https://raw.githubusercontent.com/wp-statistics/DbIP-City-lite/master/dbip-city-lite.mmdb.gz", "dbip-city-lite.mmdb.gz"},
 		{ghproxy + "https://github.com/jcjc-dev/mmdb-latest/releases/download/dbip-latest/dbip-asn-lite.mmdb", "dbip-asn-lite.mmdb"},
 		{ghproxy + "https://github.com/nomdn/ip2location/releases/latest/download/IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP", "IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP"},
+		{ghproxy + "https://github.com/nomdn/ip2location/releases/latest/download/IP2LOCATION-LITE-ASN.IPV6.BIN.zip", "IP2LOCATION-LITE-ASN.IPV6.BIN.zip"},
 	}
 
 	tmpDir := "./tmp"

@@ -605,10 +605,21 @@ func asnLookupHandler(c *gin.Context) {
 		return
 	}
 
-	result := ipdb.SearchIP(ip, "maxmind_asn", "dbip_asn")
+	result := ipdb.SearchIP(ip, "maxmind_asn", "dbip_asn", "ip2location_asn")
 
 	asnResult := map[string]interface{}{
 		"ip": ip,
+	}
+
+	if ip2locASN, ok := result["ip2location_asn"].(map[string]string); ok && ip2locASN["asn"] != "" {
+		asnResult["ip2location_asn"] = map[string]string{
+			"asn": ip2locASN["asn"],
+			"as":  ip2locASN["as"],
+		}
+	} else if errStr, ok := result["ip2location_asn"].(string); ok {
+		asnResult["ip2location_asn"] = map[string]string{
+			"error": errStr,
+		}
 	}
 
 	if maxmindASN, ok := result["maxmind_asn"].(*ipdb.MMDBASNResult); ok {
