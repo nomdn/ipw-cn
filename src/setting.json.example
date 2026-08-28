@@ -12,5 +12,6 @@
     "access-token": "",
     "ws-url": "",
     "node-id": "",
-    "node-key": ""
+    "node-key": "",
+    "node-ota": "false"
 }

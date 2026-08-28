@@ -124,3 +124,22 @@ NODE_KEY=<注册key，与中间件 ws-keys[节点id] 一致；节点未配置 ke
 - 节点注册带 `NODE_KEY`：中间件 `ws-keys` 里配了 key 就必须传对，否则返回 401 并断开；未配置 key 的节点开放注册
 
 **注意**：`NODE_ID` 必须与中间件 `APIBaseURL` / `IPLocationAPI` 池中的节点 `id` 一致，且该节点需配置 `"ws": true` 才会走 WS 通道。未连接中间件时，`ws:true` 节点的拨测会返回 502。
+
+## OTA 自更新（可选）
+
+节点支持**自动升级**：检测到本仓库有新 Release 时，下载对应平台的二进制、**替换自身并重启**。
+
+```bash
+# 启用（环境变量，或 setting.json 的 "node-ota": "true"）
+NODE_OTA=true ./lemonipw
+```
+
+- **默认关闭**，需显式开启；远端配置（`node-ota`）也可统一开关，除非列入 `remote-ignore-config`
+- **检查时机**：启动 5 分钟后首次检查，之后每 6 小时 + 随机 0~1h 抖动
+- **更新流程**：查询 GitHub 最新 Release → 按 `GOOS/GOARCH` 匹配资产（如 `lemonipw-linux-amd64`、`lemonipw-windows-amd64.exe`）→ 下载到同目录临时文件（经 `gh-proxy` 前缀加速，文件过小则丢弃）→ 当前二进制改名备份为 `<程序名>.old` → 新二进制就位 → 重启
+- **重启方式**：Linux/macOS 用 `exec` 原地替换进程镜像（PID 不变，systemd / Docker 无感）；Windows 另起新进程后退出当前进程
+- **失败处理**：下载/替换失败仅记录日志并继续运行，下次周期重试；替换过程中断会自动回滚到 `.old`
+- **注意事项**：
+  - 二进制所在目录需**可写**（Docker 只读层或只读挂载会导致替换失败）
+  - 建议保留 `.old` 备份以便手动回滚：`mv lemonipw.old lemonipw`
+  - systemd 部署时若 OTA 重启未被托管，可配 `Restart=always` 兜底

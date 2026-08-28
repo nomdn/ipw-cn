@@ -239,6 +239,7 @@ var (
 	WS_URL               string   // WS 客户端：中间件 WS 地址（ws://host:port/ws）
 	WS_NODE_ID           string   // WS 客户端：节点 id（与中间件 ws-keys 键一致）
 	WS_NODE_KEY          string   // WS 客户端：注册 key（与中间件 ws-keys[节点id] 一致，可空）
+	NODE_OTA             string   // OTA 自更新开关（node-ota / NODE_OTA），"true" 时启用
 	VERSION              string
 	COMMIT               string
 	BUILD_TIME           string
@@ -1042,6 +1043,10 @@ func applyRemoteConfig() {
 	if v := configValue(CONFIG, "node-key"); v != "" && !ignored("node-key") {
 		WS_NODE_KEY = v
 	}
+	// OTA 自更新开关（远端可统一开启/关闭节点的自更新）
+	if v := configValue(CONFIG, "node-ota"); v != "" && !ignored("node-ota") {
+		NODE_OTA = v
+	}
 	// access-token 不在此覆盖：保持原有优先级（环境变量 > setting.json）
 	if CORS != "" {
 		ACCEPT_DOMAINS = strings.Split(CORS, ",")
@@ -1119,6 +1124,11 @@ func readConfig() {
 	if WS_NODE_KEY == "" {
 		WS_NODE_KEY = viper.GetString("node-key")
 	}
+	// NODE_OTA：OTA 自更新开关（环境变量 NODE_OTA 或 setting.json 的 node-ota）
+	NODE_OTA = os.Getenv("NODE_OTA")
+	if NODE_OTA == "" {
+		NODE_OTA = viper.GetString("node-ota")
+	}
 	// REMOTE_IGNORE_CONFIG：不被远端覆盖的配置项列表（JSON 数组字符串，env 优先）
 	if raw := os.Getenv("REMOTE_IGNORE_CONFIG"); raw != "" {
 		var list []string
@@ -1178,6 +1188,9 @@ func main() {
 		go wsClientLoop()
 		slog.Info("WS client enabled", "url", WS_URL, "nodeId", WS_NODE_ID)
 	}
+
+	// OTA 自更新：定期检查 GitHub Release 并替换二进制（配置 NODE_OTA / node-ota 启用）
+	initOTA(GH_PROXY)
 
 	r := gin.Default()
 	corsConfig := cors.DefaultConfig()

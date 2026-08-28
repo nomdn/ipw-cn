@@ -27,8 +27,9 @@
 - `ws-url`：WS 通道地址——接入独立中间件的 WebSocket 地址（如 `"wss://middleware-1.api-ipw.wsmdn.top/ws"`，须含 `wss://` 前缀与 `/ws` 路径）；支持**逗号分隔多个中间件，同时连接全部（多活）**，任一断开只重连自己，不影响其他连接；留空 = 不启用 WS 客户端，走原 HTTP 接口
 - `node-id`：WS 节点 id（与中间件 `api-keys`/`ws-keys` 键、前端配置的节点 `id` 一致；建议用 UUID 唯一标识）
 - `node-key`：WS 注册 key（与中间件 `ws-keys[节点id]` 一致；**必填**——节点未配置该 key 时中间件拒绝注册并返回 401）
+- `node-ota`：**OTA 自更新开关**（`"true"` 启用）。启用后节点定期检查本仓库 GitHub Release，发现新版本时下载与当前平台匹配的二进制、**替换自身并重启**（旧二进制保留为 `<程序名>.old` 便于回滚）；默认关闭
 
-以上字段均可用环境变量覆盖（`PORTS` / `DNS_SERVER` / `DNSSEC_DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `IPDB` / `CORS` / `ACCESS_TOKEN` / `WS_URL` / `NODE_ID` / `NODE_KEY`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）。
+以上字段均可用环境变量覆盖（`PORTS` / `DNS_SERVER` / `DNSSEC_DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `IPDB` / `CORS` / `ACCESS_TOKEN` / `WS_URL` / `NODE_ID` / `NODE_KEY` / `NODE_OTA`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）。
 
 ---
 
