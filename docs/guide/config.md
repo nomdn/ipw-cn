@@ -18,8 +18,8 @@
 ```
 
 - `port`：监听端口
-- `dns-server`：DNS 解析服务器，支持**主从 failover**——逗号分隔多地址（如 `"119.28.28.28:53,223.5.5.5:53"`），第一个为主，主查询失败（超时/网络错误）自动切换下一个；每项支持 `ip:port`（UDP）或 `https://` URL（DoH）
-- `dnssec-server`：**DNSSEC 专用** DNS 服务器（同样支持主从逗号分隔）；留空则沿用 `dns-server`
+- `dns-server`：DNS 解析服务器，支持**主从 failover**——逗号分隔多地址（如 `"119.28.28.28:53,223.5.5.5:53"`），第一个为主，主查询失败（超时/网络错误）自动切换下一个；每项支持 `ip:port`（UDP）或 `https://` URL（DoH）；**留空则启动时自动探测系统 DNS**（`IP:Port` 逗号分隔串）兜底
+- `dnssec-server`：**DNSSEC 专用** DNS 服务器（同样支持主从逗号分隔）；留空则沿用 `dns-server`；`dns-server` 与 `dnssec-server` **都留空时自动探测系统 DNS** 兜底
 - `block-private-ips`：SSRF 防护开关
 - `ipdb`：IP 数据库开关（首次启动自动下载约 450MB，之后每 24h 更新）
 - `cors`：允许的请求来源（逗号分隔）

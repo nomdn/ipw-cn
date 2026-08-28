@@ -38,9 +38,9 @@ sudo bash install.sh
 | 安装目录 | `/opt/lemon-ipw` | 二进制与工作目录 |
 | 监听端口 | `8080` | 后端 HTTP 端口 |
 | access-token | 留空 | 留空 = 不启用鉴权 |
-| DNS 服务器 | `119.28.28.28:53` | 主从逗号分隔（如 `119.28.28.28:53,223.5.5.5:53`） |
-| DNSSEC 专用 DNS | 留空 | 留空 = 沿用 dns-server |
-| IP 数据库 | `Y` | 首次启动下载约 200MB |
+| DNS 服务器 | 留空 | 主从逗号分隔（如 `119.28.28.28:53,223.5.5.5:53`）；留空 = 启动时自动探测系统 DNS |
+| DNSSEC 专用 DNS | 留空 | 留空 = 沿用 dns-server；都留空 = 自动探测系统 DNS |
+| IP 数据库 | `Y` | 首次启动下载约 450MB |
 | CORS | 留空 | 逗号分隔允许来源 |
 | 远端配置地址 | 留空 | `REMOTE_CONFIG_URL` |
 | WS 通道接入 | `N` | 选 `y` 后输入 WS_URL / NODE_ID / NODE_KEY |
