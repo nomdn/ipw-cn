@@ -21,7 +21,7 @@
 - `dns-server`：DNS 解析服务器，支持**主从 failover**——逗号分隔多地址（如 `"119.28.28.28:53,223.5.5.5:53"`），第一个为主，主查询失败（超时/网络错误）自动切换下一个；每项支持 `ip:port`（UDP）或 `https://` URL（DoH）
 - `dnssec-server`：**DNSSEC 专用** DNS 服务器（同样支持主从逗号分隔）；留空则沿用 `dns-server`
 - `block-private-ips`：SSRF 防护开关
-- `ipdb`：IP 数据库开关（首次启动自动下载约 200MB，之后每 24h 更新）
+- `ipdb`：IP 数据库开关（首次启动自动下载约 450MB，之后每 24h 更新）
 - `cors`：允许的请求来源（逗号分隔）
 - `access-token`：API 访问令牌，留空则不启用鉴权
 - `ws-url`：WS 通道地址——接入独立中间件的 WebSocket 地址（如 `"wss://middleware-1.api-ipw.wsmdn.top/ws"`，须含 `wss://` 前缀与 `/ws` 路径）；支持**逗号分隔多个中间件，同时连接全部（多活）**，任一断开只重连自己，不影响其他连接；留空 = 不启用 WS 客户端，走原 HTTP 接口

@@ -62,6 +62,7 @@ function formatLocationText(data: any, ip: string): string {
         ['bilibili', data?.bilibili],
         ['geocn', data?.geocn],
         ['ip2region', data?.ip2region],
+        ['ip2location', data?.ip2location],
         ['maxmind_city', data?.maxmind_city],
         ['maxmind_asn', data?.maxmind_asn],
         ['dbip_city', data?.dbip_city],

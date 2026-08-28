@@ -15,6 +15,7 @@ import (
 	"time"
 
 	ipdbgo "github.com/ipipdotnet/ipdb-go"
+	"github.com/ip2location/ip2location-go/v9"
 	"github.com/lionsoul2014/ip2region/binding/golang/service"
 	maxminddb "github.com/oschwald/maxminddb-golang/v2"
 	"resty.dev/v3"
@@ -23,6 +24,8 @@ import (
 var (
 	ip2region     *service.Ip2Region
 	ip2regionMu   sync.RWMutex
+	ip2locDB      *ip2location.DB
+	ip2locMu      sync.RWMutex
 	qqwryDB       *ipdbgo.City
 	qqwryMu       sync.RWMutex
 	mmdbDBs       map[string]*maxminddb.Reader
@@ -163,7 +166,6 @@ func loadIp2Region() error {
 		ip2region.Close()
 		slog.Info("Previous ip2region closed")
 	}
-
 	v4Config, err := service.NewV4Config(service.VIndexCache, "ip2region_v4.xdb", 20)
 	if err != nil {
 		slog.Error("failed to create v4 config", "error", err)
@@ -183,6 +185,27 @@ func loadIp2Region() error {
 	}
 
 	slog.Info("ip2region loaded successfully")
+	return nil
+}
+
+// loadIP2Location 加载 IP2Location LITE DB11 数据库（.BIN 格式，官方 ip2location-go 库读取）
+func loadIP2Location() error {
+	ip2locMu.Lock()
+	defer ip2locMu.Unlock()
+
+	if ip2locDB != nil {
+		ip2locDB.Close()
+		ip2locDB = nil
+		slog.Info("Previous ip2location closed")
+	}
+
+	db, err := ip2location.OpenDB("./IP2LOCATION-LITE-DB11.IPV6.BIN")
+	if err != nil {
+		slog.Error("failed to open ip2location db", "error", err)
+		return err
+	}
+	ip2locDB = db
+	slog.Info("ip2location loaded successfully")
 	return nil
 }
 
@@ -552,6 +575,13 @@ func closeAllDBs() {
 	}
 	ip2regionMu.Unlock()
 
+	ip2locMu.Lock()
+	if ip2locDB != nil {
+		ip2locDB.Close()
+		ip2locDB = nil
+	}
+	ip2locMu.Unlock()
+
 	qqwryMu.Lock()
 	qqwryDB = nil
 	qqwryMu.Unlock()
@@ -569,6 +599,9 @@ func reloadAll() {
 	if err := loadIp2Region(); err != nil {
 		slog.Error("Error loading ip2region", "error", err)
 	}
+	if err := loadIP2Location(); err != nil {
+		slog.Error("Error loading ip2location", "error", err)
+	}
 	if err := reloadQQWry(); err != nil {
 		slog.Error("Error reloading qqwry.ipdb", "error", err)
 	}
@@ -585,6 +618,10 @@ func Init(ghproxy string) {
 	localOK := true
 	if err := loadIp2Region(); err != nil {
 		slog.Warn("Local ip2region not available", "error", err)
+		localOK = false
+	}
+	if err := loadIP2Location(); err != nil {
+		slog.Warn("Local ip2location not available", "error", err)
 		localOK = false
 	}
 	if err := loadQQWry(); err != nil {
@@ -627,7 +664,7 @@ func Init(ghproxy string) {
 	}()
 }
 
-var allDatabases = []string{"ip2region", "qqwry", "maxmind_city", "maxmind_asn", "dbip_asn", "geocn", "dbip_city", "bilibili"}
+var allDatabases = []string{"ip2region", "ip2location", "qqwry", "maxmind_city", "maxmind_asn", "dbip_asn", "geocn", "dbip_city", "bilibili"}
 
 func SearchIP(ip string, databases ...string) map[string]interface{} {
 	if len(databases) == 0 {
@@ -652,6 +689,43 @@ func SearchIP(ip string, databases ...string) map[string]interface{} {
 				result["ip2region"] = "not loaded"
 			}
 			ip2regionMu.RUnlock()
+
+		case "ip2location":
+			ip2locMu.RLock()
+			if ip2locDB != nil {
+				rec, err := ip2locDB.Get_all(ip)
+				if err != nil {
+					result["ip2location"] = "error: " + err.Error()
+				} else {
+					// LITE 免费版不提供 asn/isp 等字段，库会返回占位提示串，统一过滤为空
+					clean := func(s string) string {
+						if s == "" || strings.HasPrefix(s, "This parameter is unavailable") {
+							return ""
+						}
+						return s
+					}
+					loc := map[string]string{
+						"country":             clean(rec.Country_long),
+						"country_code":        clean(rec.Country_short),
+						"administrative_area": clean(rec.Region),
+						"city":                clean(rec.City),
+						"isp":                 clean(rec.Isp),
+						"asn":                 clean(rec.Asn),
+						"district":            clean(rec.District),
+						"zipcode":             clean(rec.Zipcode),
+						"timezone":            clean(rec.Timezone),
+						"usagetype":           clean(rec.Usagetype),
+					}
+					if rec.Latitude != 0 || rec.Longitude != 0 {
+						loc["latitude"] = strconv.FormatFloat(float64(rec.Latitude), 'f', -1, 32)
+						loc["longitude"] = strconv.FormatFloat(float64(rec.Longitude), 'f', -1, 32)
+					}
+					result["ip2location"] = loc
+				}
+			} else {
+				result["ip2location"] = "not loaded"
+			}
+			ip2locMu.RUnlock()
 
 		case "qqwry":
 			qqwryMu.RLock()

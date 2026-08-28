@@ -1,6 +1,7 @@
 package ipdb
 
 import (
+	"archive/zip"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -31,6 +32,7 @@ func PullDatabase(ghproxy string) error {
 		{ghproxy + "https://github.com/ljxi/GeoCN/releases/latest/download/GeoCN.mmdb", "GeoCN.mmdb"},
 		{ghproxy + "https://raw.githubusercontent.com/wp-statistics/DbIP-City-lite/master/dbip-city-lite.mmdb.gz", "dbip-city-lite.mmdb.gz"},
 		{ghproxy + "https://github.com/jcjc-dev/mmdb-latest/releases/download/dbip-latest/dbip-asn-lite.mmdb", "dbip-asn-lite.mmdb"},
+		{ghproxy + "https://github.com/nomdn/ip2location/releases/latest/download/IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP", "IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP"},
 	}
 
 	tmpDir := "./tmp"
@@ -78,6 +80,14 @@ func PullDatabase(ghproxy string) error {
 			slog.Info("Decompressing...", "file", t.name, "output", outName)
 			if err := gunzipFile(dst, "./"+outName); err != nil {
 				slog.Error("Failed to decompress", "file", t.name, "error", err)
+			}
+			os.Remove(dst)
+		}
+		if strings.HasSuffix(t.name, ".zip") {
+			outName := strings.TrimSuffix(t.name, ".zip")
+			slog.Info("Unzipping...", "file", t.name, "output", outName)
+			if err := unzipFile(dst, "./"+outName); err != nil {
+				slog.Error("Failed to unzip", "file", t.name, "error", err)
 			}
 			os.Remove(dst)
 		}
@@ -203,5 +213,66 @@ func gunzipFile(src, dst string) error {
 		return err
 	}
 
+	return nil
+}
+
+// unzipFile 解压 zip 中与目标同名（或同后缀）的文件到 dst（dst 如 ./IP2LOCATION-LITE-DB11.IPV6.BIN）；
+// 找不到匹配文件时回退解压第一个非目录文件。
+func unzipFile(src, dst string) error {
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	target := filepath.Base(dst)
+	var fallback *zip.File
+	for _, f := range r.File {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+		if fallback == nil {
+			fallback = f
+		}
+		if f.Name == target || strings.EqualFold(f.Name, target) || strings.HasSuffix(strings.ToLower(f.Name), strings.ToLower(target)) {
+			return extractZipEntry(f, dst)
+		}
+	}
+	if fallback == nil {
+		return fmt.Errorf("no file found in zip archive %s", src)
+	}
+	return extractZipEntry(fallback, dst)
+}
+
+func extractZipEntry(f *zip.File, dst string) error {
+	rc, err := f.Open()
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+
+	tmp := dst + ".tmp"
+	out, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, rc); err != nil {
+		out.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := out.Sync(); err != nil {
+		out.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := out.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, dst); err != nil {
+		os.Remove(tmp)
+		return err
+	}
 	return nil
 }

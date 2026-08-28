@@ -6,6 +6,7 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
+	github.com/ip2location/ip2location-go/v9 v9.8.0
 	github.com/ipipdotnet/ipdb-go v1.3.3
 	github.com/klauspost/compress v1.19.1
 	github.com/likexian/whois v1.15.7
@@ -60,4 +61,5 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/tools v0.47.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
+	lukechampine.com/uint128 v1.2.0 // indirect
 )
