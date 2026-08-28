@@ -83,7 +83,7 @@ DNS_SERVER=${DNS_SERVER:-119.28.28.28:53}
 
 read -r -p "DNSSEC 专用 DNS（留空=沿用上面 dns-server）: " DNSSEC_DNS_SERVER
 
-read -r -p "启用 IP 数据库 ipdb（首次启动下载约 200MB）[Y/n]: " IPDB_CHOICE
+read -r -p "启用 IP 数据库 ipdb（首次启动下载约 450MB）[Y/n]: " IPDB_CHOICE
 case "${IPDB_CHOICE,,}" in
     n|no) IPDB="false" ;;
     *)    IPDB="true" ;;
@@ -107,8 +107,11 @@ case "${WS_CHOICE,,}" in
             WS_URL="wss://middleware-1.api-ipw.wsmdn.top/ws"
             WS_USED_DEFAULT="true"
         fi
-        NODE_ID=$(gen_uuid)
-        echo "  节点 id（自动生成 UUID）: $NODE_ID"
+        read -r -p "  节点 id（回车自动生成 UUID）: " NODE_ID
+        if [ -z "$NODE_ID" ]; then
+            NODE_ID=$(gen_uuid)
+            echo "  节点 id（自动生成 UUID）: $NODE_ID"
+        fi
         while [ -z "$NODE_KEY" ]; do
             read -r -p "  注册 key（必填，中间件 ws-keys 必须包含此节点，否则注册被拒 401）: " NODE_KEY
             if [ -z "$NODE_KEY" ]; then
@@ -116,6 +119,14 @@ case "${WS_CHOICE,,}" in
             fi
         done
         ;;
+esac
+
+echo ""
+echo "--- OTA 自更新（可选）---"
+read -r -p "启用 OTA 自动升级（跟随 GitHub Release，major 版本不自动升）？[y/N]: " OTA_CHOICE
+NODE_OTA=""
+case "${OTA_CHOICE,,}" in
+    y|yes) NODE_OTA="true" ;;
 esac
 
 echo ""
@@ -146,6 +157,7 @@ echo "access-token: ${ACCESS_TOKEN:+已设置 (隐藏)}"
 echo "DNS:          $DNS_SERVER"
 echo "ipdb:         $IPDB"
 echo "WS 接入:      ${WS_URL:+$WS_URL (id=$NODE_ID, key=${NODE_KEY:+已设置})}${WS_URL:-未启用}"
+echo "OTA 自更新:   ${NODE_OTA:-未启用}"
 echo "========================================"
 read -r -p "确认安装？[Y/n]: " CONFIRM
 case "${CONFIRM,,}" in
@@ -204,6 +216,8 @@ ENV_LINES=""
 [ -n "$NODE_ID" ]           && ENV_LINES="${ENV_LINES}Environment=\"NODE_ID=$NODE_ID\"
 "
 [ -n "$NODE_KEY" ]          && ENV_LINES="${ENV_LINES}Environment=\"NODE_KEY=$NODE_KEY\"
+"
+[ -n "$NODE_OTA" ]          && ENV_LINES="${ENV_LINES}Environment=\"NODE_OTA=$NODE_OTA\"
 "
 if [ -n "$EXTRA_ENVS" ]; then
     while IFS= read -r line; do
