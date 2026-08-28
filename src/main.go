@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AdguardTeam/golibs/netutil/sysresolv"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/klauspost/compress/zstd"
@@ -214,33 +215,33 @@ func (s *Setting) PortString() string {
 // Global variables and structs
 // 全局变量与结构体
 var (
-	PORTS          string
-	GH_PROXY       string
-	LOG_LEVEL      string
-	websiteCache   sync.Map
-	SINGLE_STACK   string
-	DNS_SERVER     string
-	DNSSEC_DNS_SERVER string // DNSSEC 专用 DNS 服务器（dnssec-server / DNSSEC_DNS_SERVER），留空沿用 DNS_SERVER
-	sslCache       sync.Map
-	pingCache      sync.Map
-	speedCache     sync.Map
-	whoisCache     sync.Map
-	asnWhoisCache  sync.Map
-	sfGroup        singleflight.Group
-	V6Client       *resty.Client
-	V4Client       *resty.Client
-	IPDB           string
-	CORS           string
-	ACCEPT_DOMAINS     []string
-	ACCESS_TOKEN       string
-	REMOTE_CONFIG_URL  string
+	PORTS                string
+	GH_PROXY             string
+	LOG_LEVEL            string
+	websiteCache         sync.Map
+	SINGLE_STACK         string
+	DNS_SERVER           string
+	DNSSEC_DNS_SERVER    string // DNSSEC 专用 DNS 服务器（dnssec-server / DNSSEC_DNS_SERVER），留空沿用 DNS_SERVER
+	sslCache             sync.Map
+	pingCache            sync.Map
+	speedCache           sync.Map
+	whoisCache           sync.Map
+	asnWhoisCache        sync.Map
+	sfGroup              singleflight.Group
+	V6Client             *resty.Client
+	V4Client             *resty.Client
+	IPDB                 string
+	CORS                 string
+	ACCEPT_DOMAINS       []string
+	ACCESS_TOKEN         string
+	REMOTE_CONFIG_URL    string
 	REMOTE_IGNORE_CONFIG []string // 不被远端配置覆盖的配置项列表（remote-ignore-config / REMOTE_IGNORE_CONFIG）
-	WS_URL             string // WS 客户端：中间件 WS 地址（ws://host:port/ws）
-	WS_NODE_ID         string // WS 客户端：节点 id（与中间件 ws-keys 键一致）
-	WS_NODE_KEY        string // WS 客户端：注册 key（与中间件 ws-keys[节点id] 一致，可空）
-	VERSION            string
-	COMMIT             string
-	BUILD_TIME         string
+	WS_URL               string   // WS 客户端：中间件 WS 地址（ws://host:port/ws）
+	WS_NODE_ID           string   // WS 客户端：节点 id（与中间件 ws-keys 键一致）
+	WS_NODE_KEY          string   // WS 客户端：注册 key（与中间件 ws-keys[节点id] 一致，可空）
+	VERSION              string
+	COMMIT               string
+	BUILD_TIME           string
 )
 
 type websiteCacheEntry struct {
@@ -278,8 +279,6 @@ type WebsiteCheckResult struct {
 	IPv6 *webtest.WebsiteCheckDetail `json:"ipv6"`
 }
 
-
-
 type SSLCheckResult struct {
 	IPv4 *webtest.SSLCheckDetail `json:"ipv4"`
 	IPv6 *webtest.SSLCheckDetail `json:"ipv6"`
@@ -291,10 +290,6 @@ type TCPingResult struct {
 
 // Business Endpoints
 // 业务端点
-
-
-
-
 
 func checkWebsiteHandler(c *gin.Context) {
 	testUrl := c.Param("url")
@@ -946,6 +941,7 @@ func tokenCheck() gin.HandlerFunc {
 		}
 	}
 }
+
 // fetchRemoteConfig 从远端 URL 拉取配置文件（遵守 setting.json 的 JSON 格式）。
 // 拉取或解析失败时返回错误，调用方应回退到本地配置。
 func fetchRemoteConfig(url string) (map[string]any, error) {
@@ -1135,6 +1131,22 @@ func readConfig() {
 		REMOTE_IGNORE_CONFIG = viper.GetStringSlice("remote-ignore-config")
 	}
 	applyRemoteConfig()
+	var SYSTEM_DNS string
+	if DNS_SERVER == "" || DNSSEC_DNS_SERVER == "" {
+		sysDNS, err := sysresolv.NewSystemResolvers(nil, 53)
+		if err != nil {
+			slog.Warn("Cannot setup reslovers")
+
+		}
+		sysDNS.Refresh()
+		SYSTEM_DNS = webtest.AddrPortsToCSV(sysDNS.Addrs())
+	}
+	if DNSSEC_DNS_SERVER == "" {
+		DNSSEC_DNS_SERVER = SYSTEM_DNS
+	}
+	if DNS_SERVER == "" {
+		DNS_SERVER = SYSTEM_DNS
+	}
 	slog.Info("SSRF protection initialized", "blockPrivateIPs", ssrf.Enabled())
 }
 

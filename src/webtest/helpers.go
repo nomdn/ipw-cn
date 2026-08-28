@@ -1,6 +1,7 @@
 package webtest
 
 import (
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
@@ -41,4 +42,14 @@ func measureDNSTime(urlStr string, version string) float64 {
 		return 0
 	}
 	return time.Since(start).Seconds() * 1000
+}
+func AddrPortsToCSV(addrs []netip.AddrPort) string {
+	if len(addrs) == 0 {
+		return ""
+	}
+	parts := make([]string, len(addrs))
+	for i, addr := range addrs {
+		parts[i] = addr.String() // 自动格式化为 "IP:Port"
+	}
+	return strings.Join(parts, ",")
 }
