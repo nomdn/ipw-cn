@@ -189,8 +189,7 @@ onMounted(async () => {
               </tr>
               <tr v-if="IPLocation.ip2location && typeof IPLocation.ip2location === 'object' && (IPLocation.ip2location.administrative_area || IPLocation.ip2location.city)">
                 <td class="table-label">IP2Location</td>
-                <td class="table-value">{{ IPLocation.ip2location?.country }}&nbsp;{{ IPLocation.ip2location?.administrative_area }}&nbsp;{{ IPLocation.ip2location?.city }}</td>
-                <td class="table-value">{{ IPLocation.ip2location?.zipcode }}&nbsp;{{ IPLocation.ip2location?.timezone }}</td>
+                <td class="table-value" colspan="2">{{ IPLocation.ip2location?.country }}&nbsp;{{ IPLocation.ip2location?.administrative_area }}&nbsp;{{ IPLocation.ip2location?.city }}</td>
               </tr>
               <tr v-if="IPLocation.geocn && (IPLocation.geocn.administrative_area || IPLocation.geocn.city || IPLocation.geocn.district)">
                 <td class="table-label">GeoCN(仅中国大陆)</td>
