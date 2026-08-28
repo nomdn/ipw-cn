@@ -135,6 +135,30 @@ func compareVersion(latest, current string) int {
 	return 0
 }
 
+// majorSame 判断 latest 与 current 的 major 段是否相同。
+// 任一段无法解析（如本地构建 VERSION 为空）时返回 true（放行，不拦截更新）。
+func majorSame(latest, current string) bool {
+	parseMajor := func(s string) (int, bool) {
+		s = strings.TrimSpace(s)
+		s = strings.TrimPrefix(s, "v")
+		s = strings.TrimPrefix(s, "V")
+		if i := strings.IndexAny(s, "-+."); i >= 0 {
+			s = s[:i]
+		}
+		n, err := strconv.Atoi(s)
+		if err != nil {
+			return 0, false
+		}
+		return n, true
+	}
+	lm, lok := parseMajor(latest)
+	cm, cok := parseMajor(current)
+	if !lok || !cok {
+		return true
+	}
+	return lm == cm
+}
+
 // fetchLatestRelease 查询 GitHub 最新 Release 信息
 func fetchLatestRelease() (*otaRelease, error) {
 	client := resty.New().SetTimeout(30 * time.Second)
@@ -187,6 +211,13 @@ func checkOTAUpdate(ghproxy string) {
 	cmp := compareVersion(rel.TagName, VERSION)
 	if cmp <= 0 {
 		slog.Debug("OTA already up to date", "latest", rel.TagName, "current", VERSION)
+		return
+	}
+
+	// major 版本变化（如 3.x → 4.x）通常含破坏性变更，不自动更新，需人工升级
+	if !majorSame(rel.TagName, VERSION) {
+		slog.Warn("OTA skipped: major version upgrade requires manual action",
+			"latest", rel.TagName, "current", VERSION)
 		return
 	}
 

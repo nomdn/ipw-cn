@@ -136,6 +136,7 @@ NODE_OTA=true ./lemonipw
 
 - **默认关闭**，需显式开启；远端配置（`node-ota`）也可统一开关，除非列入 `remote-ignore-config`
 - **检查时机**：启动 5 分钟后首次检查，之后每 6 小时 + 随机 0~1h 抖动
+- **major 变化不自动更新**：仅 minor/patch 升级自动跟进（如 3.1.0 → 3.2.0）；主版本变化（如 3.x → 4.x，通常含破坏性变更）会跳过并告警，需人工升级
 - **更新流程**：查询 GitHub 最新 Release → 按 `GOOS/GOARCH` 匹配资产（如 `lemonipw-linux-amd64`、`lemonipw-windows-amd64.exe`）→ 下载到同目录临时文件（经 `gh-proxy` 前缀加速，文件过小则丢弃）→ 当前二进制改名备份为 `<程序名>.old` → 新二进制就位 → 重启
 - **重启方式**：Linux/macOS 用 `exec` 原地替换进程镜像（PID 不变，systemd / Docker 无感）；Windows 另起新进程后退出当前进程
 - **失败处理**：下载/替换失败仅记录日志并继续运行，下次周期重试；替换过程中断会自动回滚到 `.old`
