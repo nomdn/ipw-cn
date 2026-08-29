@@ -799,9 +799,9 @@ func main() {
 	app.Get("/v1/*", middlewareHandler)
 	app.Get("/middleware/*", middlewareHandler)
 
-	// 监听地址，优先级: 环境变量 PORT > setting.json port > 默认 8080。
-	// 写回全局 PORT：waitChildReady 的健康检查地址要用同一个端口
-	PORT = os.Getenv("PORT")
+	// 监听地址：readConfig 已按 env PORT > setting.json port 填好全局 PORT，
+	// 这里只在为空时补默认 8080——不要再用 Getenv 覆盖，否则 setting.json 的 port 失效。
+	// waitChildReady 的健康检查地址要用同一个端口
 	if PORT == "" {
 		PORT = "8080"
 	}
