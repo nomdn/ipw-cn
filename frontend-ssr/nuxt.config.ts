@@ -64,6 +64,13 @@ export default defineNuxtConfig({
   runtimeConfig: {
     indexnowKey: '',
     apiKeys: '',
+    // 数据上报（协议见收集中心中间件 report.go）。敏感项 token 只从环境变量注入，不进仓库。
+    // NUXT_BOCE_REPORT_URL：收集中心基址（如 https://collector.example.com）；空 = 不上报
+    boceReportUrl: '',
+    // NUXT_BOCE_REPORT_TOKEN：收集中心 /report 鉴权 token
+    boceReportToken: '',
+    // NUXT_BOCE_REPORT_INSTANCE：上报方标识（存收集库 origin）；空 = 默认 frontend-ssr
+    boceReportInstance: '',
     public: {
       siteUrl: config.siteUrl,
       docConfig: docConfig,

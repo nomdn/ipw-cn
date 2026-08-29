@@ -14,5 +14,8 @@
     "ws-url": "",
     "node-id": "",
     "node-key": "",
-    "node-ota": "false"
+    "node-ota": "false",
+    "report-url": "",
+    "report-token": "",
+    "report-interval-seconds": 15
 }

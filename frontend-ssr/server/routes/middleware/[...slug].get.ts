@@ -21,6 +21,54 @@ function checkRateLimit(ip: string, limit: number): boolean {
     return entry.count <= limit
 }
 
+// ---- 数据上报（协议见收集中心中间件 ipw-boce 的 report.go）：调一次上报一次 ----
+// 配置经 runtimeConfig 从环境变量注入：
+//   NUXT_BOCE_REPORT_URL       收集中心基址（如 https://collector.example.com）；空 = 不上报
+//   NUXT_BOCE_REPORT_TOKEN     /report 鉴权 token（敏感，仅环境变量，不进仓库）
+//   NUXT_BOCE_REPORT_INSTANCE  上报方标识（存收集库 probe_results.origin）；空 = 默认 frontend-ssr
+// 语义：本入口只报"自己转发的请求"（fire-and-forget，失败丢弃不影响主链路）；
+//       配置了上报时，转发请求会带 X-Boce-Reporter 标记头，节点据此跳过，避免双算。
+const BOCE_PROBE_TYPES = new Set(['tcping', 'udping', 'speed'])
+const BOCE_INSTANCE_DEFAULT = 'frontend-ssr'
+
+function boceReportOnce(rt: any, backendID: string, apiType: string, raw: string, status: number, latencyMs: number, body?: any) {
+    const base: string = rt.boceReportUrl || ''
+    if (!base) return
+    const payload: Record<string, any> = {
+        instance: rt.boceReportInstance || BOCE_INSTANCE_DEFAULT,
+        stats: [{
+            nodeId: backendID,
+            apiType,
+            total: 1,
+            errors: status >= 500 ? 1 : 0,
+            latencySumMs: latencyMs,
+            latencyMaxMs: latencyMs,
+            minute: 0, // 0 = 收集器按自己时钟入桶（前端时钟不可信也不影响聚合口径）
+        }],
+    }
+    if (BOCE_PROBE_TYPES.has(apiType)) {
+        payload.probes = [{
+            nodeId: backendID,
+            apiType,
+            raw,
+            status,
+            latencyMs,
+            source: 'http',
+            body: body === undefined || body === null ? undefined : body,
+        }]
+    }
+    const base2 = base.replace(new RegExp('/+$'), '')
+    $fetch(`${base2}/report`, {
+        method: 'POST',
+        headers: {
+            authorization: `Bearer ${rt.boceReportToken || ''}`,
+            'content-type': 'application/json',
+        },
+        body: payload,
+        timeout: 5_000,
+    }).catch(() => {}) // 上报失败静默：不影响转发响应
+}
+
 export default defineEventHandler(async (event) => {
     // 1) Origin / Referer 校验：跨域浏览器调用一律拒绝。
     //    注意：无 Origin/Referer 的服务端 SSR 调用与命令行请求无法区分，仅靠下方限流约束。
@@ -77,9 +125,10 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Invalid path' })
     }
     const query = getQuery(event)
+    const runtimeConfig = useRuntimeConfig(event)
 
     // 从运行时变量读取 APIKEYS (JSON字符串)，解析后按 backendID 查找 token
-    const runtimeConfig = useRuntimeConfig(event)
+    // （runtimeConfig 同时提供数据上报配置 boceReport*，见文件头说明）
     let apiKey: string | undefined
     try {
         const apiKeysMap: Record<string, string> = (runtimeConfig.apiKeys || {}) as Record<string, string>
@@ -90,13 +139,19 @@ export default defineEventHandler(async (event) => {
     } catch (e) {
         console.debug('[middleware debug] JSON parse FAILED:', e)
     }
-    // 转发头：不透传 Origin，避免上游 CORS 误判；仅按需注入 Authorization
+    // 转发头：不透传 Origin，避免上游 CORS 误判；仅按需注入 Authorization。
+    // 配置了数据上报时注入 X-Boce-Reporter 标记头（本入口会计数上报，节点据此跳过防双算；
+    // 未配置上报则不打标记，由节点兜底记账）
     const authHeaders: Record<string, string> = {}
     if (apiKey) {
         authHeaders['Authorization'] = `Bearer ${apiKey}`
         console.debug('[middleware debug] authHeaders SET Authorization:', `Bearer ${apiKey.slice(0, 1)}...`)
     } else {
         console.debug('[middleware debug] authHeaders NO Authorization header')
+    }
+    const boceInstance = (runtimeConfig.boceReportInstance || BOCE_INSTANCE_DEFAULT) as string
+    if (runtimeConfig.boceReportUrl) {
+        authHeaders['X-Boce-Reporter'] = boceInstance
     }
     
     if (apiType === 'whois' || apiType === 'dns' || apiType === 'location' || apiType === 'ssl' || apiType === 'asn' || apiType === 'dnssec' || apiType === 'detail') {
@@ -132,6 +187,8 @@ export default defineEventHandler(async (event) => {
         if (apiBaseUrl.slice(-1) != '/') {
             apiBaseUrl = `${apiBaseUrl}/`
             }
+        const boceStart = Date.now()
+        let upstreamStatus = 200
             data = await $fetch(`${apiBaseUrl}v1/${apiType}/${raw}`, {
                 method: 'GET',
                 headers: authHeaders,
@@ -141,13 +198,16 @@ export default defineEventHandler(async (event) => {
                 const errStatus = error?.status ?? error?.statusCode
                 if (errStatus) {
                     // 上游返回的错误响应（4xx/5xx），直接转发其状态码与错误体，不包装成 500
+                    upstreamStatus = errStatus
                     setResponseStatus(event, errStatus)
                     return error.data ?? {}
                 }
                 // 网络层错误（无法连接上游）
+                upstreamStatus = 502
                 setResponseStatus(event, 502)
                 return { statusCode: 502, statusMessage: 'Backend unreachable' }
             })
+        boceReportOnce(runtimeConfig, backendID, apiType, raw, upstreamStatus, Date.now() - boceStart)
         return data
     }else if (apiType === 'tcping' || apiType === 'udping' || apiType === 'speed') {
         // tcping/udping/speed 统一走 APIBaseURL 节点池（平铺三栈）
@@ -174,6 +234,8 @@ export default defineEventHandler(async (event) => {
             Object.entries(query).filter(([_, v]) => v !== undefined) as [string, string][]
         ).toString()
 
+        const boceStart = Date.now()
+        let upstreamStatus = 200
         data = await $fetch(`${apiBaseUrl}v1/${apiType}/${raw}${queryString ? '?' + queryString : ''}`, {
                 method: 'GET',
                 headers: authHeaders,
@@ -183,13 +245,16 @@ export default defineEventHandler(async (event) => {
                 const errStatus = error?.status ?? error?.statusCode
                 if (errStatus) {
                     // 上游返回的错误响应（4xx/5xx），直接转发其状态码与错误体，不包装成 500
+                    upstreamStatus = errStatus
                     setResponseStatus(event, errStatus)
                     return error.data ?? {}
                 }
                 // 网络层错误（无法连接上游）
+                upstreamStatus = 502
                 setResponseStatus(event, 502)
                 return { statusCode: 502, statusMessage: 'Backend unreachable' }
             })
+        boceReportOnce(runtimeConfig, backendID, apiType, raw, upstreamStatus, Date.now() - boceStart, data)
         return data
 
         

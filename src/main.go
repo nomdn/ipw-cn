@@ -15,10 +15,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/AdguardTeam/golibs/netutil/sysresolv"
@@ -241,6 +243,9 @@ var (
 	WS_URL               string        // WS 客户端：中间件 WS 地址（ws://host:port/ws）
 	WS_NODE_ID           string        // WS 客户端：节点 id（与中间件 ws-keys 键一致）
 	WS_NODE_KEY          string        // WS 客户端：注册 key（与中间件 ws-keys[节点id] 一致，可空）
+	REPORT_URL           string        // 数据上报：收集中心 HTTP 接口基址（report-url / REPORT_URL），WS 全部掉线时的兜底通道
+	REPORT_TOKEN         string        // 数据上报：/report 鉴权 token（report-token / REPORT_TOKEN）
+	REPORT_INTERVAL      int           // 数据上报间隔秒（report-interval-seconds / REPORT_INTERVAL_SECONDS），缺省 15
 	NODE_OTA             string        // OTA 自更新开关（node-ota / NODE_OTA），"true" 时启用
 	TRUSTED_PROXIES      string        // 可信代理列表（trusted-proxies / TRUSTED_PROXIES），逗号分隔 IP/CIDR，供 ClientIP 判定
 	httpServer           *http.Server  // 显式持有的 HTTP 服务（Windows OTA 优雅重启需要先 Shutdown）
@@ -1070,6 +1075,10 @@ func applyRemoteConfig() {
 	if v := configValue(CONFIG, "node-key"); v != "" && !ignored("node-key") {
 		WS_NODE_KEY = v
 	}
+	// 数据上报收集中心（远端可统一下发；report-token 属凭据，不随远端覆盖）
+	if v := configValue(CONFIG, "report-url"); v != "" && !ignored("report-url") {
+		REPORT_URL = v
+	}
 	// OTA 自更新开关（远端可统一开启/关闭节点的自更新）
 	if v := configValue(CONFIG, "node-ota"); v != "" && !ignored("node-ota") {
 		NODE_OTA = v
@@ -1158,6 +1167,23 @@ func readConfig() {
 	WS_NODE_KEY = os.Getenv("NODE_KEY")
 	if WS_NODE_KEY == "" {
 		WS_NODE_KEY = viper.GetString("node-key")
+	}
+	// 数据上报（report-url / report-token / report-interval-seconds），env 优先；详见 report.go
+	REPORT_URL = os.Getenv("REPORT_URL")
+	if REPORT_URL == "" {
+		REPORT_URL = viper.GetString("report-url")
+	}
+	REPORT_TOKEN = os.Getenv("REPORT_TOKEN")
+	if REPORT_TOKEN == "" {
+		REPORT_TOKEN = viper.GetString("report-token")
+	}
+	REPORT_INTERVAL = viper.GetInt("report-interval-seconds")
+	if v := os.Getenv("REPORT_INTERVAL_SECONDS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			REPORT_INTERVAL = n
+		}
+	} else if REPORT_INTERVAL <= 0 {
+		REPORT_INTERVAL = 15
 	}
 	// NODE_OTA：OTA 自更新开关（环境变量 NODE_OTA 或 setting.json 的 node-ota）
 	NODE_OTA = os.Getenv("NODE_OTA")
@@ -1276,6 +1302,9 @@ func main() {
 		slog.Info("WS client enabled", "url", WS_URL, "nodeId", WS_NODE_ID)
 	}
 
+	// 数据上报：WS 在线走 WS 广播，否则 HTTP POST 收集中心 /report（详见 report.go）
+	startNodeReporter()
+
 	// OTA 自更新：定期检查 GitHub Release 并替换二进制（配置 NODE_OTA / node-ota 启用）
 	initOTA(GH_PROXY)
 
@@ -1315,6 +1344,7 @@ func main() {
 	if ACCESS_TOKEN != "" {
 		v1.Use(tokenCheck()) // Apply token check middleware to the v1 group
 	}
+	v1.Use(nodeReportMiddleware()) // 数据上报统计：归属规则过滤后计数（详见 report.go）
 	{
 		v1.GET("/detail/*url", checkWebsiteHandler)
 		v1.GET("/ssl/*url", sslCheckHandler)
@@ -1354,7 +1384,14 @@ func main() {
 	if otaEnabled() && runtime.GOOS == "windows" {
 		otaHandoverWait = make(chan struct{})
 		<-otaHandoverWait
+		return
 	}
+	// 非 OTA 交接模式：main 必须阻塞，否则 Server goroutine 随 main 返回而消亡，
+	// 进程启动后立即退出。阻塞在退出信号上，收到后走优雅停机。
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	<-sigCh
+	gracefulShutdown()
 }
 
 // gracefulShutdown 优雅停止 HTTP 服务：停止接收新请求，等待在途请求完成（上限 30s）。

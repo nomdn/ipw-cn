@@ -133,7 +133,9 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 				return webtest.TCPingRun(host, port, n, v, 10*time.Second, 100*time.Millisecond)
 			},
 			func(err error) *webtest.TCPingStats { return &webtest.TCPingStats{IP: "Error: " + err.Error()} },
-			func(v string) *webtest.TCPingStats { return &webtest.TCPingStats{IP: "Skipped due to SINGLE_STACK=" + v} },
+			func(v string) *webtest.TCPingStats {
+				return &webtest.TCPingStats{IP: "Skipped due to SINGLE_STACK=" + v}
+			},
 		)
 		result := &TCPingResult{IPv4: ipv4, IPv6: ipv6}
 		pingCache.Store(cacheKey, pingCacheEntry{result: result, timestamp: time.Now()})
@@ -334,7 +336,11 @@ func wsRaw(v any) json.RawMessage {
 	return b
 }
 
-// wsHandleProbe 处理中间件下发的拨测请求（并发执行）：取数 → probe_result
+// wsActiveConns 当前已注册的中间件连接（url → conn）：注册成功写入、断开移除，数据上报广播用（report.go）
+var wsActiveConns sync.Map
+
+// wsHandleProbe 处理中间件下发的拨测请求（并发执行）：取数 → probe_result。
+// 同时按归属规则喂给数据上报：requestId 非空 = 中间件下发（中间件侧已计数上报），本节点跳过
 func wsHandleProbe(c *websocket.Conn, data json.RawMessage) {
 	var req struct {
 		RequestID string            `json:"requestId"`
@@ -346,7 +352,9 @@ func wsHandleProbe(c *websocket.Conn, data json.RawMessage) {
 		slog.Warn("ws client bad probe message")
 		return
 	}
+	start := time.Now()
 	status, body := wsProbe(req.APIType, req.Raw, req.Query)
+	nodeRecordWSProbe(req.RequestID, req.APIType, req.Raw, req.Query, status, time.Since(start))
 	payload := struct {
 		RequestID string          `json:"requestId"`
 		Status    int             `json:"status"`
@@ -384,7 +392,10 @@ func wsClientOnce(url string) time.Duration {
 		slog.Warn("ws client dial failed", "url", url, "error", err)
 		return 3 * time.Second
 	}
-	defer c.CloseNow()
+	defer func() {
+		wsActiveConns.Delete(url)
+		c.CloseNow()
+	}()
 
 	reg := map[string]string{"nodeId": WS_NODE_ID}
 	if WS_NODE_KEY != "" {
@@ -413,6 +424,7 @@ func wsClientOnce(url string) time.Duration {
 		return 3 * time.Second
 	}
 	slog.Info("ws client registered", "nodeId", WS_NODE_ID, "url", url)
+	wsActiveConns.Store(url, c)
 
 	// 心跳 goroutine：每 10s 发 ping，失败重试，连续 3 次失败主动断开（per-URL 循环重连同一中间件）
 	stopHeartbeat := make(chan struct{})

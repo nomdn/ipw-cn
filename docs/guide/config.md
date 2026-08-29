@@ -29,8 +29,11 @@
 - `node-id`：WS 节点 id（与中间件 `api-keys`/`ws-keys` 键、前端配置的节点 `id` 一致；建议用 UUID 唯一标识）
 - `node-key`：WS 注册 key（与中间件 `ws-keys[节点id]` 一致；**必填**——节点未配置该 key 时中间件拒绝注册并返回 401）
 - `node-ota`：**OTA 自更新开关**（`"true"` 启用）。启用后节点定期检查本仓库 GitHub Release，发现新版本时下载与当前平台匹配的二进制、**替换自身并重启**（旧二进制保留为 `<程序名>.old` 便于回滚）；默认关闭
+- `report-url`：**数据上报收集中心** HTTP 基址（如 `"https://collector.example.com"`，即 ipw-boce 中间件）。节点把自身观测的统计/拨测按 `report-interval-seconds` 周期上报；`ws-url` 已启用时优先走 WS `report` 消息（所有已连接中间件广播），WS 未启用或全部掉线时 HTTP POST 到 `<report-url>/report` 兜底；远端配置可覆盖（`report-ignore-config` 加 `report-url` 可禁止）
+- `report-token`：收集中心 `/report` 鉴权 token（与中间件 `report-token` 配置一致）；属敏感凭据，**不随远端配置覆盖**
+- `report-interval-seconds`：上报周期秒，缺省 15
 
-以上字段均可用环境变量覆盖（`PORTS` / `DNS_SERVER` / `DNSSEC_DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `IPDB` / `CORS` / `TRUSTED_PROXIES` / `ACCESS_TOKEN` / `WS_URL` / `NODE_ID` / `NODE_KEY` / `NODE_OTA`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）。
+以上字段均可用环境变量覆盖（`PORTS` / `DNS_SERVER` / `DNSSEC_DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `IPDB` / `CORS` / `TRUSTED_PROXIES` / `ACCESS_TOKEN` / `WS_URL` / `NODE_ID` / `NODE_KEY` / `NODE_OTA` / `REPORT_URL` / `REPORT_TOKEN` / `REPORT_INTERVAL_SECONDS`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）。
 
 ---
 
@@ -141,6 +144,22 @@ APIBaseURL: {
 
 也可以在 `nuxt.config.ts` 的 `runtimeConfig.apiKeys` 里直接写死（不推荐，密钥不应进仓库）。
 
+### 内置中间件数据上报（调一次上报一次）
+
+内置中间件可作为数据上报入口：每转发一次请求，向收集中心（ipw-boce 中间件）`POST /report` 上报一次统计与拨测明细。**配置全部经环境变量注入**（敏感项不进仓库）：
+
+| 环境变量 | 说明 |
+|------|------|
+| `NUXT_BOCE_REPORT_URL` | 收集中心基址（如 `https://collector.example.com`）；**留空 = 不上报**（此时转发也不带标记头，由节点兜底记账） |
+| `NUXT_BOCE_REPORT_TOKEN` | 收集中心 `/report` 鉴权 token（敏感，与收集中心 `report-token` 配置一致） |
+| `NUXT_BOCE_REPORT_INSTANCE` | 上报方标识（存收集库 `probe_results.origin`）；默认 `frontend-ssr` |
+
+行为约定：
+
+- 配置了上报后，内置中间件转发请求会带 `X-Boce-Reporter` 标记头——后端节点据此跳过这些请求的统计（防双算，见后端节点"数据上报"一节）
+- 上报为 fire-and-forget：失败静默丢弃、不重试（统计是增量累加语义，重试会双算），不影响转发响应
+- 上报失败不影响主链路；超时 5 秒
+
 ---
 
 ## 独立中间件（middleware-go）
@@ -192,6 +211,14 @@ WS 通道涉及**中间件（服务端）**与**后端节点（客户端）**两
 | 节点（客户端） | `ws-url` | `WS_URL` | 中间件 WS 完整地址（含 `/ws` 路径），逗号分隔多个则**同时连接全部（多活）** |
 | 节点（客户端） | `node-id` | `NODE_ID` | 节点 id，与中间件 `api-keys`/`ws-keys` 键一致（建议 UUID） |
 | 节点（客户端） | `node-key` | `NODE_KEY` | 注册 key，与中间件 `ws-keys[节点id]` 一致，**必填** |
+
+**数据上报通道**（节点把自身观测的统计/拨测上报到收集中心，归属规则防双算——中间件转发的请求由中间件上报，节点只报直连/前端/边缘流量）：
+
+| 角色 | 配置项 | 环境变量 | 说明 |
+|------|--------|----------|------|
+| 节点（客户端） | `report-url` | `REPORT_URL` | 收集中心（ipw-boce 中间件）HTTP 基址；WS 在线时优先走 WS 广播，掉线时 POST `<report-url>/report` 兜底 |
+| 节点（客户端） | `report-token` | `REPORT_TOKEN` | `/report` 鉴权 token，与收集中心 `report-token` 一致；**不随远端配置覆盖** |
+| 节点（客户端） | `report-interval-seconds` | `REPORT_INTERVAL_SECONDS` | 上报周期秒，缺省 15 |
 
 **链路**：中间件收到 `ws:true` 节点的拨测请求 → 经 WS 发 `probe` → 节点执行探针（直调 webtest 函数 + 缓存）→ `probe_result` 回传 → 中间件返回 HTTP 响应（`Content-Type: application/json`）。节点侧接入步骤见 [后端节点部署 - WS 通道接入](/guide/deploy-node#ws-通道接入可选)。
 
