@@ -25,33 +25,37 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [lemon-ipw, lemon-ipw-middleware]
+        # 纯 include 模式：每条自带全部字段，独立成一个任务。
+        # 注意不能把 image 写成顶层数组再用 include 拆——GitHub 会把能匹配
+        # 现有组合的 include 条目合并进组合本身，导致任务被折叠（见 v3.3.0 事故）
         include:
           - image: lemon-ipw
             context: src
-          - image: lemon-ipw-middleware
-            context: middleware-go
-          - image: lemon-ipw
             runner: ubuntu-latest
             platforms: linux/amd64
             platform_id: amd64
           - image: lemon-ipw
+            context: src
             runner: ubuntu-24.04-arm
             platforms: linux/arm64
             platform_id: arm64
           - image: lemon-ipw
+            context: src
             runner: ubuntu-24.04-arm
             platforms: linux/arm/v7
             platform_id: armv7
           - image: lemon-ipw-middleware
+            context: middleware-go
             runner: ubuntu-latest
             platforms: linux/amd64
             platform_id: amd64
           - image: lemon-ipw-middleware
+            context: middleware-go
             runner: ubuntu-24.04-arm
             platforms: linux/arm64
             platform_id: arm64
           - image: lemon-ipw-middleware
+            context: middleware-go
             runner: ubuntu-24.04-arm
             platforms: linux/arm/v7
             platform_id: armv7
