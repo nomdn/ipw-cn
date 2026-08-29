@@ -92,7 +92,9 @@ jobs:
         run: |
           mkdir -p "${{ runner.temp }}/digests"
           digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+          # 文件名自带镜像与平台元数据：merge 阶段 merge-multiple 平铺下载后
+          # 按前缀收集，不依赖 artifact 的目录结构
+          touch "${{ runner.temp }}/digests/${{ matrix.image }}-${{ matrix.platform_id }}-${digest#sha256:}"
 
       - name: Upload digest
         uses: actions/upload-artifact@v4
@@ -111,6 +113,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/digests
           pattern: digests-*
+          merge-multiple: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -160,13 +163,23 @@ jobs:
               # fi
             done
             # 各平台单架构 manifest（GHCR 上按 digest 推送的产物）合并为一份
-            # 多架构 manifest list；imagetools create 会按 -t 目标同时推送 GHCR 与 Docker Hub
+            # 多架构 manifest list；imagetools create 会按 -t 目标推送到 GHCR
+            shopt -s nullglob
             for PLATFORM_ID in amd64 arm64 armv7; do
-              DIR="${DIGESTS_DIR}/digests-${IMG}-${PLATFORM_ID}"
-              for f in "${DIR}"/*; do
-                ARGS+=("${GHCR_REPO}/${IMG}@sha256:$(basename "${f}")")
+              PREFIX="${IMG}-${PLATFORM_ID}-"
+              FILES=("${DIGESTS_DIR}"/${PREFIX}*)
+              if [ ${#FILES[@]} -eq 0 ]; then
+                echo "ERROR: no digest file for ${IMG} (${PLATFORM_ID}); dir contents:" >&2
+                ls -la "${DIGESTS_DIR}" >&2 || true
+                exit 1
+              fi
+              for f in "${FILES[@]}"; do
+                hex="$(basename "${f}")"
+                ARGS+=("${GHCR_REPO}/${IMG}@sha256:${hex#${PREFIX}}")
               done
             done
+            shopt -u nullglob
+            echo "Merging ${#ARGS[@]} refs for ${IMG}:"; printf '  %s\n' "${ARGS[@]}"
             docker buildx imagetools create "${ARGS[@]}"
           done
           echo "Pushed multi-arch manifests: ${TAGS[*]}"
