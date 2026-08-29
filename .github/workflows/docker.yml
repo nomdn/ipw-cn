@@ -75,15 +75,16 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}/${{ matrix.image }}
 
+      # push-by-digest 模式：不传 tags（新 buildx 禁止 tagged ref 按 digest 推送），
+      # 仓库名通过 outputs 的 name= 传入，最终 tag 由 merge 阶段统一打
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           platforms: ${{ matrix.platforms }}
-          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=ghcr.io/${{ github.repository }}/${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.platform_id }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.platform_id }}
 
