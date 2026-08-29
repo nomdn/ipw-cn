@@ -77,6 +77,8 @@ const port = ref('80')
 const userIP = ref('')
 const loading = ref(false)
 const serverResults = ref<ServerResult[]>([])
+// 查询序号：连续点击时旧查询的结果不允许写入新查询的结果表
+let queryId = 0
 
 const allServers = [
   ...config.APIBaseURL.DualStack.map((s: ServerConfig) => ({ ...s, type: 'DualStack' })),
@@ -84,7 +86,7 @@ const allServers = [
 ];
 
 const tcpingFetches = allServers.map((server) => {
-  const url = computed(() => "/middleware/" + server.id + "/tcping/" + extractHost(tmpDomain.value) + "?port=" + port.value);
+  const url = computed(() => "/middleware/" + server.id + "/tcping/" + encodeURIComponent(extractHost(tmpDomain.value)) + "?port=" + encodeURIComponent(port.value));
   const { data, error: fetchError, execute } = useMiddlewareFetch<TCPingResponse>(url, {
     immediate: false,
     watch: false,
@@ -117,23 +119,31 @@ function initServerResults() {
 function TCPingAll() {
   const host = extractHost(tmpDomain.value)
   if (!host) return
-  
+
   loading.value = true
-  
+
+  const id = ++queryId
+
   serverResults.value.forEach((result) => {
     result.loading = true
     result.error = ''
     result.ipv4 = undefined
     result.ipv6 = undefined
   })
-  
+
   const promises = tcpingFetches.map(async (fetch, index) => {
     try {
       await fetch.execute();
+      if (id !== queryId) return
       const result = serverResults.value[index];
       if (result) {
-        result.ipv4 = fetch.data.value?.ipv4;
-        result.ipv6 = fetch.data.value?.ipv6;
+        // execute() 不会抛错，失败以 error.value 为准（否则故障节点渲染成 '-'）
+        if (fetch.error.value) {
+          result.error = (fetch.error.value as any)?.message || '请求失败';
+        } else {
+          result.ipv4 = fetch.data.value?.ipv4;
+          result.ipv6 = fetch.data.value?.ipv6;
+        }
       }
     } catch (err) {
       console.error(err);
@@ -143,22 +153,24 @@ function TCPingAll() {
       }
     } finally {
       const result = serverResults.value[index];
-      if (result) {
+      if (result && id === queryId) {
         result.loading = false;
       }
     }
   })
-  
+
   Promise.all(promises).finally(function () {
-    loading.value = false
+    if (id === queryId) {
+      loading.value = false
+    }
   })
 }
 async function getUserIP(){
-  
-  await $fetch<string>(config.DualStackAPI).then(
-  function (data){
-    userIP.value = data
-  })
+  try {
+    userIP.value = await $fetch<string>(config.DualStackAPI)
+  } catch {
+    // 获取失败保持为空，避免未处理的 Promise 拒绝
+  }
   return userIP.value
 }
 onMounted(() => {
@@ -221,13 +233,13 @@ onMounted(() => {
               <td class="table-value">{{ server.ipv6.sent }}</td>
               <td class="table-value">{{ server.ipv6.success }}</td>
               <td class="table-value">
-                <span :class="server.ipv6.loss_rate > 0 ? 'loss-warning' : 'loss-ok'">
-                  {{ server.ipv6.loss_rate.toFixed(1) }}
+                <span :class="(server.ipv6?.loss_rate ?? 0) > 0 ? 'loss-warning' : 'loss-ok'">
+                  {{ server.ipv6?.loss_rate?.toFixed(1) ?? '-' }}
                 </span>
               </td>
-              <td class="table-value">{{ server.ipv6.max_rtt.toFixed(2) }}</td>
-              <td class="table-value">{{ server.ipv6.min_rtt.toFixed(2) }}</td>
-              <td class="table-value">{{ server.ipv6.avg_rtt.toFixed(2) }}</td>
+              <td class="table-value">{{ server.ipv6?.max_rtt?.toFixed(2) ?? '-' }}</td>
+              <td class="table-value">{{ server.ipv6?.min_rtt?.toFixed(2) ?? '-' }}</td>
+              <td class="table-value">{{ server.ipv6?.avg_rtt?.toFixed(2) ?? '-' }}</td>
             </tr>
             <tr v-else-if="server.loading">
               <td class="table-label">{{ server.label }}</td>

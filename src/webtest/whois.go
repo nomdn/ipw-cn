@@ -1,6 +1,7 @@
 package webtest
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -200,7 +201,6 @@ func happyEyeballsWhoisQuery(domain string, v4IPs, v6IPs []string, port string) 
 	}
 	// 有缓冲：保证每个 goroutine 写入不被阻塞，避免 goroutine 泄漏
 	ch := make(chan outcome, len(v4IPs)+len(v6IPs))
-	pending := 0
 
 	tryIP := func(ip string) {
 		raw, err := rawWhoisQueryCtx(ctx, domain, ip, port)
@@ -209,7 +209,6 @@ func happyEyeballsWhoisQuery(domain string, v4IPs, v6IPs []string, port string) 
 
 	// 1) 立即启动所有 v4
 	for _, ip := range v4IPs {
-		pending++
 		go tryIP(ip)
 	}
 
@@ -218,7 +217,6 @@ func happyEyeballsWhoisQuery(domain string, v4IPs, v6IPs []string, port string) 
 	if len(v6IPs) > 0 {
 		v6Timer = time.AfterFunc(happyEyeballsV6Delay, func() {
 			for _, ip := range v6IPs {
-				pending++
 				go tryIP(ip)
 			}
 		})
@@ -241,9 +239,7 @@ func happyEyeballsWhoisQuery(domain string, v4IPs, v6IPs []string, port string) 
 		case <-ctx.Done():
 			return "", ctx.Err()
 		}
-		// 注意：pending 是在 goroutine 内自增，这里用固定上限做兜底计数
-		// 如果 v6 还没启动完，但 v4 已经全部失败也没有成功，需要等待 pending 全部发完
-		// 简化起见：若 i 到达 len(v4IPs) 但 v6 还在 pending，我们再等一会
+		// v4 全部失败且无成功时，给延迟启动的 v6 goroutine 留一个启动 + 写入窗口
 		if i == len(v4IPs)-1 && v6Timer != nil && lastErr != nil {
 			// 给 v6 一个启动 + 写入窗口
 			time.Sleep(happyEyeballsV6Delay + 20*time.Millisecond)
@@ -336,19 +332,29 @@ func rawWhoisQueryCtx(ctx context.Context, domain, server, port string) (string,
 		}
 	}
 
-	// 3. 读取响应
+	// 3. 读取响应：循环读到 EOF/超时。单次 Read 只能拿到一个 TCP 段，会截断大多数 WHOIS 响应
 	buf := make([]byte, 65536)
-	n, readErr := conn.Read(buf)
-
-	// 有数据就读到了，哪怕 readErr != nil 也先返回数据
-	if n > 0 {
-		return string(buf[:n]), nil
-	}
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	default:
-		return "", readErr
+	var out bytes.Buffer
+	for {
+		n, readErr := conn.Read(buf)
+		if n > 0 {
+			out.Write(buf[:n])
+		}
+		if readErr != nil {
+			// 有数据就返回（EOF/超时都视为读完），哪怕 readErr != nil
+			if out.Len() > 0 {
+				return out.String(), nil
+			}
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			default:
+				return "", readErr
+			}
+		}
+		if out.Len() > 1<<20 { // 防御上限 1MB，避免异常响应无限读
+			return out.String(), nil
+		}
 	}
 }
 

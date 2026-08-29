@@ -5,21 +5,21 @@ export function extractHost(url: string): string {
   return match?.groups?.host ?? url;
 }
 
-export function formatTime(ms: number): string {
-  if (ms == null || ms <= 0) return '-'
+export function formatTime(ms?: number | null): string {
+  if (ms == null || typeof ms !== 'number' || !isFinite(ms) || ms <= 0) return '-'
   if (ms < 1000) {
     return `${ms.toFixed(2)} ms`
   }
   return `${(ms / 1000).toFixed(2)} s`
 }
 
-export function formatSpeed(speed: number): string {
-  if (speed == null) return '-'
+export function formatSpeed(speed?: number | null): string {
+  if (speed == null || typeof speed !== 'number' || !isFinite(speed)) return '-'
   return `${speed.toFixed(2)} KB/s`
 }
 
-export function formatSize(bytes: number): string {
-  if (bytes == null) return '-'
+export function formatSize(bytes?: number | null): string {
+  if (bytes == null || typeof bytes !== 'number' || !isFinite(bytes)) return '-'
   if (bytes < 1024) {
     return `${bytes} B`
   }
@@ -29,7 +29,8 @@ export function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`
 }
 
-export function getStatusCodeClass(code: number): string {
+export function getStatusCodeClass(code?: number | null): string {
+  if (code == null || typeof code !== 'number') return 'status-error'
   if (code >= 200 && code < 300) return 'status-success'
   if (code >= 300 && code < 400) return 'status-warning'
   return 'status-error'

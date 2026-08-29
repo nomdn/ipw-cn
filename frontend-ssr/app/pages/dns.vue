@@ -50,13 +50,15 @@ const results = ref<any>([])
 const isloading = ref(false)
 const nowRecordType = ref('')
 const userIP = ref('')
+// 查询序号：连续点击时旧查询的结果不允许写入新查询的结果表
+let queryId = 0
 
 async function getUserIP(){
-  
-  await $fetch<string>(config.DualStackAPI).then(
-  function (data){
-    userIP.value = data
-  })
+  try {
+    userIP.value = await $fetch<string>(config.DualStackAPI)
+  } catch {
+    // 获取失败保持为空，避免未处理的 Promise 拒绝
+  }
   return userIP.value
 }
 
@@ -77,7 +79,7 @@ const dnsServerFetches = [
   ...config.APIBaseURL.IPv4,
   ...config.APIBaseURL.IPv6
 ].map((server) => {
-  const url = computed(() => "/middleware/" + server.id + "/dns/" + recordType.value + "/" + domain.value);
+  const url = computed(() => "/middleware/" + server.id + "/dns/" + recordType.value + "/" + encodeURIComponent(domain.value));
   const { data, error, execute } = useMiddlewareFetch(url, {
     immediate: false,
     watch: false,
@@ -89,7 +91,9 @@ async function queryDNS() {
   isloading.value = true
   domain.value = tmpDomain.value
   await nextTick()
-  
+
+  const id = ++queryId
+
   // 初始化结果数组，保持响应式结构
   results.value = dnsServerFetches.map(fetch => ({
     server: fetch.label,
@@ -101,7 +105,20 @@ async function queryDNS() {
   const promises = dnsServerFetches.map(async (fetch, index) => {
     try {
       await fetch.execute();
-      
+
+      if (id !== queryId) return null
+
+      // execute() 不会抛错，全部候选失败时以 error.value 为准（否则故障节点渲染成空白）
+      if (fetch.error.value) {
+        results.value[index] = {
+          server: fetch.label,
+          loading: false,
+          data: null,
+          error: fetch.error.value
+        };
+        return { server: fetch.label, error: fetch.error.value };
+      }
+
       //  直接更新对应索引的结果，保持响应式
       results.value[index] = {
         server: fetch.label,
@@ -109,12 +126,13 @@ async function queryDNS() {
         data: fetch.data.value,
         error: null
       };
-      
+
       return {
         server: fetch.label,
         data: fetch.data.value
       };
     } catch (err) {
+      if (id !== queryId) return null
       //  错误时也更新对应索引
       results.value[index] = {
         server: fetch.label,
@@ -122,7 +140,7 @@ async function queryDNS() {
         data: null,
         error: err
       };
-      
+
       return {
         server: fetch.label,
         error: err
@@ -130,10 +148,11 @@ async function queryDNS() {
     }
   });
   nowRecordType.value = recordType.value
-  const promiseResults = await Promise.all(promises)
-  console.log(promiseResults)
-  isloading.value = false
-  
+  const promiseResults = (await Promise.all(promises)).filter(Boolean)
+  if (id === queryId) {
+    isloading.value = false
+  }
+
   return promiseResults
 }
 

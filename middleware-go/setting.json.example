@@ -6,6 +6,9 @@
     "remote-config-url": "",
     "remote-ignore-config": [],
     "cors": "",
+    "trusted-proxies": "",
+    "gh-proxy": "",
+    "ota": "false",
     "api-base-url": {
         "DualStack": [
             {

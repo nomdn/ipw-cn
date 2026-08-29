@@ -71,6 +71,11 @@ export default defineEventHandler(async (event) => {
     if (!backendID || !apiType || !raw) {
         throw createError({ statusCode: 400, statusMessage: 'Missing parameters in slug' })
     }
+    // 阻断路径穿越：raw 里的 ".." 会被上游 URL 规范化解析掉，
+    // 把请求（连同节点的 Authorization 头）带到 /v1 之外的任意路径
+    if (raw.split('/').some(seg => seg === '.' || seg === '..')) {
+        throw createError({ statusCode: 400, statusMessage: 'Invalid path' })
+    }
     const query = getQuery(event)
 
     // 从运行时变量读取 APIKEYS (JSON字符串)，解析后按 backendID 查找 token
@@ -118,8 +123,9 @@ export default defineEventHandler(async (event) => {
             throw createError({ statusCode: 400, statusMessage: 'Invalid backend ID' })
         }
         let apiBaseUrl = map.get(backendID)
-        if (apiBaseUrl === undefined) {
-            throw createError({ statusCode: 400, statusMessage: 'API base URL not found for the given backend ID' })
+        // url 为空的节点无法转发（会变成对前端自身的请求），直接报 502 而不是浪费一次自请求
+        if (!apiBaseUrl) {
+            throw createError({ statusCode: 502, statusMessage: 'Backend URL not configured' })
         }
         let data: any = {}
 
@@ -129,6 +135,7 @@ export default defineEventHandler(async (event) => {
             data = await $fetch(`${apiBaseUrl}v1/${apiType}/${raw}`, {
                 method: 'GET',
                 headers: authHeaders,
+                timeout: 15_000,
             }).catch((error: any) => {
                 console.error(`Error fetching from ${apiBaseUrl}:`, error)
                 const errStatus = error?.status ?? error?.statusCode
@@ -154,8 +161,8 @@ export default defineEventHandler(async (event) => {
             throw createError({ statusCode: 400, statusMessage: 'Invalid backend ID' })
         }
         let apiBaseUrl = map.get(backendID)
-        if (apiBaseUrl === undefined) {
-            throw createError({ statusCode: 400, statusMessage: 'API base URL not found for the given backend ID' })
+        if (!apiBaseUrl) {
+            throw createError({ statusCode: 502, statusMessage: 'Backend URL not configured' })
         }
         let data: any = {}
 
@@ -170,6 +177,7 @@ export default defineEventHandler(async (event) => {
         data = await $fetch(`${apiBaseUrl}v1/${apiType}/${raw}${queryString ? '?' + queryString : ''}`, {
                 method: 'GET',
                 headers: authHeaders,
+                timeout: 30_000, // tcping/测速上游本身较慢，给更长超时
             }).catch((error: any) => {
                 console.error(`Error fetching from ${apiBaseUrl}:`, error)
                 const errStatus = error?.status ?? error?.statusCode

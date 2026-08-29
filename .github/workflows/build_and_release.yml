@@ -17,7 +17,7 @@ jobs:
             - name: Setup Go
               uses: actions/setup-go@v4
               with:
-                go-version: '1.26.2' # 选择适合的 Go 版本
+                go-version: '1.26.6' # 与 src/go.mod 声明保持一致，避免依赖 GOTOOLCHAIN 隐式下载
             - name: Set version metadata
               run: |
                 echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV  

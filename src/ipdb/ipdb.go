@@ -65,7 +65,12 @@ func PullDatabase(ghproxy string) error {
 	}
 
 	slog.Info("Copying downloaded files to working directory...")
-	for _, t := range tasks {
+	for i, t := range tasks {
+		if errs[i] != nil {
+			// 下载失败（含传输中断留下的残缺文件）不覆盖现有数据库
+			slog.Warn("Skipping failed download, keep existing file", "file", t.name)
+			continue
+		}
 		src := filepath.Join(tmpDir, t.name)
 		if _, err := os.Stat(src); os.IsNotExist(err) {
 			slog.Warn("Skipping missing file", "file", t.name)
@@ -76,16 +81,19 @@ func PullDatabase(ghproxy string) error {
 			slog.Error("Failed to copy file", "file", t.name, "error", err)
 			continue
 		}
-		if strings.HasSuffix(t.name, ".gz") {
-			outName := strings.TrimSuffix(t.name, ".gz")
+		lower := strings.ToLower(t.name)
+		// 后缀判断用小写比较：IP2LOCATION 的资产名是大写 .ZIP，原来 HasSuffix(".zip") 永远匹配不上，
+		// 导致该数据库从不解压就被删除
+		if strings.HasSuffix(lower, ".gz") {
+			outName := t.name[:len(t.name)-3]
 			slog.Info("Decompressing...", "file", t.name, "output", outName)
 			if err := gunzipFile(dst, "./"+outName); err != nil {
 				slog.Error("Failed to decompress", "file", t.name, "error", err)
 			}
 			os.Remove(dst)
 		}
-		if strings.HasSuffix(t.name, ".zip") {
-			outName := strings.TrimSuffix(t.name, ".zip")
+		if strings.HasSuffix(lower, ".zip") {
+			outName := t.name[:len(t.name)-4]
 			slog.Info("Unzipping...", "file", t.name, "output", outName)
 			if err := unzipFile(dst, "./"+outName); err != nil {
 				slog.Error("Failed to unzip", "file", t.name, "error", err)
@@ -118,6 +126,8 @@ func downloadWithRetry(url, name string) error {
 		if err != nil {
 			lastErr = fmt.Errorf("request failed: %w", err)
 			slog.Warn("Download attempt failed", "file", name, "attempt", attempt, "error", err)
+			// 传输中断会在输出文件里留下残缺内容，删掉避免被当作下载成功覆盖现有数据库
+			os.Remove(filepath.Join("./tmp", name))
 			time.Sleep(time.Duration(attempt) * time.Second)
 			continue
 		}

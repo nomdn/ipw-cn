@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -106,6 +107,12 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 		if port == "" {
 			port = "80"
 		}
+		// 与 HTTP handler 同样校验端口/次数，避免垃圾参数直接进拨号
+		p, err := strconv.Atoi(port)
+		if err != nil || p < 1 || p > 65535 {
+			return 400, map[string]string{"error": "Invalid port number"}
+		}
+		port = strconv.Itoa(p)
 		count := query["count"]
 		n := 4
 		if count != "" {
@@ -385,7 +392,10 @@ func wsClientOnce(url string) time.Duration {
 	}
 	wsSend(c, wsMsg{Type: "register", Data: wsRaw(reg)})
 
-	_, data, err := c.Read(ctx)
+	// 注册应答限时读取：中间件半死（TCP 通但不回包）时 goroutine 会永久阻塞在 Read 上
+	regCtx, regCancel := context.WithTimeout(ctx, 15*time.Second)
+	defer regCancel()
+	_, data, err := c.Read(regCtx)
 	if err != nil {
 		slog.Warn("ws client register read failed", "url", url, "error", err)
 		return 3 * time.Second

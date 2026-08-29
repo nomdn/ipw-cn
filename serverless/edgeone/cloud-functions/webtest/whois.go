@@ -1,6 +1,7 @@
 package webtest
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -343,19 +344,29 @@ func rawWhoisQueryCtx(ctx context.Context, domain, server, port string) (string,
 		}
 	}
 
-	// 3. 读取响应
+	// 3. 读取响应：循环读到 EOF/超时。单次 Read 只能拿到一个 TCP 段，会截断大多数 WHOIS 响应
 	buf := make([]byte, 65536)
-	n, readErr := conn.Read(buf)
-
-	// 有数据就读到了，哪怕 readErr != nil 也先返回数据
-	if n > 0 {
-		return string(buf[:n]), nil
-	}
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	default:
-		return "", readErr
+	var out bytes.Buffer
+	for {
+		n, readErr := conn.Read(buf)
+		if n > 0 {
+			out.Write(buf[:n])
+		}
+		if readErr != nil {
+			// 有数据就返回（EOF/超时都视为读完），哪怕 readErr != nil
+			if out.Len() > 0 {
+				return out.String(), nil
+			}
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			default:
+				return "", readErr
+			}
+		}
+		if out.Len() > 1<<20 { // 防御上限 1MB，避免异常响应无限读
+			return out.String(), nil
+		}
 	}
 }
 

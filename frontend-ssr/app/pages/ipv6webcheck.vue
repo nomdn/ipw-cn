@@ -72,6 +72,8 @@ const loading = ref(false)
 const error = ref('')
 const result = ref<PerformanceCheckResponse | null>(null)
 const checkUrl = computed(() => "/middleware/" + backendID.value + "/detail/" + testDomain.value);
+// testDomain 是完整 URL（含 https:// 与路径斜杠），服务端 [...slug].get.ts 依赖
+// 分段重组协议部分，这里刻意不做 encodeURIComponent
 
 const { data: checkData, error: checkError, execute: executeCheck } = useMiddlewareFetch<PerformanceCheckResponse>(checkUrl, {
   immediate: false,
@@ -162,7 +164,7 @@ onMounted(() => {
           <tr>
             <td class="table-label">主机记录</td>
             <td class="table-value"><div class="one-line"><RouterLink :to="`/ipv6?ip=${result.ipv4!.host_record}`">{{ result.ipv4!.host_record }}</RouterLink><el-icon><Position /></el-icon></div></td>
-            <td class="table-value"><div class="one-line"><RouterLink :to="`/ipv6?ip=${result.ipv6?.host_record}`">{{ result.ipv6?.host_record || '-' }}</RouterLink><el-icon><Position /></el-icon></div></td>
+            <td class="table-value"><div class="one-line"><RouterLink v-if="result.ipv6?.host_record" :to="`/ipv6?ip=${result.ipv6!.host_record}`">{{ result.ipv6!.host_record }}</RouterLink><span v-else>-</span><el-icon><Position /></el-icon></div></td>
           </tr>
           <tr>
             <td class="table-label">HTTP 状态码</td>

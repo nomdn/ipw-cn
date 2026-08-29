@@ -73,7 +73,7 @@ const testDomain = ref('')
 const loading = ref(false)
 const error = ref('')
 const result = ref<SSLCheckResponse | null>(null)
-const sslUrl = computed(() => "/middleware/" + backendID.value + "/ssl/" + testDomain.value);
+const sslUrl = computed(() => "/middleware/" + backendID.value + "/ssl/" + encodeURIComponent(testDomain.value));
 
 const { data: sslData, error: sslError, execute: executeSSL } = useMiddlewareFetch<SSLCheckResponse>(sslUrl, {
   immediate: false,

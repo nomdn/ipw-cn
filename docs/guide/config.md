@@ -23,13 +23,14 @@
 - `block-private-ips`：SSRF 防护开关
 - `ipdb`：IP 数据库开关（首次启动自动下载约 450MB，之后每 24h 更新）
 - `cors`：允许的请求来源（逗号分隔）
+- `trusted-proxies`：可信代理 IP/CIDR（逗号分隔，如 `"10.0.0.0/8,173.245.48.0/20"`）。配置后 `ClientIP` 与 `/v1/location` 归属地接口只信任这些代理转发的 `X-Forwarded-For`，直连公网的节点可防止访客伪造 XFF；**留空保持默认行为（信任所有代理，XFF 可被伪造）**
 - `access-token`：API 访问令牌，留空则不启用鉴权
 - `ws-url`：WS 通道地址——接入独立中间件的 WebSocket 地址（如 `"wss://middleware-1.api-ipw.wsmdn.top/ws"`，须含 `wss://` 前缀与 `/ws` 路径）；支持**逗号分隔多个中间件，同时连接全部（多活）**，任一断开只重连自己，不影响其他连接；留空 = 不启用 WS 客户端，走原 HTTP 接口
 - `node-id`：WS 节点 id（与中间件 `api-keys`/`ws-keys` 键、前端配置的节点 `id` 一致；建议用 UUID 唯一标识）
 - `node-key`：WS 注册 key（与中间件 `ws-keys[节点id]` 一致；**必填**——节点未配置该 key 时中间件拒绝注册并返回 401）
 - `node-ota`：**OTA 自更新开关**（`"true"` 启用）。启用后节点定期检查本仓库 GitHub Release，发现新版本时下载与当前平台匹配的二进制、**替换自身并重启**（旧二进制保留为 `<程序名>.old` 便于回滚）；默认关闭
 
-以上字段均可用环境变量覆盖（`PORTS` / `DNS_SERVER` / `DNSSEC_DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `IPDB` / `CORS` / `ACCESS_TOKEN` / `WS_URL` / `NODE_ID` / `NODE_KEY` / `NODE_OTA`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）。
+以上字段均可用环境变量覆盖（`PORTS` / `DNS_SERVER` / `DNSSEC_DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `IPDB` / `CORS` / `TRUSTED_PROXIES` / `ACCESS_TOKEN` / `WS_URL` / `NODE_ID` / `NODE_KEY` / `NODE_OTA`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）。
 
 ---
 
@@ -151,6 +152,9 @@ APIBaseURL: {
     "port": "8091",
     "http-timeout-seconds": 30,
     "cors": "",
+    "trusted-proxies": "",
+    "gh-proxy": "",
+    "ota": "false",
     "rate-limit": 120,
     "ws-port": 8092,
     "remote-config-url": "",
@@ -167,6 +171,9 @@ APIBaseURL: {
 ```
 
 - `rate-limit`：单 IP 每分钟限流次数，默认 `120`，`0` 表示不限流（也可用环境变量 `RATE_LIMIT` 覆盖）
+- `trusted-proxies`：可信代理 IP/CIDR（逗号分隔）。配置后 `c.IP()`（限流按它分桶）只信任这些代理转发的 `X-Forwarded-For`，反代/CDN 后限流才按真实客户端 IP 计数；留空保持默认（不信任 XFF 头，按直连地址限流）。也可用环境变量 `TRUSTED_PROXIES` 覆盖
+- `gh-proxy`：GitHub 代理前缀（OTA 下载加速，如 `"https://ghproxy.com/"`），可空；也可用环境变量 `GH_PROXY` 覆盖
+- `ota`：**OTA 自更新开关**（`"true"` 启用）。启用后中间件定期检查本仓库 GitHub Release，发现新版本时下载匹配的 `middleware-go-*` 资产、预检、**替换自身并重启**（Windows 下为优雅交接，失败自动回滚旧版；major 版本升级需人工）；默认关闭。也可用环境变量 `OTA` 覆盖
 - `ws-port`：WS 服务端口，默认 `8092`，`0` 表示关闭 WS 通道（也可用环境变量 `WS_PORT` 覆盖；优先级：远端配置 > 环境变量 > setting.json）
 - `remote-config-url`：远端配置地址，也可用环境变量 `REMOTE_CONFIG_URL`（环境变量优先）
 - `remote-ignore-config`：**不被远端配置覆盖的配置项列表**（数组），如 `["port", "rate-limit"]`；也可用环境变量 `REMOTE_IGNORE_CONFIG`（JSON 数组字符串，优先于 setting.json）
@@ -244,8 +251,9 @@ REMOTE_CONFIG_URL=https://example.com/ipw-config.json ./lemonipw
 {
     "port": "8091",
     "cors": "",
+    "trusted-proxies": "",
     "rate-limit": 120,
-    "APIBaseURL": {
+    "api-base-url": {
         "DualStack": [ { "label": "中国 江苏 移动", "id": "cn-jiangsu", "url": "https://cn-jiangsu.api-ipw.wsmdn.top/" } ],
         "IPv4": [],
         "IPv6": []

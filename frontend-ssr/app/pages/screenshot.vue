@@ -32,17 +32,18 @@ let detectionImg: HTMLImageElement | null = null
 let detectionTimeout: ReturnType<typeof setTimeout> | null = null
 let currentRequestId = 0
 const userIP = ref('')
-// WordPress mshots default error image dimensions
-const DEFAULT_MSHOTS_WIDTH = 400
-const DEFAULT_MSHOTS_HEIGHT = 300
+// WordPress mshots 默认占位图（生成失败/重定向目标）的尺寸是 1200x900，
+// 与下方注释及判定逻辑一致；真实网站截图可以是任意尺寸
+const DEFAULT_MSHOTS_WIDTH = 1200
+const DEFAULT_MSHOTS_HEIGHT = 900
 const LOADING_TIMEOUT = 15000 // 15 seconds
 
 async function getUserIP(){
-  
-  await $fetch<string>(config.DualStackAPI).then(
-  function (data){
-    userIP.value = data
-  })
+  try {
+    userIP.value = await $fetch<string>(config.DualStackAPI)
+  } catch {
+    // 获取失败保持为空，避免未处理的 Promise 拒绝
+  }
   return userIP.value
 }
 function cleanupDetection() {

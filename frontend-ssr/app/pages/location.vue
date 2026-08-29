@@ -76,7 +76,7 @@ const ipAddress = ref('');
 const IPLocation = ref<IPLocationType>({});
 const UserIP = ref('');
 const error = ref('')
-const locationUrl = computed(() => "/middleware/" + backendID.value + "/location/" + ipAddress.value);
+const locationUrl = computed(() => "/middleware/" + backendID.value + "/location/" + encodeURIComponent(ipAddress.value));
 
 const { data: locationData, error: locationError, execute: executeLocation } = useMiddlewareFetch<IPLocationType>(locationUrl, {
   immediate: false,

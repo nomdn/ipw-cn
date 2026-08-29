@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/viper"
@@ -61,17 +63,20 @@ type stackConfig struct {
 // 原 apiBaseUrls/whois·ssl·detail、NSLookup/dns·dnssec、TCPing、SpeedTest 统一并入 APIBaseURL，
 // 原 IPLocationAPI/location·asn 并入 IPLocationAPI。
 type middlewareConfig struct {
-	Port            stringOrNumber    `json:"port"`
-	HTTPTimeoutSeconds int            `json:"http-timeout-seconds"`
-	RateLimit       *int              `json:"rate-limit"` // 单 IP 每分钟限流次数；缺省=默认120，0=不限流
-	WSPort          stringOrNumber   `json:"ws-port"`    // WS 端口：兼容 "8092" 与 8092；缺省=8092，"0"/0=关闭 WS 通道
-	RemoteConfigURL string            `json:"remote-config-url"`
-	RemoteIgnoreConfig []string       `json:"remote-ignore-config"` // 不被远端覆盖的配置项列表
-	Cors            string            `json:"cors"`
-	APIBaseURL      stackConfig       `json:"api-base-url"` // whois/ssl/detail/dns/dnssec/tcping/speed 上游节点池
-	IPLocationAPI   []apiInfo         `json:"ip-location-api"` // location/asn 上游节点池（纯数组，无栈）
-	APIKeys         map[string]string `json:"api-keys"` // HTTP 转发鉴权：backendID → token（注入 Authorization: Bearer）
-	WSKeys          map[string]string `json:"ws-keys"`  // WS 注册校验：nodeID → key（节点 register 的 key 须匹配）
+	Port               stringOrNumber    `json:"port"`
+	HTTPTimeoutSeconds int               `json:"http-timeout-seconds"`
+	RateLimit          *int              `json:"rate-limit"` // 单 IP 每分钟限流次数；缺省=默认120，0=不限流
+	WSPort             stringOrNumber    `json:"ws-port"`    // WS 端口：兼容 "8092" 与 8092；缺省=8092，"0"/0=关闭 WS 通道
+	RemoteConfigURL    string            `json:"remote-config-url"`
+	RemoteIgnoreConfig []string          `json:"remote-ignore-config"` // 不被远端覆盖的配置项列表
+	Cors               string            `json:"cors"`
+	TrustedProxies     string            `json:"trusted-proxies"` // 可信代理 IP/CIDR（逗号分隔），c.IP() 仅信任这些来源的 X-Forwarded-For
+	GhProxy            string            `json:"gh-proxy"`        // GitHub 代理前缀（OTA 下载加速），可空
+	Ota                string            `json:"ota"`             // OTA 自更新开关，"true" 启用
+	APIBaseURL         stackConfig       `json:"api-base-url"`    // whois/ssl/detail/dns/dnssec/tcping/speed 上游节点池
+	IPLocationAPI      []apiInfo         `json:"ip-location-api"` // location/asn 上游节点池（纯数组，无栈）
+	APIKeys            map[string]string `json:"api-keys"`        // HTTP 转发鉴权：backendID → token（注入 Authorization: Bearer）
+	WSKeys             map[string]string `json:"ws-keys"`         // WS 注册校验：nodeID → key（节点 register 的 key 须匹配）
 }
 
 // stringOrNumber 兼容 JSON 中的字符串与数字（如 "8080" 或 8080）
@@ -79,21 +84,31 @@ type stringOrNumber string
 
 // 全局配置变量，由 readConfig 从 setting.json 填充
 var (
-	VERSION          string            // 版本号（构建时由 ldflags 注入）
-	COMMIT           string            // 提交哈希（构建时由 ldflags 注入）
-	BUILD_TIME       string            // 构建时间（构建时由 ldflags 注入）
-	PORT             string            // 监听端口
-	HTTP_TIMEOUT     int               // 上游请求超时（秒）
-	CORS             string            // CORS 配置原始字符串（逗号分隔的允许域名，可空）
-	ACCEPT_DOMAINS   []string          // 允许跨域的域名列表（由 CORS 拆分而来，空则允许所有）
-	API_BASE_URLS    stackConfig       // whois/ssl/detail/dns/dnssec/tcping/speed 上游节点池（DualStack/IPv4/IPv6）
-	IP_LOCATION_APIS []apiInfo         // location/asn 上游节点池（纯数组，无栈）
-	API_KEYS         map[string]string // backendID → HTTP 转发 token（注入 Authorization: Bearer）
-	WS_KEYS          map[string]string // backendID → WS 注册校验 key
-	CONFIG_SOURCE    string            // 配置文件路径
-	RATE_LIMIT       int               // 单 IP 每分钟限流次数（0 表示不限流），默认 120
-	WS_PORT          int               // WS 服务端口（0 = 关闭），缺省 8092，由 readConfig 统一解析
-	REMOTE_IGNORE_CONFIG []string      // 不被远端覆盖的配置项列表（remote-ignore-config / REMOTE_IGNORE_CONFIG）
+	VERSION              string            // 版本号（构建时由 ldflags 注入）
+	COMMIT               string            // 提交哈希（构建时由 ldflags 注入）
+	BUILD_TIME           string            // 构建时间（构建时由 ldflags 注入）
+	PORT                 string            // 监听端口
+	HTTP_TIMEOUT         int               // 上游请求超时（秒）
+	CORS                 string            // CORS 配置原始字符串（逗号分隔的允许域名，可空）
+	ACCEPT_DOMAINS       []string          // 允许跨域的域名列表（由 CORS 拆分而来，空则允许所有）
+	API_BASE_URLS        stackConfig       // whois/ssl/detail/dns/dnssec/tcping/speed 上游节点池（DualStack/IPv4/IPv6）
+	IP_LOCATION_APIS     []apiInfo         // location/asn 上游节点池（纯数组，无栈）
+	API_KEYS             map[string]string // backendID → HTTP 转发 token（注入 Authorization: Bearer）
+	WS_KEYS              map[string]string // backendID → WS 注册校验 key
+	CONFIG_SOURCE        string            // 配置文件路径
+	RATE_LIMIT           int               // 单 IP 每分钟限流次数（0 表示不限流），默认 120
+	TRUSTED_PROXIES      string            // 可信代理 IP/CIDR（逗号分隔），供 c.IP() 判定，空 = 不信任 XFF
+	GH_PROXY             string            // GitHub 代理前缀（gh-proxy / GH_PROXY），OTA 下载用，可空
+	OTA                  string            // OTA 自更新开关（ota / OTA），"true" 时启用
+	WS_PORT              int               // WS 服务端口（0 = 关闭），缺省 8092，由 readConfig 统一解析
+	REMOTE_IGNORE_CONFIG []string          // 不被远端覆盖的配置项列表（remote-ignore-config / REMOTE_IGNORE_CONFIG）
+)
+
+// OTA 优雅交接支持（Windows 路径）：见 ota.go
+var (
+	fiberApp           *fiber.App    // 显式持有的 Fiber 应用（gracefulShutdown 需要）
+	otaHandoverWait    chan struct{} // 非 nil 表示 Windows OTA 优雅重启模式：Listen 关闭后 main 停在此等待老进程退出
+	otaShutdownStarted atomic.Bool   // gracefulShutdown 已启动（Listen 退出时区分绑定失败与优雅关闭）
 )
 
 // HTTP_CLIENT 用于转发上游请求（等价于 TS 中的 $fetch），超时由 HTTP_TIMEOUT 决定
@@ -104,6 +119,18 @@ var HTTP_CLIENT = &http.Client{}
 var wsSrv *wsServer
 
 // ==================== 工具函数 ====================
+
+// splitAndTrim 按逗号切分并去掉每段首尾空白与空段（对齐根 main.go 的同名函数）
+func splitAndTrim(s, sep string) []string {
+	parts := strings.Split(s, sep)
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
 
 // envJSON 从环境变量读取 JSON 字符串并反序列化到 target（用于数组/对象等映射表类配置项）。
 // 环境变量为空时不做任何事；解析失败返回错误，避免静默使用空配置。
@@ -346,7 +373,11 @@ func middlewareHandler(c fiber.Ctx) error {
 			return badRequest(c, "Invalid backend ID")
 		}
 		// ws:true 节点：拨测请求经 WS 通道转发（数据上传走 WS），失败返回 502
-		if node.UseWS() && wsSrv != nil {
+		if node.UseWS() {
+			if wsSrv == nil {
+				// 不再静默落回空 URL 的 HTTP 转发（必然 502 且掩盖真实配置错误）
+				return c.Status(fiber.StatusBadGateway).SendString("Node " + backendID + " is WS-only but WS channel is disabled (ws-port=0 or bind failed)")
+			}
 			status, body, err := wsSrv.RequestProbe(backendID, apiType, raw, nil, wsProbeTimeout())
 			if err != nil {
 				return c.Status(fiber.StatusBadGateway).SendString("WS probe failed: " + err.Error())
@@ -381,7 +412,10 @@ func middlewareHandler(c fiber.Ctx) error {
 			return badRequest(c, "Invalid backend ID")
 		}
 		// ws:true 节点：拨测请求经 WS 通道转发
-		if node.UseWS() && wsSrv != nil {
+		if node.UseWS() {
+			if wsSrv == nil {
+				return c.Status(fiber.StatusBadGateway).SendString("Node " + backendID + " is WS-only but WS channel is disabled (ws-port=0 or bind failed)")
+			}
 			status, body, err := wsSrv.RequestProbe(backendID, apiType, raw, queryMap, wsProbeTimeout())
 			if err != nil {
 				return c.Status(fiber.StatusBadGateway).SendString("WS probe failed: " + err.Error())
@@ -418,7 +452,8 @@ func viperValue(key string, target any) error {
 }
 
 // fetchRemoteConfig 从远端 URL 拉取配置内容（middleware setting.json 格式）
-func fetchRemoteConfig(url string) ([]byte, error) {	client := &http.Client{Timeout: 10 * time.Second}
+func fetchRemoteConfig(url string) ([]byte, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
@@ -478,6 +513,15 @@ func applyRemoteConfig(mw *middlewareConfig) error {
 	if !ignored("cors") && remote.Cors != "" {
 		mw.Cors = remote.Cors
 	}
+	if !ignored("trusted-proxies") && remote.TrustedProxies != "" {
+		mw.TrustedProxies = remote.TrustedProxies
+	}
+	if !ignored("gh-proxy") && remote.GhProxy != "" {
+		mw.GhProxy = remote.GhProxy
+	}
+	if !ignored("ota") && remote.Ota != "" {
+		mw.Ota = remote.Ota
+	}
 	// 节点池结构：api-base-url 与 ip-location-api（远端非空栈时覆盖本地）
 	if !ignored("api-base-url") && stackNonEmpty(remote.APIBaseURL) {
 		mw.APIBaseURL = remote.APIBaseURL
@@ -531,6 +575,24 @@ func readConfig() error {
 		mw.Cors = v
 	} else {
 		mw.Cors = viper.GetString("cors")
+	}
+	// trusted-proxies：可信代理 IP/CIDR（逗号分隔），env > setting.json
+	if v := os.Getenv("TRUSTED_PROXIES"); v != "" {
+		mw.TrustedProxies = v
+	} else {
+		mw.TrustedProxies = viper.GetString("trusted-proxies")
+	}
+	// gh-proxy：GitHub 代理前缀（OTA 下载用），env > setting.json
+	if v := os.Getenv("GH_PROXY"); v != "" {
+		mw.GhProxy = v
+	} else {
+		mw.GhProxy = viper.GetString("gh-proxy")
+	}
+	// ota：OTA 自更新开关（"true" 启用），env > setting.json
+	if v := os.Getenv("OTA"); v != "" {
+		mw.Ota = v
+	} else {
+		mw.Ota = viper.GetString("ota")
 	}
 	if v := os.Getenv("REMOTE_CONFIG_URL"); v != "" {
 		mw.RemoteConfigURL = v
@@ -631,10 +693,14 @@ func readConfig() error {
 	}
 	REMOTE_IGNORE_CONFIG = mw.RemoteIgnoreConfig
 	CORS = mw.Cors
-	// 逗号分隔的 CORS 域名列表（对齐根 main.go 的 ACCEPT_DOMAINS 用法）
+	// 逗号分隔的 CORS 域名列表（对齐根 main.go 的 ACCEPT_DOMAINS 用法）；
+	// 带空格的配置 "a.com, b.com" 直接 Split 会产生带前导空格的 origin，永远匹配不上，须 trim
 	if CORS != "" {
-		ACCEPT_DOMAINS = strings.Split(CORS, ",")
+		ACCEPT_DOMAINS = splitAndTrim(CORS, ",")
 	}
+	TRUSTED_PROXIES = mw.TrustedProxies
+	GH_PROXY = mw.GhProxy
+	OTA = mw.Ota
 	API_BASE_URLS = mw.APIBaseURL
 	IP_LOCATION_APIS = mw.IPLocationAPI
 	API_KEYS = mw.APIKeys
@@ -662,6 +728,9 @@ func main() {
 	}
 	log.Printf("[middleware] config loaded from %s", CONFIG_SOURCE)
 
+	// OTA 自更新：定期检查 GitHub Release 并替换二进制（配置 ota / OTA 启用）
+	initOTA(GH_PROXY)
+
 	timeout := HTTP_TIMEOUT
 	if timeout <= 0 {
 		timeout = 30
@@ -679,8 +748,24 @@ func main() {
 		log.Printf("[ws] ws channel disabled (wsPort=0)")
 	}
 
-	app := fiber.New()
-
+	// TRUSTED_PROXIES / trusted-proxies：逗号分隔的可信代理 IP/CIDR。配置后 c.IP()（限流按它分桶）
+	// 只信任这些来源转发的 X-Forwarded-For，反代/CDN 后限流才按真实客户端 IP 计数；
+	// 未配置保持默认（不信任 XFF 头）
+	fiberConf := fiber.Config{}
+	if strings.TrimSpace(TRUSTED_PROXIES) != "" {
+		var proxies []string
+		for _, p := range strings.Split(TRUSTED_PROXIES, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				proxies = append(proxies, p)
+			}
+		}
+		fiberConf.TrustProxy = true
+		fiberConf.TrustProxyConfig = fiber.TrustProxyConfig{Proxies: proxies}
+		fiberConf.ProxyHeader = "X-Forwarded-For"
+		log.Printf("[middleware] trusted proxies: %v", proxies)
+	}
+	fiberApp = fiber.New(fiberConf)
+	app := fiberApp
 	// 单 IP 限流（fiber 内置中间件，默认按客户端 IP 计数）：次数由配置 rateLimit / 环境变量 RATE_LIMIT 决定（默认 120 次/分钟），
 	// 0 表示不限流。必须放在所有路由注册之前，fiber 中间件只对注册在其后的路由生效。
 	if RATE_LIMIT > 0 {
@@ -714,19 +799,35 @@ func main() {
 	app.Get("/v1/*", middlewareHandler)
 	app.Get("/middleware/*", middlewareHandler)
 
-	// 监听地址，优先级: 环境变量 PORT > setting.json port > 默认 8080
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = PORT
+	// 监听地址，优先级: 环境变量 PORT > setting.json port > 默认 8080。
+	// 写回全局 PORT：waitChildReady 的健康检查地址要用同一个端口
+	PORT = os.Getenv("PORT")
+	if PORT == "" {
+		PORT = "8080"
 	}
-	if port == "" {
-		port = "8080"
-	}
-	listenAddr := port
+	listenAddr := PORT
 	if !strings.Contains(listenAddr, ":") {
 		listenAddr = ":" + listenAddr
 	}
-	if err := app.Listen(listenAddr); err != nil {
-		log.Fatal(err)
+
+	// Windows OTA 优雅交接：Listen 被 gracefulShutdown 关闭后，main 停在停车位，
+	// 由 restartSelf 在新进程健康检查通过后 os.Exit 结束整个老进程
+	if otaEnabled() && runtime.GOOS == "windows" {
+		otaHandoverWait = make(chan struct{})
+	}
+
+	listenErr := make(chan error, 1)
+	go func() { listenErr <- app.Listen(listenAddr) }()
+	err := <-listenErr
+	if err != nil {
+		if otaShutdownStarted.Load() {
+			// 优雅关闭过程中的退出属预期，主流程已在停车位等待交接
+			log.Printf("[ota] listen exited during graceful shutdown: %v", err)
+		} else {
+			log.Fatalf("listen failed: %v", err)
+		}
+	}
+	if otaHandoverWait != nil {
+		<-otaHandoverWait
 	}
 }

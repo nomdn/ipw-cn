@@ -549,7 +549,7 @@ func searchBilibili(ip string) (*BilibiliResult, error) {
 		bilibiliCache.Delete(ip)
 	}
 
-	client := resty.New()
+	client := resty.New().SetTimeout(10 * time.Second)
 	defer client.Close()
 	resp, err := client.R().
 		SetQueryParam("ip", ip).
@@ -573,6 +573,18 @@ func searchBilibili(ip string) (*BilibiliResult, error) {
 
 	bilibiliCache.Store(ip, bilibiliCacheEntry{result: result, timestamp: time.Now()})
 	return result, nil
+}
+
+// SweepBilibiliCache 清理过期的 Bilibili 归属地缓存（由外部定时调用，
+// 防止公网端点被唯一 key 洪打时缓存内存无限增长）
+func SweepBilibiliCache() {
+	cutoff := time.Now().Add(-24 * time.Hour)
+	bilibiliCache.Range(func(k, v any) bool {
+		if e, ok := v.(bilibiliCacheEntry); ok && e.timestamp.Before(cutoff) {
+			bilibiliCache.Delete(k)
+		}
+		return true
+	})
 }
 
 func loadAll() {

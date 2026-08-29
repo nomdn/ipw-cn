@@ -1,6 +1,9 @@
 import { defineEventHandler, createError } from 'h3'
 
 const IANA_BOOTSTRAP_URL = 'https://data.iana.org/rdap/dns.json'
+// bootstrap 数据基本不变，按进程缓存 24h，避免每个请求都重新下载
+const BOOTSTRAP_TTL = 24 * 60 * 60 * 1000
+let bootstrapCache: { map: Map<string, string>; at: number } | null = null
 
 function encodeDomain(input: string): string {
   try {
@@ -21,8 +24,12 @@ function getTLDCandidates(hostname: string): string[] {
 }
 
 async function fetchBootstrap(): Promise<Map<string, string>> {
+  if (bootstrapCache && Date.now() - bootstrapCache.at < BOOTSTRAP_TTL) {
+    return bootstrapCache.map
+  }
   const res = await fetch(IANA_BOOTSTRAP_URL, {
     headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(10_000),
   })
   if (!res.ok) {
     throw createError({
@@ -42,6 +49,7 @@ async function fetchBootstrap(): Promise<Map<string, string>> {
       map.set(String(tld), baseUrl)
     }
   }
+  bootstrapCache = { map, at: Date.now() }
   return map
 }
 
@@ -214,6 +222,7 @@ export default defineEventHandler(async (event) => {
 
   const primaryRes = await fetch(rdapUrl, {
     headers: { accept: 'application/rdap+json' },
+    signal: AbortSignal.timeout(15_000),
   })
 
   if (!primaryRes.ok) {
@@ -233,6 +242,7 @@ export default defineEventHandler(async (event) => {
     try {
       const thickRes = await fetch(relatedLink.href, {
         headers: { accept: 'application/rdap+json' },
+        signal: AbortSignal.timeout(15_000),
       })
       if (thickRes.ok) {
         thickData = await thickRes.json()

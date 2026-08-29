@@ -5,6 +5,8 @@ import (
 	"math"
 	"net"
 	"time"
+
+	"edgeone-cloud-functions/ssrf"
 )
 
 type TCPingResult struct {
@@ -36,6 +38,13 @@ func TCPing(host string, port string, version string, timeout time.Duration) (*T
 	ip, err := resolveHost(host, version)
 	if err != nil {
 		return nil, err
+	}
+	// SSRF 防护：内网/云元数据段（127.0.0.1、10.x、169.254.169.254 等）直接拒绝，
+	// 否则 tcping 接口会被当作内网端口扫描器
+	if ssrf.Enabled() {
+		if pip := net.ParseIP(ip); pip != nil && ssrf.IsPrivateIP(pip) {
+			return nil, fmt.Errorf("request to private/internal address is not allowed")
+		}
 	}
 	addr := ""
 	switch version {

@@ -241,6 +241,9 @@ func initHttpClient() {
 	V4Client.SetTransport(setTransport("tcp4"))
 	V6Client.SetTimeout(10 * time.Second)
 	V4Client.SetTimeout(10 * time.Second)
+	// 响应体上限：探针会读取任意用户提供的 URL，无上限时 10s 窗口内可灌入数 GB 导致 OOM
+	V6Client.SetResponseBodyLimit(10 * 1024 * 1024)
+	V4Client.SetResponseBodyLimit(10 * 1024 * 1024)
 	V6Client.SetRedirectPolicy(resty.RedirectPolicyFunc(ssrf.SecureCheckRedirect))
 	V4Client.SetRedirectPolicy(resty.RedirectPolicyFunc(ssrf.SecureCheckRedirect))
 	V6Client.AddContentDecompresser("zstd", decompressZstd)
@@ -555,13 +558,15 @@ func cleanHostRecord(addr string) string {
 
 func normalizeURL(input string) string {
 	input = strings.TrimSpace(input)
-	input = strings.TrimPrefix(input, "/")
 	if strings.HasPrefix(input, "http://") || strings.HasPrefix(input, "https://") {
 		return input
 	}
+	// 协议相对路径必须先于剥前导斜杠判断，否则 "//example.com" 被剥成 "/example.com"，
+	// 该分支永远不会命中，最终拼出空 host 的 "https:///example.com"
 	if strings.HasPrefix(input, "//") {
 		return "https:" + input
 	}
+	input = strings.TrimPrefix(input, "/")
 	return "https://" + input
 }
 
@@ -581,8 +586,8 @@ func checkWebsiteHandler(c *gin.Context) {
 
 	testUrl = normalizeURL(testUrl)
 
-	parsedURL, _ := url.Parse(testUrl)
-	if ssrf.HasLocalOrPrivateIP(parsedURL.Hostname()) {
+	parsedURL, err := url.Parse(testUrl)
+	if err == nil && ssrf.HasLocalOrPrivateIP(parsedURL.Hostname()) {
 		c.JSON(200, &WebsiteCheckResult{
 			IPv4: fakePerfectWebsiteResult(testUrl),
 			IPv6: fakePerfectWebsiteResult(testUrl),
@@ -682,8 +687,8 @@ func sslCheckHandler(c *gin.Context) {
 
 	testUrl = normalizeURL(testUrl)
 
-	parsedURL, _ := url.Parse(testUrl)
-	if ssrf.HasLocalOrPrivateIP(parsedURL.Hostname()) {
+	parsedURL, err := url.Parse(testUrl)
+	if err == nil && ssrf.HasLocalOrPrivateIP(parsedURL.Hostname()) {
 		c.JSON(200, &SSLCheckResult{
 			IPv4: fakeInvalidSSLResult(parsedURL.Hostname()),
 			IPv6: fakeInvalidSSLResult(parsedURL.Hostname()),
@@ -1179,7 +1184,7 @@ func applyRemoteConfig() {
 		ssrf.SetEnabled(v != "false" && v != "0")
 	}
 	if CORS != "" {
-		ACCEPT_DOMAINS = strings.Split(CORS, ",")
+		ACCEPT_DOMAINS = splitAndTrim(CORS, ",")
 	}
 	slog.Info("Remote config applied", "url", url)
 }
@@ -1216,9 +1221,56 @@ func readConfig() {
 		PORTS = "8080"
 	}
 	if CORS != "" {
-		ACCEPT_DOMAINS = strings.Split(CORS, ",")
+		ACCEPT_DOMAINS = splitAndTrim(CORS, ",")
 	}
 	slog.Info("SSRF protection initialized", "blockPrivateIPs", ssrf.Enabled())
+}
+
+// splitAndTrim 按逗号切分并去掉每段首尾空白：CORS 配置 "a.com, b.com" 带空格时，
+// 直接 Split 会产生带前导空格的 origin，永远匹配不上请求头
+func splitAndTrim(s, sep string) []string {
+	parts := strings.Split(s, sep)
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// sweepExpiredCaches 按条目时间戳清扫各 sync.Map 缓存（TTL 均为 5 分钟，清扫窗口取 10 分钟），
+// 缓存条目只在同 key 重访时惰性淘汰，公网端点被唯一 key 洪打时内存会无限增长
+func sweepExpiredCaches() {
+	cutoff := time.Now().Add(-10 * time.Minute)
+	sweep := func(m *sync.Map) {
+		m.Range(func(k, v any) bool {
+			var ts time.Time
+			switch e := v.(type) {
+			case websiteCacheEntry:
+				ts = e.timestamp
+			case sslCacheEntry:
+				ts = e.timestamp
+			case pingCacheEntry:
+				ts = e.timestamp
+			case speedCacheEntry:
+				ts = e.timestamp
+			case whoisCacheEntry:
+				ts = e.timestamp
+			default:
+				return true
+			}
+			if ts.Before(cutoff) {
+				m.Delete(k)
+			}
+			return true
+		})
+	}
+	sweep(&websiteCache)
+	sweep(&sslCache)
+	sweep(&pingCache)
+	sweep(&speedCache)
+	sweep(&whoisCache)
 }
 
 func main() {
@@ -1227,6 +1279,15 @@ func main() {
 	webtest.SetDNSServer(DNS_SERVER)
 	webtest.SetDNSSecServer(DNSSEC_DNS_SERVER)
 	slog.Info("Starting server", "port", PORTS, "single_stack", SINGLE_STACK)
+
+	// 缓存清扫：定期淘汰过期条目
+	go func() {
+		for {
+			time.Sleep(10 * time.Minute)
+			sweepExpiredCaches()
+		}
+	}()
+
 	r := gin.Default()
 	corsConfig := cors.DefaultConfig()
 	if len(ACCEPT_DOMAINS) > 0{

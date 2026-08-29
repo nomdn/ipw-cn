@@ -68,6 +68,8 @@ const tmpDomain = ref('www.zakoflare.com')
 const loading = ref(false)
 const serverResults = ref<ServerResult[]>([])
 const userIP = ref('')
+// 查询序号：连续点击时旧查询的结果不允许写入新查询的结果表
+let queryId = 0
 
 const apiList = [
   ...config.APIBaseURL.DualStack,
@@ -76,7 +78,7 @@ const apiList = [
 ]
 
 const dnssecFetches = apiList.map((server) => {
-  const url = computed(() => "/middleware/" + server.id + "/dnssec/" + tmpDomain.value)
+  const url = computed(() => "/middleware/" + server.id + "/dnssec/" + encodeURIComponent(tmpDomain.value.trim()))
   const { data, error, execute } = useMiddlewareFetch<DNSSECResult>(url, {
     immediate: false,
     watch: false,
@@ -97,6 +99,8 @@ async function checkDNSSEC() {
 
   loading.value = true
 
+  const id = ++queryId
+
   serverResults.value.forEach((result) => {
     result.loading = true
     result.data = undefined
@@ -105,9 +109,15 @@ async function checkDNSSEC() {
   const promises = dnssecFetches.map(async (fetch, index) => {
     try {
       await fetch.execute()
+      if (id !== queryId) return
       const result = serverResults.value[index]
       if (result) {
-        result.data = fetch.data.value
+        // execute() 不会抛错，失败以 error.value 为准（否则故障节点渲染成 '-'）
+        if (fetch.error.value) {
+          result.error = (fetch.error.value as any)?.message || '请求失败'
+        } else {
+          result.data = fetch.data.value
+        }
       }
     } catch (err) {
       console.error(err)
@@ -117,14 +127,16 @@ async function checkDNSSEC() {
       }
     } finally {
       const result = serverResults.value[index]
-      if (result) {
+      if (result && id === queryId) {
         result.loading = false
       }
     }
   })
 
   Promise.allSettled(promises).finally(function () {
-    loading.value = false
+    if (id === queryId) {
+      loading.value = false
+    }
   })
 }
 
@@ -134,8 +146,8 @@ function getValidationClass(result: DNSSECResult): string {
   return 'status-error'
 }
 
-function formatDuration(ms: number): string {
-  return ms.toFixed(2) + ' ms'
+function formatDuration(ms?: number): string {
+  return typeof ms === 'number' && isFinite(ms) ? ms.toFixed(2) + ' ms' : '-'
 }
 
 onMounted(() => {
@@ -149,11 +161,11 @@ onMounted(() => {
 })
 
 async function getUserIP() {
-  await $fetch<string>(config.DualStackAPI).then(
-    function (data) {
-      userIP.value = data
-    }
-  )
+  try {
+    userIP.value = await $fetch<string>(config.DualStackAPI)
+  } catch {
+    // 获取失败保持为空，避免未处理的 Promise 拒绝
+  }
   return userIP.value
 }
 </script>
@@ -244,7 +256,7 @@ async function getUserIP() {
     </div>
 
     <blockquote>
-      <a href="/doc/user/dnssec" target="_blank">DNSSEC 原理介绍</a><br/>
+      DNSSEC 原理介绍即将上线<br/>
       DNSSEC 通过 DNSKEY、RRSIG、DS 记录为 DNS 数据提供完整性验证，防止 DNS 欺骗攻击。<br/>
       如果显示 "验证失败"，可能原因：域名未配置 DNSSEC、DNSKEY 密钥不匹配、DS 记录缺失等。<br/>
       <a href="/dns" target="_blank">DNS 解析查询</a> | <a href="/whois" target="_blank">Whois 查询</a><br/>

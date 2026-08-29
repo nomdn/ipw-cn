@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"lemon-ipw/ipdb"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -235,11 +237,14 @@ var (
 	ACCEPT_DOMAINS       []string
 	ACCESS_TOKEN         string
 	REMOTE_CONFIG_URL    string
-	REMOTE_IGNORE_CONFIG []string // 不被远端配置覆盖的配置项列表（remote-ignore-config / REMOTE_IGNORE_CONFIG）
-	WS_URL               string   // WS 客户端：中间件 WS 地址（ws://host:port/ws）
-	WS_NODE_ID           string   // WS 客户端：节点 id（与中间件 ws-keys 键一致）
-	WS_NODE_KEY          string   // WS 客户端：注册 key（与中间件 ws-keys[节点id] 一致，可空）
-	NODE_OTA             string   // OTA 自更新开关（node-ota / NODE_OTA），"true" 时启用
+	REMOTE_IGNORE_CONFIG []string      // 不被远端配置覆盖的配置项列表（remote-ignore-config / REMOTE_IGNORE_CONFIG）
+	WS_URL               string        // WS 客户端：中间件 WS 地址（ws://host:port/ws）
+	WS_NODE_ID           string        // WS 客户端：节点 id（与中间件 ws-keys 键一致）
+	WS_NODE_KEY          string        // WS 客户端：注册 key（与中间件 ws-keys[节点id] 一致，可空）
+	NODE_OTA             string        // OTA 自更新开关（node-ota / NODE_OTA），"true" 时启用
+	TRUSTED_PROXIES      string        // 可信代理列表（trusted-proxies / TRUSTED_PROXIES），逗号分隔 IP/CIDR，供 ClientIP 判定
+	httpServer           *http.Server  // 显式持有的 HTTP 服务（Windows OTA 优雅重启需要先 Shutdown）
+	otaHandoverWait      chan struct{} // 非 nil 表示 Windows OTA 优雅重启模式：Serve 关闭后 main 停在此等待老进程退出
 	VERSION              string
 	COMMIT               string
 	BUILD_TIME           string
@@ -303,8 +308,8 @@ func checkWebsiteHandler(c *gin.Context) {
 
 	testUrl = normalizeURL(testUrl)
 
-	parsedURL, _ := url.Parse(testUrl)
-	if ssrf.HasLocalOrPrivateIP(parsedURL.Hostname()) {
+	parsedURL, err := url.Parse(testUrl)
+	if err == nil && ssrf.HasLocalOrPrivateIP(parsedURL.Hostname()) {
 		c.JSON(200, &WebsiteCheckResult{
 			IPv4: fakePerfectWebsiteResult(testUrl),
 			IPv6: fakePerfectWebsiteResult(testUrl),
@@ -383,7 +388,17 @@ func checkWebsiteHandler(c *gin.Context) {
 
 		websiteCache.Store(testUrl, websiteCacheEntry{result: result, timestamp: time.Now()})
 
-		if (result.IPv4 != nil && !result.IPv4.IsReachable) || (result.IPv6 != nil && !result.IPv6.IsReachable) {
+		// 单栈模式下被跳过的一侧 IsReachable 恒为 false，不能据此把成功结果也判定为失败提前清缓存
+		failed := false
+		switch SINGLE_STACK {
+		case "ipv4":
+			failed = result.IPv4 != nil && !result.IPv4.IsReachable
+		case "ipv6":
+			failed = result.IPv6 != nil && !result.IPv6.IsReachable
+		default:
+			failed = (result.IPv4 != nil && !result.IPv4.IsReachable) || (result.IPv6 != nil && !result.IPv6.IsReachable)
+		}
+		if failed {
 			go func() {
 				time.Sleep(30 * time.Second)
 				websiteCache.Delete(testUrl)
@@ -481,8 +496,8 @@ func sslCheckHandler(c *gin.Context) {
 
 	testUrl = normalizeURL(testUrl)
 
-	parsedURL, _ := url.Parse(testUrl)
-	if ssrf.HasLocalOrPrivateIP(parsedURL.Hostname()) {
+	parsedURL, err := url.Parse(testUrl)
+	if err == nil && ssrf.HasLocalOrPrivateIP(parsedURL.Hostname()) {
 		c.JSON(200, &SSLCheckResult{
 			IPv4: fakeInvalidSSLResult(parsedURL.Hostname()),
 			IPv6: fakeInvalidSSLResult(parsedURL.Hostname()),
@@ -567,7 +582,17 @@ func sslCheckHandler(c *gin.Context) {
 
 		sslCache.Store(testUrl, sslCacheEntry{result: result, timestamp: time.Now()})
 
-		if (result.IPv4 != nil && !result.IPv4.IsReachable) || (result.IPv6 != nil && !result.IPv6.IsReachable) {
+		// 单栈模式下被跳过的一侧 IsReachable 恒为 false，不能据此把成功结果也判定为失败提前清缓存
+		failed := false
+		switch SINGLE_STACK {
+		case "ipv4":
+			failed = result.IPv4 != nil && !result.IPv4.IsReachable
+		case "ipv6":
+			failed = result.IPv6 != nil && !result.IPv6.IsReachable
+		default:
+			failed = (result.IPv4 != nil && !result.IPv4.IsReachable) || (result.IPv6 != nil && !result.IPv6.IsReachable)
+		}
+		if failed {
 			go func() {
 				time.Sleep(30 * time.Second)
 				sslCache.Delete(testUrl)
@@ -832,6 +857,8 @@ func pingHandler(c *gin.Context) {
 		})
 		return
 	}
+	// 拨号用归一化后的端口：Atoi 会放行 "+80"/"0080"，原样拼接会导致拨号必败
+	port = strconv.Itoa(portNum)
 
 	count := 4
 	if countStr := c.Query("count"); countStr != "" {
@@ -1047,9 +1074,13 @@ func applyRemoteConfig() {
 	if v := configValue(CONFIG, "node-ota"); v != "" && !ignored("node-ota") {
 		NODE_OTA = v
 	}
+	// 可信代理列表（远端可统一下发）
+	if v := configValue(CONFIG, "trusted-proxies"); v != "" && !ignored("trusted-proxies") {
+		TRUSTED_PROXIES = v
+	}
 	// access-token 不在此覆盖：保持原有优先级（环境变量 > setting.json）
 	if CORS != "" {
-		ACCEPT_DOMAINS = strings.Split(CORS, ",")
+		ACCEPT_DOMAINS = splitAndTrim(CORS, ",")
 	}
 	slog.Info("Remote config applied", "url", url)
 }
@@ -1066,6 +1097,7 @@ func readConfig() {
 	IPDB = os.Getenv("IPDB")
 	CORS = os.Getenv("CORS")
 	ACCESS_TOKEN = os.Getenv("ACCESS_TOKEN")
+	TRUSTED_PROXIES = os.Getenv("TRUSTED_PROXIES")
 	ssrf.SetEnabled(os.Getenv("BLOCK_PRIVATE_IPS") != "false" && os.Getenv("BLOCK_PRIVATE_IPS") != "0")
 
 	// SINGLE_STACK is intentionally excluded: empty string is a valid value (dual-stack).
@@ -1097,11 +1129,14 @@ func readConfig() {
 	if CORS == "" {
 		CORS = viper.GetString("cors")
 	}
+	if TRUSTED_PROXIES == "" {
+		TRUSTED_PROXIES = viper.GetString("trusted-proxies")
+	}
 	if PORTS == "" {
 		PORTS = "8080"
 	}
 	if CORS != "" {
-		ACCEPT_DOMAINS = strings.Split(CORS, ",")
+		ACCEPT_DOMAINS = splitAndTrim(CORS, ",")
 	}
 	if ACCESS_TOKEN == "" {
 		ACCESS_TOKEN = viper.GetString("access-token")
@@ -1145,11 +1180,13 @@ func readConfig() {
 	if DNS_SERVER == "" || DNSSEC_DNS_SERVER == "" {
 		sysDNS, err := sysresolv.NewSystemResolvers(nil, 53)
 		if err != nil {
-			slog.Warn("Cannot setup reslovers")
-
+			// 失败时 sysDNS 为 nil，绝不能再调用 Refresh()，否则启动即 panic；
+			// SYSTEM_DNS 留空，交给下游的内置默认 DNS 兜底
+			slog.Warn("Cannot setup system resolvers, DNS_SERVER will fall back to webtest defaults", "error", err)
+		} else {
+			sysDNS.Refresh()
+			SYSTEM_DNS = webtest.AddrPortsToCSV(sysDNS.Addrs())
 		}
-		sysDNS.Refresh()
-		SYSTEM_DNS = webtest.AddrPortsToCSV(sysDNS.Addrs())
 	}
 	if DNSSEC_DNS_SERVER == "" {
 		DNSSEC_DNS_SERVER = SYSTEM_DNS
@@ -1158,6 +1195,56 @@ func readConfig() {
 		DNS_SERVER = SYSTEM_DNS
 	}
 	slog.Info("SSRF protection initialized", "blockPrivateIPs", ssrf.Enabled())
+}
+
+// splitAndTrim 按逗号切分并去掉每段首尾空白：CORS 配置 "a.com, b.com" 带空格时，
+// 直接 Split 会产生带前导空格的 origin，永远匹配不上请求头
+func splitAndTrim(s, sep string) []string {
+	parts := strings.Split(s, sep)
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// sweepExpiredCaches 按条目时间戳清扫各 sync.Map 缓存（TTL 均为 5 分钟，清扫窗口取 10 分钟）
+func sweepExpiredCaches() {
+	cutoff := time.Now().Add(-10 * time.Minute)
+	sweep := func(m *sync.Map) {
+		m.Range(func(k, v any) bool {
+			var ts time.Time
+			switch e := v.(type) {
+			case websiteCacheEntry:
+				ts = e.timestamp
+			case sslCacheEntry:
+				ts = e.timestamp
+			case pingCacheEntry:
+				ts = e.timestamp
+			case speedCacheEntry:
+				ts = e.timestamp
+			case whoisCacheEntry:
+				ts = e.timestamp
+			case asnWhoisCacheEntry:
+				ts = e.timestamp
+			default:
+				return true
+			}
+			if ts.Before(cutoff) {
+				m.Delete(k)
+			}
+			return true
+		})
+	}
+	sweep(&websiteCache)
+	sweep(&sslCache)
+	sweep(&pingCache)
+	sweep(&speedCache)
+	sweep(&whoisCache)
+	sweep(&asnWhoisCache)
+	ipdb.SweepBilibiliCache()
 }
 
 func main() {
@@ -1192,7 +1279,29 @@ func main() {
 	// OTA 自更新：定期检查 GitHub Release 并替换二进制（配置 NODE_OTA / node-ota 启用）
 	initOTA(GH_PROXY)
 
+	// 缓存清扫：各 sync.Map 只在同 key 重访时惰性淘汰过期条目，
+	// 公网端点被唯一 key 洪打时内存会无限增长，这里定期清扫
+	go func() {
+		for {
+			time.Sleep(10 * time.Minute)
+			sweepExpiredCaches()
+		}
+	}()
+
 	r := gin.Default()
+	// TRUSTED_PROXIES / trusted-proxies：逗号分隔的可信代理（IP/CIDR）。配置后 ClientIP 只信任这些
+	// 代理转发的 X-Forwarded-For；未配置时保持 gin 默认行为（信任所有代理）
+	if strings.TrimSpace(TRUSTED_PROXIES) != "" {
+		var proxies []string
+		for _, p := range strings.Split(TRUSTED_PROXIES, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				proxies = append(proxies, p)
+			}
+		}
+		if err := r.SetTrustedProxies(proxies); err != nil {
+			slog.Warn("Invalid TRUSTED_PROXIES, keep gin default", "error", err)
+		}
+	}
 	corsConfig := cors.DefaultConfig()
 
 	if len(ACCEPT_DOMAINS) > 0 {
@@ -1224,7 +1333,41 @@ func main() {
 
 	r.GET("/", healchCheck)
 
-	if err := r.Run(":" + PORTS); err != nil {
+	// 显式持有 http.Server：Windows OTA 优雅重启需要先 Shutdown 释放端口再拉起新进程，
+	// 避免 r.Run 的隐式 Server 无法受控关闭、父子进程抢端口
+	httpServer = &http.Server{Handler: r}
+	ln, err := net.Listen("tcp", ":"+PORTS)
+	if err != nil {
 		slog.Error("Server failed to start", "error", err)
+		os.Exit(1)
+	}
+	go func() {
+		// 优雅重启时 Shutdown 会正常关闭 Server，返回 ErrServerClosed 属预期
+		if err := httpServer.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("Server failed to start", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Windows OTA：Server 被 restartSelf 的优雅停机关闭后，main 停在这里不退出，
+	// 由 restartSelf 在新进程健康检查通过后 os.Exit 结束整个老进程
+	if otaEnabled() && runtime.GOOS == "windows" {
+		otaHandoverWait = make(chan struct{})
+		<-otaHandoverWait
+	}
+}
+
+// gracefulShutdown 优雅停止 HTTP 服务：停止接收新请求，等待在途请求完成（上限 30s）。
+// 供 Windows OTA 在拉起新进程前调用，确保监听端口先释放、子进程能正常绑定。
+func gracefulShutdown() {
+	if httpServer == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	slog.Info("Graceful shutdown started, waiting for in-flight requests")
+	if err := httpServer.Shutdown(ctx); err != nil {
+		slog.Warn("Graceful shutdown timed out, forcing close", "error", err)
+		httpServer.Close()
 	}
 }

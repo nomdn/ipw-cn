@@ -156,7 +156,7 @@ echo "单栈模式:     ${SINGLE_STACK:-双栈}"
 echo "access-token: ${ACCESS_TOKEN:+已设置 (隐藏)}"
 echo "DNS:          $DNS_SERVER"
 echo "ipdb:         $IPDB"
-echo "WS 接入:      ${WS_URL:+$WS_URL (id=$NODE_ID, key=${NODE_KEY:+已设置})}${WS_URL:-未启用}"
+echo "WS 接入:      $(if [ -n "$WS_URL" ]; then printf '%s (id=%s, key=%s)' "$WS_URL" "$NODE_ID" "${NODE_KEY:+已设置}"; else printf '未启用'; fi)"
 echo "OTA 自更新:   ${NODE_OTA:-未启用}"
 echo "========================================"
 read -r -p "确认安装？[Y/n]: " CONFIRM
@@ -185,7 +185,8 @@ echo "下载 $BINARY ..."
 if command -v wget >/dev/null 2>&1; then
     wget -q -O "$INSTALL_DIR/lemonipw" "$DOWNLOAD_URL"
 else
-    curl -sL -o "$INSTALL_DIR/lemonipw" "$DOWNLOAD_URL"
+    # -f 让 404/4xx 直接失败，避免把 GitHub 的 "Not Found" 页面存成二进制
+    curl -fsSL -o "$INSTALL_DIR/lemonipw" "$DOWNLOAD_URL"
 fi
 chmod +x "$INSTALL_DIR/lemonipw"
 echo "二进制已安装到 $INSTALL_DIR/lemonipw"
@@ -194,35 +195,32 @@ echo "二进制已安装到 $INSTALL_DIR/lemonipw"
 SERVICE_FILE="/etc/systemd/system/lemon-ipw.service"
 
 # 收集环境变量（仅非空的写入，避免空值覆盖默认）
+# 值里的双引号/反斜杠需要转义，否则会提前终止 systemd 的引号包裹、损坏 unit
 ENV_LINES=""
-[ -n "$PORTS" ]             && ENV_LINES="${ENV_LINES}Environment=\"PORTS=$PORTS\"
+add_env() {
+    local name="$1" value="$2"
+    [ -n "$value" ] || return 0
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    ENV_LINES="${ENV_LINES}Environment=\"${name}=${value}\"
 "
-[ -n "$SINGLE_STACK" ]      && ENV_LINES="${ENV_LINES}Environment=\"SINGLE_STACK=$SINGLE_STACK\"
-"
-[ -n "$ACCESS_TOKEN" ]      && ENV_LINES="${ENV_LINES}Environment=\"ACCESS_TOKEN=$ACCESS_TOKEN\"
-"
-[ -n "$DNS_SERVER" ]        && ENV_LINES="${ENV_LINES}Environment=\"DNS_SERVER=$DNS_SERVER\"
-"
-[ -n "$DNSSEC_DNS_SERVER" ] && ENV_LINES="${ENV_LINES}Environment=\"DNSSEC_DNS_SERVER=$DNSSEC_DNS_SERVER\"
-"
-[ -n "$IPDB" ]              && ENV_LINES="${ENV_LINES}Environment=\"IPDB=$IPDB\"
-"
-[ -n "$CORS" ]              && ENV_LINES="${ENV_LINES}Environment=\"CORS=$CORS\"
-"
-[ -n "$REMOTE_CONFIG_URL" ] && ENV_LINES="${ENV_LINES}Environment=\"REMOTE_CONFIG_URL=$REMOTE_CONFIG_URL\"
-"
-[ -n "$WS_URL" ]            && ENV_LINES="${ENV_LINES}Environment=\"WS_URL=$WS_URL\"
-"
-[ -n "$NODE_ID" ]           && ENV_LINES="${ENV_LINES}Environment=\"NODE_ID=$NODE_ID\"
-"
-[ -n "$NODE_KEY" ]          && ENV_LINES="${ENV_LINES}Environment=\"NODE_KEY=$NODE_KEY\"
-"
-[ -n "$NODE_OTA" ]          && ENV_LINES="${ENV_LINES}Environment=\"NODE_OTA=$NODE_OTA\"
-"
+}
+add_env PORTS "$PORTS"
+add_env SINGLE_STACK "$SINGLE_STACK"
+add_env ACCESS_TOKEN "$ACCESS_TOKEN"
+add_env DNS_SERVER "$DNS_SERVER"
+add_env DNSSEC_DNS_SERVER "$DNSSEC_DNS_SERVER"
+add_env IPDB "$IPDB"
+add_env CORS "$CORS"
+add_env REMOTE_CONFIG_URL "$REMOTE_CONFIG_URL"
+add_env WS_URL "$WS_URL"
+add_env NODE_ID "$NODE_ID"
+add_env NODE_KEY "$NODE_KEY"
+add_env NODE_OTA "$NODE_OTA"
 if [ -n "$EXTRA_ENVS" ]; then
     while IFS= read -r line; do
-        [ -n "$line" ] && ENV_LINES="${ENV_LINES}Environment=\"$line\"
-"
+        [ -n "$line" ] || continue
+        add_env "${line%%=*}" "${line#*=}"
     done <<< "$EXTRA_ENVS"
 fi
 
@@ -235,8 +233,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/lemonipw
+WorkingDirectory="${INSTALL_DIR}"
+ExecStart="${INSTALL_DIR}/lemonipw"
 ${ENV_LINES}Restart=always
 RestartSec=5
 
@@ -248,7 +246,9 @@ echo "已生成服务文件 $SERVICE_FILE"
 
 # ---------- 启动服务 ----------
 systemctl daemon-reload
-systemctl enable --now lemon-ipw
+# restart 而非 enable --now：重跑安装改配置后旧进程必须重启才会生效
+systemctl enable lemon-ipw
+systemctl restart lemon-ipw
 systemctl status lemon-ipw --no-pager | head -15
 
 echo ""

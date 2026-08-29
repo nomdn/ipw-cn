@@ -32,16 +32,41 @@ npx edgeone pages deploy -n ipw-cn -t $EDGEONE_API_TOKEN
 
 ## 方案三：Docker
 
-仓库根目录提供 `Dockerfile`（多阶段构建，产物基于 Alpine）：
+`src/` 目录提供 `Dockerfile`（多阶段构建，产物基于 Alpine，支持多架构）：
 
 ```bash
+cd src
 docker build -t lemon-ipw .
-docker run -d -p 8080:8080 \
-  -v $(pwd)/setting.json:/app/setting.json \
+docker run -d --restart unless-stopped -p 8080:8080 \
+  -v $(pwd)/setting.json:/home/appuser/setting.json \
   lemon-ipw
 ```
 
-配置通过挂载 `setting.json` 提供，也可用环境变量覆盖（`PORTS` / `CORS` / `ACCESS_TOKEN` 等）。
+> `--restart unless-stopped`：主进程退出时 Docker 自动拉起容器（OTA 更新失败自愈依赖它）；手动 `docker stop` 不会触发重启。
+
+配置通过挂载 `setting.json` 提供（注意挂载到容器工作目录 `/home/appuser`），也可用环境变量覆盖（`PORTS` / `CORS` / `TRUSTED_PROXIES` / `ACCESS_TOKEN` 等）。
+
+**多架构**：Dockerfile 已适配 buildx——构建阶段固定在构建机原生平台交叉编译（`TARGETOS`/`TARGETARCH`），目标架构无需 QEMU 模拟。本机为其他架构构建：
+
+```bash
+cd src
+docker buildx build --platform linux/arm64 -t lemon-ipw:arm64 --load .
+```
+
+打 `v*` 版本标签发版时，CI（`.github/workflows/docker.yml`）会自动构建 `linux/amd64` / `linux/arm64` / `linux/arm/v7` 三架构镜像（amd64 在 x64 实例上原生构建，arm64/armv7 在 GitHub 原生 ARM 实例 `ubuntu-24.04-arm` 上交叉构建，全程无 QEMU），推送 GHCR 与 Docker Hub：
+
+- GHCR：`ghcr.io/<owner>/<repo>/lemon-ipw`（自动）
+- Docker Hub：`docker.io/<namespace>/lemon-ipw`（**workflow 中暂未启用**——`.github/workflows/docker.yml` 已预留注释，取消注释并配置 `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` Secrets 即可开启）
+
+均带 `版本` 与 `major.minor` 标签。部署直接：
+
+```bash
+docker run -d -p 8080:8080 \
+  -v $(pwd)/setting.json:/home/appuser/setting.json \
+  ghcr.io/nomdn/ipw-cn/lemon-ipw:v1.2.3
+```
+
+Docker 会按宿主机架构自动拉取 manifest 中对应的镜像变体。
 
 ## 方案四：二进制
 
@@ -73,6 +98,7 @@ sudo bash install.sh
 |--------|--------|------|
 | 安装目录 | `/opt/lemon-ipw` | 二进制与工作目录 |
 | 监听端口 | `8080` | `PORTS` |
+| 单栈模式 | 双栈 | `SINGLE_STACK`，`ipv4` / `ipv6` / 留空 |
 | access-token | 留空 | 留空 = 不启用鉴权 |
 | DNS 服务器 | 留空 | 主从逗号分隔（`119.28.28.28:53,223.5.5.5:53`）；留空 = 启动时自动探测系统 DNS |
 | DNSSEC 专用 DNS | 留空 | 留空 = 沿用 dns-server；都留空 = 自动探测系统 DNS |
@@ -80,7 +106,7 @@ sudo bash install.sh
 | CORS | 留空 | 逗号分隔允许来源 |
 | 远端配置地址 | 留空 | `REMOTE_CONFIG_URL` |
 | WS 通道接入 | `N` | 选 `y` 后继续输入 WS_URL / NODE_ID / NODE_KEY |
-| 其他环境变量 | 无 | 每行一个 `K=V`，空行结束 |
+| 其他环境变量 | 无 | 每行一个 `K=V`，空行结束。如需可信代理在此输入 `TRUSTED_PROXIES=<IP/CIDR 逗号分隔>`（配置后归属地接口只信任这些代理转发的 X-Forwarded-For，防伪造） |
 
 **WS 接入特殊规则**：
 

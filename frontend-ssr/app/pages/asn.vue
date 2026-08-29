@@ -61,7 +61,7 @@ const currentApiIndex = ref(0)
 const backendID = computed(() => apiList[currentApiIndex.value]?.id || '')
 
 
-const { data: asnData, error: asnError, execute: executeASN } = useMiddlewareFetch<ASNResult>(() => '/middleware/' + backendID.value + '/asn/' + tmpIP.value, {
+const { data: asnData, error: asnError, execute: executeASN } = useMiddlewareFetch<ASNResult>(() => '/middleware/' + backendID.value + '/asn/' + encodeURIComponent(tmpIP.value), {
   key: 'asn-fetch',
   immediate: false,
   watch: false,
@@ -119,11 +119,11 @@ onMounted(() => {
 })
 
 async function getUserIP() {
-  await $fetch<string>(config.DualStackAPI).then(
-    function (data) {
-      userIP.value = data
-    }
-  )
+  try {
+    userIP.value = await $fetch<string>(config.DualStackAPI)
+  } catch {
+    // 获取失败保持为空，避免未处理的 Promise 拒绝
+  }
   return userIP.value
 }
 
@@ -234,7 +234,6 @@ function getStatusClass(status: string): string {
     </div>
 
     <blockquote>
-      <a href="/doc/user/asn" target="_blank">ASN 查询原理介绍</a><br/>
       ASN（Autonomous System Number）是互联网中每个自治系统的唯一标识符。<br/>
       数据来源：Maxmind GEOLite2、DB-IP，部分节点集成 WHOIS 进一步解析 ASN 详情。<br/>
       <a href="/location" target="_blank">IP 归属地查询</a> | <a href="/whois" target="_blank">Whois 查询</a><br/>

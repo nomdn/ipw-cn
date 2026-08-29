@@ -128,7 +128,7 @@ html.dark .content {
 </style>
 <style>
 @import "github-markdown-css/github-markdown-light.css";
-@import "/github-markdown-dark.css";
+@import "../../github-markdown-dark.css";
 @import "/style.css"
 
 </style>

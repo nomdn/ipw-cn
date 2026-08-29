@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -54,7 +55,9 @@ type wsCommand struct {
 type wsPeer struct {
 	conn *websocket.Conn
 	id   string
-	last time.Time
+	// lastAtomic 最后收到消息的时间（unix nano）。读循环写、maintenanceLoop 读，
+	// 跨 goroutine 且不在 s.mu 保护内，必须原子访问
+	lastAtomic atomic.Int64
 }
 
 type wsServer struct {
@@ -91,6 +94,7 @@ func (s *wsServer) Handler(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	peer := &wsPeer{conn: c}
+	peer.lastAtomic.Store(time.Now().UnixNano())
 	registered := false
 
 	// 读循环
@@ -110,7 +114,7 @@ func (s *wsServer) Handler(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[ws] invalid message from %s: %v", peer.id, err)
 			continue
 		}
-		peer.last = time.Now()
+		peer.lastAtomic.Store(time.Now().UnixNano())
 
 		// ===== 数据阶段 =====
 		switch msg.Type {
@@ -194,10 +198,11 @@ func (s *wsServer) Handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *wsServer) sendJSON(c *websocket.Conn, msg wsMessage) {
+// sendJSON 发送 JSON 消息并返回写错误（写失败意味着对端连接已不可用，调用方应尽快失败）
+func (s *wsServer) sendJSON(c *websocket.Conn, msg wsMessage) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_ = c.Write(ctx, websocket.MessageText, mustRaw(msg))
+	return c.Write(ctx, websocket.MessageText, mustRaw(msg))
 }
 
 // RequestProbe 通过 WS 通道向指定节点发送拨测请求并等待结果（超时返回错误）。
@@ -221,7 +226,13 @@ func (s *wsServer) RequestProbe(nodeID, apiType, raw string, query map[string]st
 	}()
 
 	payload := wsProbeRequest{RequestID: reqID, APIType: apiType, Raw: raw, Query: query}
-	s.sendJSON(peer.conn, wsMessage{Type: "probe", NodeID: nodeID, TS: time.Now().Unix(), Data: mustRaw(payload)})
+	if err := s.sendJSON(peer.conn, wsMessage{Type: "probe", NodeID: nodeID, TS: time.Now().Unix(), Data: mustRaw(payload)}); err != nil {
+		// 连接已死（写失败立刻可知），直接返回错误，不再让请求干等满超时
+		s.statMu.Lock()
+		s.errReqs++
+		s.statMu.Unlock()
+		return 0, nil, fmt.Errorf("ws probe send failed for node %s: %w", nodeID, err)
+	}
 
 	s.statMu.Lock()
 	s.totalReqs++
@@ -292,6 +303,21 @@ func (s *wsServer) maintenanceLoop() {
 		s.statMu.Unlock()
 
 		for _, p := range peers {
+			// 空闲剔除：超过 75s（约 3 个心跳周期）没有任何消息的节点视为僵死。
+			// 不剔除的话死连接会永久占位，路由到它的探测全部干等超时
+			s.mu.Lock()
+			idle := time.Since(time.Unix(0, p.lastAtomic.Load()))
+			s.mu.Unlock()
+			if idle > 75*time.Second {
+				log.Printf("[ws] node %s idle for %s, evicting", p.id, idle.Round(time.Second))
+				p.conn.Close(websocket.StatusPolicyViolation, "idle timeout")
+				s.mu.Lock()
+				if cur, ok := s.peers[p.id]; ok && cur == p {
+					delete(s.peers, p.id)
+				}
+				s.mu.Unlock()
+				continue
+			}
 			// 心跳
 			s.sendJSON(p.conn, wsMessage{Type: "ping", NodeID: p.id, TS: time.Now().Unix()})
 			// 状态/统计上报

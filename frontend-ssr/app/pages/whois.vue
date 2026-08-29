@@ -67,7 +67,7 @@ const userIP = ref('')
 const apiList = config.APIBaseURL.DualStack
 const currentApiIndex = ref(0)
 const backendID = computed(() => apiList[currentApiIndex.value]?.id || '')
-const whoisUrl = computed(() => '/middleware/' + backendID.value + '/whois/' + domain.value)
+const whoisUrl = computed(() => '/middleware/' + backendID.value + '/whois/' + encodeURIComponent(domain.value))
 
 const { data: whoisData, error: whoisError, execute: executeWhois } = useMiddlewareFetch<any>(whoisUrl, {
   immediate: false,
@@ -124,11 +124,11 @@ onMounted(() => {
 })
 
 async function getUserIP(){
-  await $fetch<string>(config.DualStackAPI).then(
-    function (data){
-      userIP.value = data
-    }
-  )
+  try {
+    userIP.value = await $fetch<string>(config.DualStackAPI)
+  } catch {
+    // 获取失败保持为空，避免未处理的 Promise 拒绝
+  }
   return userIP.value
 }
 

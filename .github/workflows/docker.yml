@@ -1,0 +1,171 @@
+name: Docker Multi-Arch
+
+# 打 v* 标签发版时构建多架构镜像并推送到 GHCR + Docker Hub。
+# ARM 用 GitHub 原生 arm64 实例（ubuntu-24.04-arm，公开仓库免费）交叉编译，全程无 QEMU：
+#   - ubuntu-latest        → linux/amd64（原生）
+#   - ubuntu-24.04-arm     → linux/arm64（原生）、linux/arm/v7（Go 交叉编译，GOARM 由 Dockerfile 处理）
+# 各平台按 digest 推到 GHCR，最后由 merge job 用 buildx imagetools 合并成多架构
+# manifest list，同时打上 GHCR 与 Docker Hub 的标签。
+#
+# Docker Hub 推送为可选：需要仓库 Secrets 配置 DOCKERHUB_USERNAME / DOCKERHUB_TOKEN，
+# 未配置时只推 GHCR，不影响流程。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [lemon-ipw, lemon-ipw-middleware]
+        include:
+          - image: lemon-ipw
+            context: src
+          - image: lemon-ipw-middleware
+            context: middleware-go
+          - image: lemon-ipw
+            runner: ubuntu-latest
+            platforms: linux/amd64
+            platform_id: amd64
+          - image: lemon-ipw
+            runner: ubuntu-24.04-arm
+            platforms: linux/arm64
+            platform_id: arm64
+          - image: lemon-ipw
+            runner: ubuntu-24.04-arm
+            platforms: linux/arm/v7
+            platform_id: armv7
+          - image: lemon-ipw-middleware
+            runner: ubuntu-latest
+            platforms: linux/amd64
+            platform_id: amd64
+          - image: lemon-ipw-middleware
+            runner: ubuntu-24.04-arm
+            platforms: linux/arm64
+            platform_id: arm64
+          - image: lemon-ipw-middleware
+            runner: ubuntu-24.04-arm
+            platforms: linux/arm/v7
+            platform_id: armv7
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.image }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          platforms: ${{ matrix.platforms }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.platform_id }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.platform_id }}
+
+      - name: Export digest
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.image }}-${{ matrix.platform_id }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ===== Docker Hub 推送暂时停用 =====
+      # 需要启用时：取消注释本步骤与下方 merge 脚本中的 docker.io 标签行，
+      # 并在仓库 Secrets 配置 DOCKERHUB_USERNAME / DOCKERHUB_TOKEN
+      # - name: Log in to Docker Hub
+      #   if: ${{ secrets.DOCKERHUB_USERNAME != '' }}
+      #   uses: docker/login-action@v3
+      #   with:
+      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifest lists
+        # DOCKERHUB_USERNAME 暂不注入（Docker Hub 推送停用，见上方登录步骤注释）
+        # env:
+        #   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          set -euo pipefail
+          DIGESTS_DIR="${{ runner.temp }}/digests"
+          GHCR_REPO="ghcr.io/${GITHUB_REPOSITORY,,}"
+
+          # 标签：v1.2.3 → ["1.2.3", "1.2"]；手动触发 → ["main"]
+          if [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            MINOR="$(echo "${VERSION}" | cut -d. -f1,2)"
+            TAGS=("${VERSION}" "${MINOR}")
+          else
+            TAGS=("main")
+          fi
+
+          for IMG in lemon-ipw lemon-ipw-middleware; do
+            ARGS=()
+            for TAG in "${TAGS[@]}"; do
+              ARGS+=(-t "${GHCR_REPO}/${IMG}:${TAG}")
+              # Docker Hub 推送停用；启用时取消注释并恢复上方 DOCKERHUB_USERNAME env
+              # if [ -n "${DOCKERHUB_USERNAME}" ]; then
+              #   ARGS+=(-t "docker.io/${DOCKERHUB_USERNAME,,}/${IMG}:${TAG}")
+              # fi
+            done
+            # 各平台单架构 manifest（GHCR 上按 digest 推送的产物）合并为一份
+            # 多架构 manifest list；imagetools create 会按 -t 目标同时推送 GHCR 与 Docker Hub
+            for PLATFORM_ID in amd64 arm64 armv7; do
+              DIR="${DIGESTS_DIR}/digests-${IMG}-${PLATFORM_ID}"
+              for f in "${DIR}"/*; do
+                ARGS+=("${GHCR_REPO}/${IMG}@sha256:$(basename "${f}")")
+              done
+            done
+            docker buildx imagetools create "${ARGS[@]}"
+          done
+          echo "Pushed multi-arch manifests: ${TAGS[*]}"

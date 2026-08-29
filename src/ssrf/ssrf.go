@@ -45,24 +45,49 @@ func SetEnabled(v bool) {
 	blockPrivateIPs = v
 }
 
+// Go 标准库 IsPrivate 只覆盖 RFC1918 与 fd00::/8，这里补齐其余不应出网的内部/特殊网段
+var extraPrivateNets = mustParseCIDRs(
+	"100.64.0.0/10", // CGNAT：运营商级 NAT、云内网、Tailscale 等
+	"198.18.0.0/15", // 网络基准测试保留段
+	"192.0.0.0/24",  // IETF 协议分配
+	"fc00::/7",      // IPv6 ULA（IsPrivate 只认 fd00::/8）
+	"64:ff9b::/96",  // NAT64：内嵌 IPv4 会被网关转换
+)
+
+func mustParseCIDRs(cidrs ...string) []*net.IPNet {
+	nets := make([]*net.IPNet, 0, len(cidrs))
+	for _, c := range cidrs {
+		_, ipNet, err := net.ParseCIDR(c)
+		if err != nil {
+			panic(fmt.Sprintf("invalid CIDR %q: %v", c, err))
+		}
+		nets = append(nets, ipNet)
+	}
+	return nets
+}
+
 // IsPrivateIP checks if the given IP address belongs to a private or internal range.
 // IsPrivateIP 检查给定的 IP 地址是否属于私有或内部地址段。
-// It covers RFC 1918 private addresses, loopback, link-local, and unspecified addresses.
-// 涵盖 RFC 1918 私有地址、回环地址、链路本地地址和未指定地址。
+// It covers RFC 1918 private addresses, loopback, link-local, and unspecified addresses,
+// plus CGNAT/ULA/NAT64/benchmark/multicast ranges that Go's IsPrivate does not cover.
+// 涵盖 RFC 1918 私有地址、回环地址、链路本地地址和未指定地址，
+// 以及 Go 标准库未覆盖的 CGNAT/ULA/NAT64/基准测试/组播段。
 // This is the core check used to block SSRF attacks targeting internal networks.
 // 这是用于阻止针对内部网络的 SSRF 攻击的核心检查。
 func IsPrivateIP(ip net.IP) bool {
-	if ip.IsPrivate() {
+	if ip == nil {
+		return false
+	}
+	if ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast() {
 		return true
 	}
-	if ip.IsLoopback() {
+	if ip.Equal(net.IPv4bcast) {
 		return true
 	}
-	if ip.IsLinkLocalUnicast() {
-		return true
-	}
-	if ip.IsUnspecified() {
-		return true
+	for _, n := range extraPrivateNets {
+		if n.Contains(ip) {
+			return true
+		}
 	}
 	return false
 }
@@ -133,36 +158,35 @@ func ValidateOutboundTarget(ctx context.Context, targetURL string) (context.Cont
 // SecureCheckRedirect is a redirect policy that prevents SSRF via HTTP redirect chains.
 // SecureCheckRedirect 是一个重定向策略，防止通过 HTTP 重定向链进行 SSRF 攻击。
 //
-// When an HTTP client follows redirects (301, 302, 307, 308), each intermediate target
-// 当 HTTP 客户端跟随重定向（301、302、307、308）时，会校验每个中间目标
-// is resolved and checked against private/internal IP ranges.
-// 的解析结果，并检查是否指向私有/内部 IP 段。
-//
-// This blocks attackers from:
-// 这阻止攻击者通过以下方式绕过防护：
-//   - Using an initial public redirect that points to an internal service.
-//     使用指向内部服务的初始公开重定向。
-//   - Chaining multiple redirects to eventually reach a private IP.
-//     链式多个重定向最终到达私有 IP。
+// req 是即将跳转的目标（via 是已访问的链）。必须校验目标本身：
+// 只检查 via 会漏掉重定向链的最后一跳。每一跳的目标都会被解析并检查
+// 是否指向私有/内部 IP 段，同时限制重定向深度。
+// 这阻止攻击者通过链式重定向最终到达私有 IP。
 func SecureCheckRedirect(req *http.Request, via []*http.Request) error {
 	if !blockPrivateIPs {
 		return nil
 	}
-	for _, r := range via {
-		redirectURL := r.URL
-		host := redirectURL.Hostname()
-		if host == "" {
-			continue
-		}
-		ips, err := net.LookupIP(host)
-		if err != nil {
-			return err
-		}
-		for _, ip := range ips {
-			if IsPrivateIP(ip) {
-				slog.Warn("Blocked redirect to private IP", "host", host, "ip", ip)
-				return fmt.Errorf("redirect to private/internal address is not allowed")
-			}
+	if req == nil || req.URL == nil {
+		return fmt.Errorf("invalid redirect target")
+	}
+	if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+		return fmt.Errorf("invalid redirect scheme: %s", req.URL.Scheme)
+	}
+	host := req.URL.Hostname()
+	if host == "" {
+		return fmt.Errorf("redirect target has empty host")
+	}
+	if len(via) >= 10 {
+		return fmt.Errorf("stopped after 10 redirects")
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return err
+	}
+	for _, ip := range ips {
+		if IsPrivateIP(ip) {
+			slog.Warn("Blocked redirect to private IP", "host", host, "ip", ip)
+			return fmt.Errorf("redirect to private/internal address is not allowed")
 		}
 	}
 	return nil

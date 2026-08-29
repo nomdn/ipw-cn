@@ -17,17 +17,28 @@
 
 ## 方案一：Docker
 
-`middleware-go/` 目录提供 `Dockerfile`：
+`middleware-go/` 目录提供 `Dockerfile`（多阶段构建，产物基于 Alpine，支持多架构）：
 
 ```bash
 cd middleware-go
 docker build -t middleware-go .
 docker run -d -p 8091:8091 \
-  -v $(pwd)/setting.json:/app/setting.json \
+  -v $(pwd)/setting.json:/home/appuser/setting.json \
   middleware-go
 ```
 
-配置通过挂载 `setting.json` 提供（`api-base-url` / `ip-location-api` / `api-keys` / `ws-keys` / `cors` / `rate-limit` / `remote-config-url` 等；`rate-limit` 为单 IP 每分钟限流次数，默认 120，0 表示不限流，可用环境变量 `RATE_LIMIT` 覆盖；`remote-config-url` 为远端配置地址，可用环境变量 `REMOTE_CONFIG_URL` 覆盖；**`api-keys` / `ws-keys` 为敏感凭据，不随远端配置覆盖**——`api-keys` 管 HTTP 转发鉴权，`ws-keys` 管 WS 注册校验，两者相互独立）。
+> 配置挂载注意：容器工作目录是 `/home/appuser`（非 root 用户运行），`setting.json` 要挂到这个路径下。
+
+**多架构**：Dockerfile 已适配 buildx 交叉编译，本机构建其他架构：
+
+```bash
+cd middleware-go
+docker buildx build --platform linux/arm64 -t middleware-go:arm64 --load .
+```
+
+打 `v*` 版本标签发版时，CI 会自动构建 `linux/amd64` / `linux/arm64` / `linux/arm/v7` 三架构镜像（amd64 原生构建，arm64/armv7 在 GitHub 原生 ARM 实例上交叉构建，无 QEMU），推送 GHCR（`ghcr.io/<owner>/<repo>/lemon-ipw-middleware`；Docker Hub 推送在 workflow 中暂未启用，预留了注释可随时开启），Docker 按宿主机架构自动拉取对应变体。
+
+配置通过挂载 `setting.json` 提供（`api-base-url` / `ip-location-api` / `api-keys` / `ws-keys` / `cors` / `trusted-proxies` / `rate-limit` / `remote-config-url` 等；`rate-limit` 为单 IP 每分钟限流次数，默认 120，0 表示不限流，可用环境变量 `RATE_LIMIT` 覆盖；`remote-config-url` 为远端配置地址，可用环境变量 `REMOTE_CONFIG_URL` 覆盖；**`api-keys` / `ws-keys` 为敏感凭据，不随远端配置覆盖**——`api-keys` 管 HTTP 转发鉴权，`ws-keys` 管 WS 注册校验，两者相互独立）。
 
 ## 方案二：二进制
 
@@ -37,7 +48,9 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o middleware-go-linux-amd64 .
 ./middleware-go-linux-amd64          # 运行（与 setting.json 同目录）
 ```
 
-所有配置可用环境变量覆盖（`API_BASE_URLS` / `IP_LOCATION_APIS` / `CORS` / `API_KEYS` / `WS_KEYS` / `RATE_LIMIT` 等，数组/对象用 JSON 字符串），优先级：**环境变量 > setting.json > 默认值**（远端配置 `REMOTE_CONFIG_URL` 高于两者，详见 [配置文件 - 远端配置](/guide/config#远端配置remoteconfigurl)）。
+**OTA 自更新**（可选，默认关闭）：配置 `"ota": "true"`（或环境变量 `OTA=true`）后，中间件定期检查本仓库 Release，下载与当前平台匹配的 `middleware-go-*` 资产并替换自身重启。下载加速可配 `"gh-proxy": ""`（或 `GH_PROXY` 环境变量）。交接流程与后端节点一致：预检 → 原子替换 → 优雅停机 → 拉起新进程 → 健康检查确认；失败自动回滚 `.old` 备份。
+
+所有配置可用环境变量覆盖（`API_BASE_URLS` / `IP_LOCATION_APIS` / `CORS` / `TRUSTED_PROXIES` / `API_KEYS` / `WS_KEYS` / `RATE_LIMIT` 等，数组/对象用 JSON 字符串），优先级：**环境变量 > setting.json > 默认值**（远端配置 `REMOTE_CONFIG_URL` 高于两者，详见 [配置文件 - 远端配置](/guide/config#远端配置remoteconfigurl)）。
 
 需要守护运行时，参考 [后端节点部署 - 方案五：一键安装](/guide/deploy-node#方案五一键安装installsh) 的 systemd 管理方式（`ExecStart` 指向中间件二进制，`WorkingDirectory` 指向 `middleware-go/setting.json` 所在目录）。
 

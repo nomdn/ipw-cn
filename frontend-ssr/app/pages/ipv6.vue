@@ -6,7 +6,8 @@ const route = useRoute();
 
 onMounted(async () => {
   const urlParam = route.query.ip;
-  await navigateTo({ path: '/location', query: { ip: urlParam } });
+  // ip 参数缺失时不要拼出 ?ip=undefined
+  await navigateTo(urlParam ? { path: '/location', query: { ip: urlParam } } : { path: '/location' });
 });
 </script>
 

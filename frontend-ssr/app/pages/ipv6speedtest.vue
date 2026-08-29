@@ -57,6 +57,9 @@ interface ServerResult {
   data: any
 }
 
+// 查询序号：连续点击时旧查询的结果不允许写入新查询的结果表
+let queryId = 0
+
 /** 预构建的服务器列表，页面挂载即展示，用户可提前看到测速节点 */
 const serverResults = ref<ServerResult[]>([])
 
@@ -69,7 +72,7 @@ const serverResults = ref<ServerResult[]>([])
 
 /** 双栈服务器：同时支持 IPv4/IPv6 的节点 */
 const dualStackFetches = config.APIBaseURL.DualStack.map((server) => {
-  const url = computed(() => "/middleware/" + server.id + "/speed/v6/" + domain.value);
+  const url = computed(() => "/middleware/" + server.id + "/speed/v6/" + encodeURIComponent(domain.value));
   const { data, error: fetchError, execute } = useMiddlewareFetch(url, {
     immediate: false,
     watch: false,
@@ -79,7 +82,7 @@ const dualStackFetches = config.APIBaseURL.DualStack.map((server) => {
 
 /** IPv6 专用服务器：仅支持 IPv6 的节点 */
 const ipv6Fetches = config.APIBaseURL.IPv6.map((server) => {
-  const url = computed(() => "/middleware/" + server.id + "/speed/v6/" + domain.value);
+  const url = computed(() => "/middleware/" + server.id + "/speed/v6/" + encodeURIComponent(domain.value));
   const { data, error: fetchError, execute } = useMiddlewareFetch(url, {
     immediate: false,
     watch: false,
@@ -116,6 +119,8 @@ async function SpeedTest() {
   error.value = ''
   await nextTick()
 
+  const id = ++queryId
+
   // 重置所有行状态为加载中
   serverResults.value.forEach((row) => {
     row.loading = true
@@ -130,16 +135,26 @@ async function SpeedTest() {
 
     try {
       await fetch.execute();
-      row.data = fetch.data.value;
+      if (id !== queryId) return
+      // execute() 不会抛错，失败以 error.value 为准（否则故障节点渲染成空白）
+      if (fetch.error.value) {
+        row.error = fetch.error.value?.data?.error || fetch.error.value?.message || '请求失败';
+      } else {
+        row.data = fetch.data.value;
+      }
     } catch (err: any) {
       row.error = err?.data?.error || err?.message || '请求失败';
     } finally {
-      row.loading = false;
+      if (id === queryId) {
+        row.loading = false;
+      }
     }
   });
 
   Promise.all(promises).finally(() => {
-    loading.value = false
+    if (id === queryId) {
+      loading.value = false
+    }
   })
 }
 
