@@ -339,14 +339,17 @@ func wsRaw(v any) json.RawMessage {
 // wsActiveConns 当前已注册的中间件连接（url → conn）：注册成功写入、断开移除，数据上报广播用（report.go）
 var wsActiveConns sync.Map
 
-// wsHandleProbe 处理中间件下发的拨测请求（并发执行）：取数 → probe_result。
-// 同时按归属规则喂给数据上报：requestId 非空 = 中间件下发（中间件侧已计数上报），本节点跳过
+// wsHandleProbe 处理中间件/收集中心经 WS 下发的拨测请求（并发执行）：取数 → probe_result。
+// 归属规则：报文带 Scheduler=true = 收集中心主动调度拨测（收集中心侧已本地落库 sched/biz），
+// 本节点跳过 data 上报，避免双算；仅回 probe_result。不带 Scheduler 的 WS probe
+// （如中间件转发真实业务）仍由本节点上报（节点是唯一记录者，见 report.go）。
 func wsHandleProbe(c *websocket.Conn, data json.RawMessage) {
 	var req struct {
 		RequestID string            `json:"requestId"`
 		APIType   string            `json:"apiType"`
 		Raw       string            `json:"raw"`
 		Query     map[string]string `json:"query"`
+		Scheduler bool              `json:"scheduler"`
 	}
 	if err := json.Unmarshal(data, &req); err != nil || req.RequestID == "" || req.APIType == "" {
 		slog.Warn("ws client bad probe message")
@@ -354,7 +357,9 @@ func wsHandleProbe(c *websocket.Conn, data json.RawMessage) {
 	}
 	start := time.Now()
 	status, body := wsProbe(req.APIType, req.Raw, req.Query)
-	nodeRecordWSProbe(req.RequestID, req.APIType, req.Raw, req.Query, status, time.Since(start))
+	if !req.Scheduler {
+		nodeRecordWSProbe(req.RequestID, req.APIType, req.Raw, req.Query, status, time.Since(start))
+	}
 	payload := struct {
 		RequestID string          `json:"requestId"`
 		Status    int             `json:"status"`

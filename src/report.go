@@ -15,23 +15,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ==================== 数据上报（节点视角 → 收集中心中间件） ====================
+// ==================== 数据上报（节点 → 收集中心 ipw-boce） ====================
 //
-// 与中间件（ipw-boce）的上报协议对接（协议定义见 ipw-boce report.go）：
+// 节点是唯一记录者：统计与拨测明细都由本节点上报，中间件不在转发路径上计数，不存在双算。
+// 上报通道（报文同构，协议定义见 ipw-boce 的 report.go）：
 //   - WS 客户端启用（WS_URL 配置且至少一条连接在线）→ 经 WS 发 {"type":"report","data":...}
 //   - WS 未启用或全部连接掉线 → HTTP POST 到收集中心 /report（REPORT_URL）
 //
-// 归属规则（防双算）：每条请求只由一个入口上报。
-//   - 转发方（Go 中间件）转发时带 X-Boce-Reporter 标记头并自行上报 → 本节点跳过这些请求
-//   - WS 下发的拨测（probe 消息带 requestId）→ 下发方中间件已记录上报 → 本节点跳过
-//   - 其余流量（直连 / 前端内置 TS 中间件 / 边缘函数）→ 本节点上报（唯一记录者）
-//     注意：TS 中间件/边缘函数若也做"调一次上报一次"，其转发请求必须同样携带
-//     X-Boce-Reporter 头，否则会与本节点的上报双算。
+// 两条来源都要上报：
+//   - HTTP 接口收到的请求（/v1/*）→ nodeReportMiddleware 计数
+//   - 中间件经 WS 下发的拨测（probe）→ nodeRecordWSProbe 计数
 
 const (
-	reportMarkerHeader = "X-Boce-Reporter" // 与 ipw-boce 转发标记头一致
-	reportMaxProbes    = 500
-	reportMaxStats     = 500
+	reportMaxProbes = 500
+	reportMaxStats  = 500
 )
 
 var (
@@ -61,10 +58,12 @@ type nodeProbeRec struct {
 	CreatedAt int64  `json:"createdAt,omitempty"`
 }
 
-// nodeIsProbeType 拨测类接口（结果需明细上报）
+// nodeIsProbeType 拨测类接口（结果需明细上报）。
+// 明细覆盖：连通性/证书类 detail、ssl，DNS 查询类 dns，直连类 tcping/speed。
+// dnssec 属功能性校验（结果是否签名/可信），不逐条进明细，只进统计聚合。
 func nodeIsProbeType(apiType string) bool {
 	switch apiType {
-	case "tcping", "speed", "udping":
+	case "tcping", "speed", "detail", "ssl", "dns":
 		return true
 	}
 	return false
@@ -87,13 +86,15 @@ func startNodeReporter() {
 // nodeReportMiddleware /v1 组统计中间件：归属规则过滤 → 计数 → 拨测类补明细
 func nodeReportMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 中间件已带标记：它自己会计数上报，本节点跳过（防双算）
-		if c.Request.Header.Get(reportMarkerHeader) != "" {
-			c.Next()
-			return
-		}
 		start := time.Now()
 		c.Next()
+
+		// 收集中心(ipw-boce)主动调度下发的拨测带 X-Scheduler-Probe 头：
+		// 该次执行由收集中心侧本地落库(source=sched/biz)，本节点跳过计数与明细上报，避免双算。
+		// 真实业务请求（用户/中间件转发）不带此头，仍按"节点是唯一记录者"正常上报。
+		if c.Request.Header.Get("X-Scheduler-Probe") != "" {
+			return
+		}
 
 		apiType, raw := nodeAPIFromPath(c)
 		if apiType == "" {
@@ -113,11 +114,9 @@ func nodeReportMiddleware() gin.HandlerFunc {
 }
 
 // nodeRecordWSProbe WS 拨测出口（ws.go wsHandleProbe 调用）。
-// requestId 非空 = 中间件下发的请求，中间件侧已计数上报，本节点跳过（防双算）
+// 中间件已不在转发路径上计数，WS 下发的拨测同样由本节点上报（唯一记录者）；
+// requestId 只作为明细的关联标识带出，不参与归属判断。
 func nodeRecordWSProbe(requestID, apiType, raw string, query map[string]string, status int, latency time.Duration) {
-	if requestID != "" {
-		return
-	}
 	if apiType == "" {
 		return
 	}
@@ -131,7 +130,8 @@ func nodeRecordWSProbe(requestID, apiType, raw string, query map[string]string, 
 			q += k + "=" + v
 		}
 		nodeRecordProbe(nodeProbeRec{
-			NodeID: nodeReportNodeID(), APIType: apiType, Raw: raw, Query: q,
+			RequestID: requestID,
+			NodeID:    nodeReportNodeID(), APIType: apiType, Raw: raw, Query: q,
 			Status: status, LatencyMs: latency.Milliseconds(), Source: "ws",
 			CreatedAt: time.Now().Unix(),
 		})

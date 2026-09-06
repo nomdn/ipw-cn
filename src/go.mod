@@ -3,6 +3,7 @@ module lemon-ipw
 go 1.26.6
 
 require (
+	github.com/AdguardTeam/golibs v0.35.16
 	github.com/coder/websocket v1.8.15
 	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
@@ -20,7 +21,6 @@ require (
 )
 
 require (
-	github.com/AdguardTeam/golibs v0.35.16 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
