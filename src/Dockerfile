@@ -5,6 +5,12 @@ FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
+# 版本信息：CI（docker.yml）注入，与 build_and_release.yml 的二进制产物同源；
+# BUILD_TIME 每次构建都变，会使 go build 层缓存失效（go mod download 层不受影响），
+# 未传时用兜底值，本地 docker build 也能识别出容器构建
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_TIME=unknown
 ENV GO111MODULE=on \
     CGO_ENABLED=0 \
     GOOS=${TARGETOS} \
@@ -22,7 +28,7 @@ RUN set -eux; \
       v7) export GOARM=7 ;; \
       v6) export GOARM=6 ;; \
     esac; \
-    go build -o main .
+    go build -ldflags "-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BUILD_TIME=${BUILD_TIME}" -o main .
 
 # 运行阶段
 FROM alpine:latest

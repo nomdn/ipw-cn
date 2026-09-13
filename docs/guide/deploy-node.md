@@ -18,6 +18,22 @@ npx edgeone pages deploy -n ipw-cn -t $EDGEONE_API_TOKEN
 
 `serverless/edgeone/` 版本的配置来源为 环境变量 + 远端配置（`REMOTE_CONFIG_URL`）。
 
+### 数据上报（可选）
+
+`serverless/edgeone/` 版本**没有 WS 客户端**（边缘函数不维持长连接），因此上报只走 HTTP 一条路：按周期把统计与拨测明细 `POST <report-url>/report` 到收集中心。下列键同样支持环境变量与远端配置两种来源（远端配置优先）：
+
+| 配置键 | 环境变量 | 说明 |
+| --- | --- | --- |
+| `node-id` | `NODE_ID` | 上报身份（写入 `probe_results.origin`）；留空回退 hostname |
+| `report-url` | `REPORT_URL` | 收集中心基址；留空则不上报 |
+| `report-token` | `REPORT_TOKEN` | `/report` 鉴权，请求头 `Authorization: Bearer <token>`；收集中心未配 token 时可留空 |
+| `report-interval-seconds` | `REPORT_INTERVAL_SECONDS` | 上报间隔秒，缺省 15 |
+
+记账口径与主节点完全一致（节点是唯一记录者、`stats` 为增量累加、上报 at-most-once），报文格式见 [节点 API 与协议](/guide/node-api) 的「数据上报协议」一节。
+
+> [!NOTE]
+> 上报依赖进程存活期内的内存计数。若所用平台会把实例缩容到零，缓冲区会随实例回收丢失——上报只在实例存活期内累积。长驻部署（Docker / 二进制）不受此限。
+
 ## 方案二：Vercel
 
 点击下方按钮一键导入仓库（部署目标为 `serverless/edgeone/cloud-functions` 目录，即 Go 边缘函数版本）：
@@ -42,9 +58,12 @@ docker run -d --restart unless-stopped -p 8080:8080 \
   lemon-ipw
 ```
 
-> `--restart unless-stopped`：主进程退出时 Docker 自动拉起容器（OTA 更新失败自愈依赖它）；手动 `docker stop` 不会触发重启。
+> `--restart unless-stopped`：主进程意外退出时 Docker 自动拉起容器；手动 `docker stop` 不会触发重启。
 
 配置通过挂载 `setting.json` 提供（注意挂载到容器工作目录 `/home/appuser`），也可用环境变量覆盖（`PORTS` / `CORS` / `TRUSTED_PROXIES` / `ACCESS_TOKEN` 等）。
+
+> [!TIP]
+> 容器内 OTA 替换二进制意义有限（重建容器即回滚到镜像版本），如需彻底关闭可设 `NODE_OTA=false`；镜像**不含 IP 库数据**，首次启动若 `ipdb` 未关闭会现场拉取约 450MB 到容器可写层，轻量部署建议直接 `IPDB=false`。
 
 **多架构**：Dockerfile 已适配 buildx——构建阶段固定在构建机原生平台交叉编译（`TARGETOS`/`TARGETARCH`），目标架构无需 QEMU 模拟。本机为其他架构构建：
 
@@ -151,22 +170,62 @@ NODE_KEY=<注册key，与中间件 ws-keys[节点id] 一致；节点未配置 ke
 
 **注意**：`NODE_ID` 必须与中间件 `APIBaseURL` / `IPLocationAPI` 池中的节点 `id` 一致，且该节点需配置 `"ws": true` 才会走 WS 通道。未连接中间件时，`ws:true` 节点的拨测会返回 502。
 
-## OTA 自更新（可选）
+## 运行时配置管理（可选）
 
-节点支持**自动升级**：检测到本仓库有新 Release 时，下载对应平台的二进制、**替换自身并重启**。
+节点暴露 `/v1/config`，供收集中心读写该节点**当前生效**的配置（内存值），是「控制台改配置不用登机器」的基础：
+
+| 动作 | HTTP | WS | 说明 |
+|------|------|----|------|
+| 读取 | `GET /v1/config` | `config` + `action=get` | 返回生效配置快照 + `secretKeys` + `restartRequiredKeys` |
+| 修改 | `PATCH /v1/config`（`?persist=1` 写回本地文件） | `config` + `action=patch` | 只应用传入的键，其余不动 |
+| 刷新远端 | `POST /v1/config/refresh` | `config` + `action=refresh` | 重新拉 `remote-config-url` 并应用 |
+
+三条重要约定：
+
+- **凭据类键不回显明文**：`access-token` / `node-key` / `report-token` 在快照中为 `***`。调用方下发配置时必须剔除这些键，否则会把真值覆盖成三个星号。收集中心控制台已自动剔除。
+- **节点不自行重启**：`port` / `cors` / `ipdb` / `report-interval-seconds` / `trusted-proxies` / `node-id` / `node-key` / `access-token` 这些启动期固定的键，改动后在应答的 `restartRequired` 中如实列出，但**不会自动重启进程**——重启会中断在途服务，时机由运维 / 编排层掌握。`ws-url` 是例外：热生效，控制器按新地址多退少补。
+- **只 PATCH 内存的改动会被重启顶掉**：节点侧优先级是 远端 > 环境变量 > `setting.json`，长期生效需写回托管配置或本地文件，详见 [配置文件](/guide/config) 的「运行时配置管理」一节。
+
+> [!NOTE]
+> **HTTP 管理面需要凭据**：节点未配置 `access-token` 时，`/v1/config` 与 `/v1/ota` 整组返回 `403`（此时业务接口也无鉴权，开放配置读写等于公网可改配置）。**WS 通道不受此限制**——节点是 WS 客户端，指令只来自已通过中间件 `ws-keys` 校验的连接。
+
+## OTA 升级（收集中心下发，可选）
+
+节点支持由收集中心下发**一次性升级任务**：下载新二进制 → 校验 → 预检 → 原子替换 → 重启，全程无需登录节点主机。
+
+**触发方式**：收集中心经 WS `ota` 消息下发（HTTP 回退 `POST /v1/ota`）。请求体三选一指定下载源：
+
+| 字段 | 说明 |
+|------|------|
+| `version` | 按版本号下发。节点按自身平台拼资产名 `lemonipw-{goos}-{goarch}[.exe]`，到资产基址 `{assetBase}/{tag}/` 下取；`assetBase` 缺省为 GitHub Releases，自建镜像源可覆盖 |
+| `url` | 直发下载地址（完全自定义） |
+| `sha256` | 可选，提供即强校验（hex64，兼容 `sha256:` 前缀） |
+
+**执行流程**：下载到与目标同分区的临时文件（保证 `rename` 原子）→ 体积下限 1MB（防错误页）→ sha256 校验 → **预检**（试运行新二进制 `-v`，确认架构匹配、可执行，在停机前拦下损坏文件）→ 当前二进制改名 `.old` → 新文件就位 → 重启。任一步失败都会回滚 `.old`。
+
+**进度回传**：经 WS `ota_result` 依次回报 `accepted` → `downloading` → `verifying` → `installing` → `restarting`，失败时带 `error`。重启后连接必然断开，**最终结果由收集中心以重连注册上报的新版本号判定**（15 分钟未观测到新版本即判超时失败）。
+
+**并发与开关**：
+
+- 同一时刻只允许一个 OTA 任务，重复下发直接拒绝。
+- `node-ota: false`（env `NODE_OTA`）可完全禁用：节点拒绝一切 OTA 指令并回传原因。**只读文件系统 / 编排托管**（Docker Swarm、K8s 等自行管理镜像）的部署建议关闭。
+- 部署方式受限导致替换失败（如容器只读层）时，升级会失败并回滚，此时仍按传统方式人工升级。
+
+手动更新（OTA 不可用时）：
 
 ```bash
-# 启用（环境变量，或 setting.json 的 "node-ota": "true"）
-NODE_OTA=true ./lemonipw
+# Docker：拉取新镜像后重建容器
+docker pull lemon-ipw && docker stop lemon-ipw && docker run ... lemon-ipw
+# systemd：替换二进制后重启服务
+systemctl restart lemon-ipw
 ```
 
-- **默认关闭**，需显式开启；远端配置（`node-ota`）也可统一开关，除非列入 `remote-ignore-config`
-- **检查时机**：启动 5 分钟后首次检查，之后每 6 小时 + 随机 0~1h 抖动
-- **major 变化不自动更新**：仅 minor/patch 升级自动跟进（如 3.1.0 → 3.2.0）；主版本变化（如 3.x → 4.x，通常含破坏性变更）会跳过并告警，需人工升级
-- **更新流程**：查询 GitHub 最新 Release → 按 `GOOS/GOARCH` 匹配资产（如 `lemonipw-linux-amd64`、`lemonipw-windows-amd64.exe`）→ 下载到同目录临时文件（经 `gh-proxy` 前缀加速，文件过小则丢弃）→ 当前二进制改名备份为 `<程序名>.old` → 新二进制就位 → 重启
-- **重启方式**：Linux/macOS 用 `exec` 原地替换进程镜像（PID 不变，systemd / Docker 无感）；Windows 另起新进程后退出当前进程
-- **失败处理**：下载/替换失败仅记录日志并继续运行，下次周期重试；替换过程中断会自动回滚到 `.old`
-- **注意事项**：
-  - 二进制所在目录需**可写**（Docker 只读层或只读挂载会导致替换失败）
-  - 建议保留 `.old` 备份以便手动回滚：`mv lemonipw.old lemonipw`
-  - systemd 部署时若 OTA 重启未被托管，可配 `Restart=always` 兜底
+## 版本与能力上报
+
+节点无论是否接入 WS，都会上报自身版本与支持的管理能力：
+
+- **版本号**来自构建时注入的 `VERSION`，随 WS `register` 报文上报（字段 `version`）；纯 HTTP 节点（无 WS 连接）由收集中心探活 `GET /` 时一并取回（响应体含 `version`）。
+- **能力清单**（`capabilities`）取值为 `probe` / `report` / `config` / `ota`，用于让收集中心在下发管理指令前判断该节点能否理解——老版本节点的消息循环没有对应分支，收到管理消息会**静默忽略**，只能靠超时暴露。
+- 收集中心「节点状态」页展示每个节点的版本号，并据此判断哪些节点需要升级；节点升级部署后重新注册即为新版本。
+
+能力清单的取值与三态判定规则见 [节点 API 与协议参考](/guide/node-api) 的「能力清单」一节。

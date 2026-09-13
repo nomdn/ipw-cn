@@ -20,6 +20,8 @@ node_modules/
 docs/.vitepress/.temp/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+# 构建期临时配置文件（vitepress 每次构建生成，用完即弃）
+docs/.vitepress/*.timestamp-*
 tmp/
 setting.json
 *.BIN

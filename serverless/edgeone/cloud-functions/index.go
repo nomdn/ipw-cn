@@ -61,6 +61,11 @@ var (
 	V4Client     *resty.Client
 	CORS         string
 	ACCEPT_DOMAINS []string
+	// 数据上报（上报到收集中心 ipw-boce，详见 report.go）
+	NODE_ID         string // 上报身份（node-id），留空回退 hostname
+	REPORT_URL      string // 收集中心 HTTP 基址（report-url），留空则不上报
+	REPORT_TOKEN    string // /report 鉴权 token（report-token）
+	REPORT_INTERVAL int    // 上报间隔秒（report-interval-seconds），缺省 15
 )
 
 func fakePerfectWebsiteResult(host string) *WebsiteCheckDetail {
@@ -1183,6 +1188,23 @@ func applyRemoteConfig() {
 	if v := configValue(CONFIG, "block-private-ips"); v != "" {
 		ssrf.SetEnabled(v != "false" && v != "0")
 	}
+	// 数据上报（详见 report.go）
+	if v := configValue(CONFIG, "node-id"); v != "" {
+		NODE_ID = v
+	}
+	if v := configValue(CONFIG, "report-url"); v != "" {
+		REPORT_URL = v
+	}
+	// report-token 属受保护凭据：远端下发**不覆盖**（与主线 configRemoteProtectedKeys 同口径）。
+	// 远端一写错，上报会被收集中心 /report 拒收，而节点侧毫无察觉，故不交给配置源自律。
+	if configValue(CONFIG, "report-token") != "" {
+		slog.Warn("远端配置里的 report-token 已被忽略（凭据由节点本地管理）", "url", url)
+	}
+	if v := configValue(CONFIG, "report-interval-seconds"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			REPORT_INTERVAL = n
+		}
+	}
 	if CORS != "" {
 		ACCEPT_DOMAINS = splitAndTrim(CORS, ",")
 	}
@@ -1212,6 +1234,21 @@ func readConfig() {
 	}
 	if v := os.Getenv("BLOCK_PRIVATE_IPS"); v != "" {
 		ssrf.SetEnabled(v != "false" && v != "0")
+	}
+	// 数据上报（详见 report.go）：node-id / report-url / report-token / report-interval-seconds
+	if v := os.Getenv("NODE_ID"); v != "" {
+		NODE_ID = strings.TrimSpace(v)
+	}
+	if v := os.Getenv("REPORT_URL"); v != "" {
+		REPORT_URL = strings.TrimSpace(v)
+	}
+	if v := os.Getenv("REPORT_TOKEN"); v != "" {
+		REPORT_TOKEN = strings.TrimSpace(v)
+	}
+	if v := os.Getenv("REPORT_INTERVAL_SECONDS"); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+			REPORT_INTERVAL = n
+		}
 	}
 
 	// 2) 远端配置（最高优先级，覆盖环境变量）
@@ -1280,6 +1317,9 @@ func main() {
 	webtest.SetDNSSecServer(DNSSEC_DNS_SERVER)
 	slog.Info("Starting server", "port", PORTS, "single_stack", SINGLE_STACK)
 
+	// 数据上报：周期把本节点的统计与拨测明细上报到收集中心（详见 report.go）
+	startNodeReporter()
+
 	// 缓存清扫：定期淘汰过期条目
 	go func() {
 		for {
@@ -1296,6 +1336,7 @@ func main() {
 		corsConfig.AllowAllOrigins = true
 	}
 	r.Use(cors.New(corsConfig))
+	r.Use(nodeReportMiddleware()) // 数据上报统计：/v1/* 请求计数与拨测明细（详见 report.go）
 
 	r.GET("/v1/detail/*url", checkWebsiteHandler)
 	r.GET("/v1/ssl/*url", sslCheckHandler)

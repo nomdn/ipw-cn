@@ -50,9 +50,9 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o middleware-go-linux-amd64 .
 
 **OTA 自更新**（可选，默认关闭）：配置 `"ota": "true"`（或环境变量 `OTA=true`）后，中间件定期检查本仓库 Release，下载与当前平台匹配的 `middleware-go-*` 资产并替换自身重启。下载加速可配 `"gh-proxy": ""`（或 `GH_PROXY` 环境变量）。交接流程与后端节点一致：预检 → 原子替换 → 优雅停机 → 拉起新进程 → 健康检查确认；失败自动回滚 `.old` 备份。
 
-所有配置可用环境变量覆盖（`API_BASE_URLS` / `IP_LOCATION_APIS` / `CORS` / `TRUSTED_PROXIES` / `API_KEYS` / `WS_KEYS` / `RATE_LIMIT` 等，数组/对象用 JSON 字符串），优先级：**环境变量 > setting.json > 默认值**（远端配置 `REMOTE_CONFIG_URL` 高于两者，详见 [配置文件 - 远端配置](/guide/config#远端配置remoteconfigurl)）。
+所有配置可用环境变量覆盖（`API_BASE_URLS` / `IP_LOCATION_APIS` / `CORS` / `TRUSTED_PROXIES` / `API_KEYS` / `WS_KEYS` / `RATE_LIMIT` 等，数组/对象用 JSON 字符串），优先级：**环境变量 > setting.json > 默认值**（远端配置 `REMOTE_CONFIG_URL` 高于两者，详见 [配置文件](/guide/config) 的「远端配置」一节）。
 
-需要守护运行时，参考 [后端节点部署 - 方案五：一键安装](/guide/deploy-node#方案五一键安装installsh) 的 systemd 管理方式（`ExecStart` 指向中间件二进制，`WorkingDirectory` 指向 `middleware-go/setting.json` 所在目录）。
+需要守护运行时，参考 [后端节点部署](/guide/deploy-node) 的「方案五：一键安装」一节的 systemd 管理方式（`ExecStart` 指向中间件二进制，`WorkingDirectory` 指向 `middleware-go/setting.json` 所在目录）。
 
 ## WS 通道（拨测数据经 WebSocket 传输）
 
@@ -101,7 +101,7 @@ middleware-go 内置 WS 服务端，后端节点可作为 **WS 客户端**连入
 
 ### 节点侧接入（WS 客户端）
 
-1. 连接 `ws://<中间件IP>:8092/ws`（本仓库后端节点接入方式见 [后端节点部署 - WS 通道接入](/guide/deploy-node#ws-通道接入可选)，配置 `WS_URL` / `NODE_ID` / `NODE_KEY` 即可自动连接注册；`WS_URL` 支持逗号分隔多个中间件地址，节点会**同时连接全部（多活）**，任一断开只重连自己）
+1. 连接 `ws://<中间件IP>:8092/ws`（本仓库后端节点接入方式见 [后端节点部署](/guide/deploy-node) 的「WS 通道接入」一节，配置 `WS_URL` / `NODE_ID` / `NODE_KEY` 即可自动连接注册；`WS_URL` 支持逗号分隔多个中间件地址，节点会**同时连接全部（多活）**，任一断开只重连自己）
 2. 首条消息发 `register { "nodeId": "<与中间件配置一致的节点 id>", "key": "<注册凭证>" }`（节点在 setting.json `ws-keys` 里配了 key 就必须传对；未配置 key 的开放节点可不传）
 3. 收到 `probe` → 执行拨测 → 回 `probe_result`（必须携带原 `requestId`，支持乱序返回，同一连接可并发多个拨测）
 4. 收到 `ping` → 回 `pong`；`status` 可忽略或记录

@@ -52,6 +52,7 @@ export default defineConfig({
         text: '简介',
         items: [
           { text: '概述', link: '/info/overview' },
+          { text: '功能总览', link: '/info/features' },
           { text: '快速入门', link: '/guide/getting-started' },
           { text: '配置文件', link: '/guide/config' },
         ],
@@ -64,6 +65,14 @@ export default defineConfig({
           { text: '后端节点', link: '/guide/deploy-node' },
           { text: '中间件', link: '/guide/deploy-middleware' },
           { text: '前端', link: '/guide/deploy-frontend' },
+        ],
+      },
+      // 参考
+      {
+        text: '参考',
+        items: [
+          { text: '节点 API 与协议', link: '/guide/node-api' },
+          { text: '公开 API（/api/v1）', link: '/guide/public-api' },
         ],
       },
     ],

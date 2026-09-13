@@ -26,6 +26,10 @@ features:
     details: 多节点并发查询，支持 A / AAAA / CNAME / MX / TXT / NS / SRV / PTR / CAA 等记录类型，并提供 DNSSEC 链式信任验证。
   - title: SSRF 防护
     details: 自动拦截对内网 / 私有 IP 的出站请求，校验安全跳转，避免服务端请求伪造风险。
+  - title: 分布式节点与 WS 通道
+    details: 节点可作为客户端接入中间件，拨测请求经 WebSocket 下发与回传；支持多地址同时连接（多活）、断线自动重连，`ws-url` 改动热生效无需重启。
+  - title: 远程运维
+    details: 节点上报版本号与能力清单，收集中心展示版本、远程读写运行时配置，并可下发一次性 OTA 升级任务（下载 → 校验 → 替换 → 重启，失败自动回滚）。
   - title: 多平台部署
     details: 支持二进制，Docker，乃至AWS Lambda，EdgeOne Makers，Vercel和阿里云函数计算
 ---

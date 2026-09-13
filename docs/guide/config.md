@@ -20,20 +20,44 @@
 - `port`：监听端口
 - `dns-server`：DNS 解析服务器，支持**主从 failover**——逗号分隔多地址（如 `"119.28.28.28:53,223.5.5.5:53"`），第一个为主，主查询失败（超时/网络错误）自动切换下一个；每项支持 `ip:port`（UDP）或 `https://` URL（DoH）；**留空则启动时自动探测系统 DNS**（`IP:Port` 逗号分隔串）兜底
 - `dnssec-server`：**DNSSEC 专用** DNS 服务器（同样支持主从逗号分隔）；留空则沿用 `dns-server`；`dns-server` 与 `dnssec-server` **都留空时自动探测系统 DNS** 兜底
-- `block-private-ips`：SSRF 防护开关
-- `ipdb`：IP 数据库开关（首次启动自动下载约 450MB，之后每 24h 更新）
+- `block-private-ips`：SSRF 防护开关（拒绝出站连接内网/私有地址；探测目标命中私有网段时直接返回伪造结果，禁止跨跳重定向）
+- `single-stack`：单栈模式，`ipv4` / `ipv6` / 留空（双栈）。声明单栈的节点跳过另一栈的探测（直接返回 `Skipped due to SINGLE_STACK=...`），EdgeOne / Vercel 等 IPv4-only 环境建议设为 `ipv4`
+- `ipdb`：IP 数据库开关。**不配置时默认启用**（首次启动自动下载约 450MB，之后每 24h 更新）；仓库的 `setting.json.example` 里显式写为 `"false"`，即**示例配置是关闭状态**——关闭后不加载任何数据库，`/v1/location`、`/v1/asn` 路由不注册，适合只做网络拨测的轻量节点
 - `cors`：允许的请求来源（逗号分隔）
 - `trusted-proxies`：可信代理 IP/CIDR（逗号分隔，如 `"10.0.0.0/8,173.245.48.0/20"`）。配置后 `ClientIP` 与 `/v1/location` 归属地接口只信任这些代理转发的 `X-Forwarded-For`，直连公网的节点可防止访客伪造 XFF；**留空保持默认行为（信任所有代理，XFF 可被伪造）**
-- `access-token`：API 访问令牌，留空则不启用鉴权
+- `access-token`：API 访问令牌，留空则不启用鉴权。**它同时是 HTTP 管理面的开关**：留空时 `/v1/config`、`/v1/ota` 整组返回 `403`，只能走 WS 通道管理
+- `gh-proxy`：GitHub 下载代理前缀（如 `"https://ghproxy.com/"`），用于 IP 数据库拉取与 OTA 下载加速；留空直连
+- `node-ota`：OTA 开关，缺省 `true`（允许收集中心下发）。设为 `false` 时节点拒绝一切 OTA 指令并回传原因，适合只读文件系统 / 编排托管（升级走各自部署渠道）的部署。**支持运行时热改**（`PATCH /v1/config` 或 WS `config` 下发即时生效，改后按新值判定后续 OTA 指令）
 - `ws-url`：WS 通道地址——接入独立中间件的 WebSocket 地址（如 `"wss://middleware-1.api-ipw.wsmdn.top/ws"`，须含 `wss://` 前缀与 `/ws` 路径）；支持**逗号分隔多个中间件，同时连接全部（多活）**，任一断开只重连自己，不影响其他连接；留空 = 不启用 WS 客户端，走原 HTTP 接口
 - `node-id`：WS 节点 id（与中间件 `api-keys`/`ws-keys` 键、前端配置的节点 `id` 一致；建议用 UUID 唯一标识）
 - `node-key`：WS 注册 key（与中间件 `ws-keys[节点id]` 一致；**必填**——节点未配置该 key 时中间件拒绝注册并返回 401）
-- `node-ota`：**OTA 自更新开关**（`"true"` 启用）。启用后节点定期检查本仓库 GitHub Release，发现新版本时下载与当前平台匹配的二进制、**替换自身并重启**（旧二进制保留为 `<程序名>.old` 便于回滚）；默认关闭
-- `report-url`：**数据上报收集中心** HTTP 基址（如 `"https://collector.example.com"`，即 ipw-boce 中间件）。节点把自身观测的统计/拨测按 `report-interval-seconds` 周期上报；`ws-url` 已启用时优先走 WS `report` 消息（所有已连接中间件广播），WS 未启用或全部掉线时 HTTP POST 到 `<report-url>/report` 兜底；远端配置可覆盖（`report-ignore-config` 加 `report-url` 可禁止）
-- `report-token`：收集中心 `/report` 鉴权 token（与中间件 `report-token` 配置一致）；属敏感凭据，**不随远端配置覆盖**
+- `report-url`：**数据上报收集中心** HTTP 基址（如 `"https://collector.example.com"`，即 ipw-boce 中间件）。节点把自身观测的统计/拨测按 `report-interval-seconds` 周期上报；`ws-url` 已启用时优先走 WS `report` 消息（所有已连接中间件广播），WS 未启用或全部掉线时 HTTP POST 到 `<report-url>/report` 兜底；远端配置可覆盖（在 `remote-ignore-config` 里加上 `report-url` 可禁止覆盖）
+- `report-token`：收集中心 `/report` 鉴权 token（与中间件 `report-token` 配置一致）；属凭据类键，GET 快照里遮蔽为 `***`；**不随远端配置覆盖**（硬编码保护，清单见本页末的「远端配置」一节）
 - `report-interval-seconds`：上报周期秒，缺省 15
 
-以上字段均可用环境变量覆盖（`PORTS` / `DNS_SERVER` / `DNSSEC_DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `IPDB` / `CORS` / `TRUSTED_PROXIES` / `ACCESS_TOKEN` / `WS_URL` / `NODE_ID` / `NODE_KEY` / `NODE_OTA` / `REPORT_URL` / `REPORT_TOKEN` / `REPORT_INTERVAL_SECONDS`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）。
+以上字段均可用环境变量覆盖（`PORTS` / `SINGLE_STACK` / `DNS_SERVER` / `DNSSEC_DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `IPDB` / `CORS` / `TRUSTED_PROXIES` / `GH_PROXY` / `ACCESS_TOKEN` / `WS_URL` / `NODE_ID` / `NODE_KEY` / `NODE_OTA` / `REPORT_URL` / `REPORT_TOKEN` / `REPORT_INTERVAL_SECONDS`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）；`remote-ignore-config` 对应的环境变量为 `REMOTE_IGNORE_CONFIG`（JSON 数组字符串）。
+
+### 运行时配置管理
+
+除启动加载外，节点（v1.4+）还支持被**远程读写当前生效配置**——收集中心控制台可以改配置而不必登录节点主机，节点也可以在运行中刷新远端配置。
+
+| 动作 | HTTP | WS | 说明 |
+|------|------|----|------|
+| 读取 | `GET /v1/config` | `config` + `action=get` | 返回生效配置快照 + `secretKeys` + `restartRequiredKeys` |
+| 修改 | `PATCH /v1/config`（`?persist=1` 时写回本地 setting.json） | `config` + `action=patch` | 逐键应用，只改传入的键 |
+| 刷新远端 | `POST /v1/config/refresh` | `config` + `action=refresh` | 重新拉取 `remote-config-url` 并应用 |
+
+三条约定：
+
+- **凭据类键不回显明文**：`access-token` / `node-key` / `report-token` 在快照里是 `***`。下发时必须剔除这些键，否则会把真值覆盖成三个星号（收集中心控制台已自动剔除）。
+- **凭据类键中 `access-token` / `report-token` 不受远端配置影响**：它们被硬编码进节点侧的保护名单（`configRemoteProtectedKeys`），远端配置里写了也会被跳过，并在应答 `protectedIgnored` 与日志中如实回报；本地 PATCH 不受此限。原因见本页末的「远端配置」一节。
+- **节点不自行重启**：`port` / `cors` / `ipdb` / `report-interval-seconds` / `trusted-proxies` / `node-id` / `node-key` / `access-token` 是启动期固定的，改动后在应答 `restartRequired` 里如实列出，但**不会自动重启**；只有"值真的变了"才报，避免每次全量下发都误报。**`ws-url` 是例外，热生效**（控制器按新地址多退少补）；`dns-server` / `dnssec-server` / `block-private-ips` / `single-stack` / `node-ota` 每次消费重读，同样即时生效。
+- **内存改动会被重启顶掉**：节点侧优先级为 远端 > 环境变量 > `setting.json`。只 PATCH 内存（或 `persist` 写本地文件）时，重启后仍可能被 ENV 顶掉；要长期生效应 **`refresh`**（改远端配置）或把改动合并进托管配置。
+
+> [!NOTE]
+> **与托管配置的区别**：托管配置（收集中心的 `node_configs`，经 `GET /remote-config/:nodeId` 下发）是**节点启动时拉的远端配置**，是持久来源；运行时配置读写的是**节点进程内存里当前生效的值**。前者决定"重启后是什么"，后者反映"现在是什么"。
+
+接口细节见 [节点 API 与协议参考](/guide/node-api) 的「管理接口」一节。
 
 ---
 
@@ -198,7 +222,7 @@ APIBaseURL: {
 - `remote-ignore-config`：**不被远端配置覆盖的配置项列表**（数组），如 `["port", "rate-limit"]`；也可用环境变量 `REMOTE_IGNORE_CONFIG`（JSON 数组字符串，优先于 setting.json）
 - `api-keys`：用于向后端注入 `Authorization: Bearer <key>`，优先级：setting.json `api-keys` > 环境变量 `API_KEYS`（JSON 字符串）。**敏感凭据，强制忽略，不随远端配置覆盖**
 - `ws-keys`：WS 注册校验表（`节点id → key`）：节点经 WS 注册时，`register` 消息的 `key` 必须与 `ws-keys[节点id]` 一致，否则返回 401 并断开；优先级：setting.json `ws-keys` > 环境变量 `WS_KEYS`（JSON 字符串）。**敏感凭据，强制忽略，不随远端配置覆盖**。与 `api-keys` **相互独立**——`api-keys` 管 HTTP 转发鉴权，`ws-keys` 管 WS 注册校验，可分别配置不同 key（例如 WS 节点单独换 key 不影响 HTTP 转发）
-- 节点池与前端 `config/index.ts` 结构一致：`APIBaseURL` 为拨测节点池（含 `DualStack` / `IPv4` / `IPv6` 三栈），`IPLocationAPI` 为 IP 归属地 / ASN 节点池（纯数组，无栈）；节点加 `"ws": true` 可让该节点走 WS 通道通信，详见 [中间件部署 - WS 通道](/guide/deploy-middleware#ws-通道拨测数据经-websocket-传输)
+- 节点池与前端 `config/index.ts` 结构一致：`APIBaseURL` 为拨测节点池（含 `DualStack` / `IPv4` / `IPv6` 三栈），`IPLocationAPI` 为 IP 归属地 / ASN 节点池（纯数组，无栈）；节点加 `"ws": true` 可让该节点走 WS 通道通信，详见 [中间件部署](/guide/deploy-middleware) 的「WS 通道」一节
 
 ### WS 通道配置一览
 
@@ -217,10 +241,10 @@ WS 通道涉及**中间件（服务端）**与**后端节点（客户端）**两
 | 角色 | 配置项 | 环境变量 | 说明 |
 |------|--------|----------|------|
 | 节点（客户端） | `report-url` | `REPORT_URL` | 收集中心（ipw-boce 中间件）HTTP 基址；WS 在线时优先走 WS 广播，掉线时 POST `<report-url>/report` 兜底 |
-| 节点（客户端） | `report-token` | `REPORT_TOKEN` | `/report` 鉴权 token，与收集中心 `report-token` 一致；**不随远端配置覆盖** |
+| 节点（客户端） | `report-token` | `REPORT_TOKEN` | `/report` 鉴权 token，与收集中心 `report-token` 一致；属凭据类键，快照遮蔽为 `***`，**不随远端配置覆盖** |
 | 节点（客户端） | `report-interval-seconds` | `REPORT_INTERVAL_SECONDS` | 上报周期秒，缺省 15 |
 
-**链路**：中间件收到 `ws:true` 节点的拨测请求 → 经 WS 发 `probe` → 节点执行探针（直调 webtest 函数 + 缓存）→ `probe_result` 回传 → 中间件返回 HTTP 响应（`Content-Type: application/json`）。节点侧接入步骤见 [后端节点部署 - WS 通道接入](/guide/deploy-node#ws-通道接入可选)。
+**链路**：中间件收到 `ws:true` 节点的拨测请求 → 经 WS 发 `probe` → 节点执行探针（直调 webtest 函数 + 缓存）→ `probe_result` 回传 → 中间件返回 HTTP 响应（`Content-Type: application/json`）。节点侧接入步骤见 [后端节点部署](/guide/deploy-node) 的「WS 通道接入」一节。
 
 ---
 
@@ -243,8 +267,11 @@ WS 通道涉及**中间件（服务端）**与**后端节点（客户端）**两
 - 部分字段缺省不会冲掉本地配置——远端只需包含要覆盖的字段
 - **敏感凭据强制忽略，永远不被远端覆盖**（代码写死，无需配置）：
   - 后端 `access-token`：不随远端覆盖（保持 环境变量 > setting.json），远端里的 `access-token` 会被忽略
+  - 后端 `report-token`：同上。收集中心的托管配置里写了也不生效，节点会在日志与控制台应答的 `protectedIgnored` 里列出被跳过的键
   - 中间件 `api-keys` / `ws-keys`：不随远端覆盖，远端里的 `api-keys`/`ws-keys` 会被忽略
-- `remote-ignore-config`（后端键名 `remote-ignore-config` / env `REMOTE_IGNORE_CONFIG`）：额外指定**不被远端覆盖的配置项列表**，数组中的键即使远端下发也不生效。适用于 access-token / api-keys / ws-keys 之外的敏感项（如 `node-key`、`dns-server` 等），也可覆盖"非空才覆盖"规则
+
+  为什么把这两项写死：它们被远端改错时的故障形态都是「远端一错、本地失联、且无法再远程修回」——`report-token` 被改 → 上报被收集中心 `/report` 拒收，控制台上节点仍显示在线、数据却静默断了；`access-token` 被改 → 控制台再也连不上该节点的管理面，连改回去的通道都没了。所以这层解耦必须由节点自己兜底，不能依赖「配置源别写错」。`node-key` 有意**不在**保护名单里（托管部署下常由远端统一下发节点身份），需要一并锁死时把它写进 `remote-ignore-config`。保护名单只增不减，且**只约束远端下发**，本地 `PATCH` 不受影响。
+- `remote-ignore-config`（后端键名 `remote-ignore-config` / env `REMOTE_IGNORE_CONFIG`）：额外指定**不被远端覆盖的配置项列表**，数组中的键即使远端下发也不生效。适用于 Node 身份类与其它不想被远端左右的项（如 `node-key`、`dns-server` 等），也可覆盖"非空才覆盖"规则
 
 **拉取行为**：
 
@@ -252,7 +279,7 @@ WS 通道涉及**中间件（服务端）**与**后端节点（客户端）**两
 - HTTP 超时 **10 秒**，仅接受 **200** 响应（404/5xx 视为失败）
 - 拉取或 JSON 解析失败：打印警告日志 `WARN failed to fetch remote config, fallback to local: ...`，**自动回退本地配置**，服务正常启动，不会崩溃
 - 拉取成功：启动日志打印 `remote config applied from <url>`
-- **没有重试、没有定时刷新**：改远端配置后需要重启进程才会重新拉取
+- **启动时拉取一次，运行中可手动刷新**：进程启动的配置加载阶段拉取一次；此后不会自动轮询远端，但可经 `POST /v1/config/refresh`（或 WS `config` + `action=refresh`）**主动重新拉取并应用**，无需重启——收集中心控制台的「刷新远端」按钮即走这条路
 
 **示例一：后端**（主线，远端 JSON 放在 `https://example.com/ipw-config.json`）：
 

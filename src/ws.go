@@ -385,13 +385,32 @@ const (
 	wsHeartbeatTimeout  = 5 * time.Second
 )
 
+// nodeCapabilities 本节点支持的远程管理能力清单，随 register 报文上报给中间件，
+// 同时也在 HTTP 健康检查 `/` 里返回（供中间件对纯 HTTP 节点探活时一并取回）。
+//
+// 存在的意义：中间件下发 config 指令前先查这份清单，
+//   - 清单里没有该能力 → 立刻给出明确错误（旧版节点会静默忽略这类消息，只能白白等满超时）
+//   - 未上报清单（老版本节点）→ 中间件按"未知"处理，仍会尝试但会给出旧版本提示
+//
+// 新增一类管理指令时在此追加，并保持取值稳定（中间件按字符串比对）。
+func nodeCapabilities() []string {
+	return []string{
+		"probe",  // 拨测（WS probe / HTTP 转发）
+		"report", // 统计与拨测明细上报
+		"config", // 运行时配置读写（/v1/config、WS config）
+		"ota",    // OTA 升级（WS ota / HTTP POST /v1/ota，见 ota.go）
+	}
+}
+
 // wsClientOnce 连接并服务单个中间件 URL，返回下次重试前的等待时长（由 per-URL 连接循环调用）：
 //   - 连接/读循环断开 → 3s（重试同一 URL）
 //   - 注册被拒（register_error）→ 30s（多为 key 配置错误，加大间隔避免空转刷日志）
 //   - 心跳连续失败 wsHeartbeatRetry 次 → 主动断开，3s
 //   - 返回 0 = 配置缺失（不再重试）
-func wsClientOnce(url string) time.Duration {
-	ctx := context.Background()
+//
+// ctx 由 per-URL 连接循环（wsClientOnceLoop）传入：ws-url 热更新移除该 URL 时会 cancel，
+// Dial / Read 立即返回错误，协程随即退出，不必等满退避。
+func wsClientOnce(ctx context.Context, url string) time.Duration {
 	c, _, err := websocket.Dial(ctx, url, nil)
 	if err != nil {
 		slog.Warn("ws client dial failed", "url", url, "error", err)
@@ -402,7 +421,15 @@ func wsClientOnce(url string) time.Duration {
 		c.CloseNow()
 	}()
 
-	reg := map[string]string{"nodeId": WS_NODE_ID}
+	// 注册报文带上版本号与能力清单：
+	//   version      → 中间件落到 nodes 表，节点状态页展示（升级部署后重新注册即为新版本）
+	//   capabilities → 中间件在下发管理指令前据此判断本节点能否理解 config，
+	//                  老节点不认这类消息又不会回错，只能靠超时暴露（白等 15s）
+	reg := map[string]any{
+		"nodeId":       WS_NODE_ID,
+		"version":      VERSION,
+		"capabilities": nodeCapabilities(),
+	}
 	if WS_NODE_KEY != "" {
 		reg["key"] = WS_NODE_KEY
 	}
@@ -469,6 +496,10 @@ func wsClientOnce(url string) time.Duration {
 		switch msg.Type {
 		case "probe":
 			go wsHandleProbe(c, msg.Data)
+		case "config":
+			go wsHandleConfig(c, msg) // 远端配置管理：get / patch / refresh（见 config_api.go）
+		case "ota":
+			go wsHandleOTA(c, msg.Data) // 收集中心下发的 OTA 升级（见 ota.go）
 		case "ping":
 			wsSend(c, wsMsg{Type: "pong"})
 		case "status":
@@ -477,35 +508,85 @@ func wsClientOnce(url string) time.Duration {
 	}
 }
 
-// wsClientLoop 同时连接所有配置的中间件 URL（逗号分隔，多活）：
-// 每个 URL 由独立 goroutine 负责，各自注册并保持连接，任一断开只重连自己，不影响其他中间件。
-// 注意：多个 URL 指向同一中间件实例时，中间件按 nodeId 单连接，后注册的连接会顶掉先前的。
-func wsClientLoop() {
-	urls := splitWSURLs(WS_URL)
-	if len(urls) == 0 {
-		slog.Info("ws client disabled (WS_URL not set)")
-		return
-	}
-	var wg sync.WaitGroup
-	for _, url := range urls {
-		wg.Add(1)
-		go func(u string) {
-			defer wg.Done()
-			wsClientOnceLoop(u)
-		}(url)
-	}
-	wg.Wait()
+// wsClientController WS 客户端连接的运行时控制器：持有每个中间件 URL 的独立连接协程，
+// 使 ws-url 支持热更新（见 reconcileWSClient，多退少补）。
+// node-id / node-key 仍是"需重启"配置项（见 config_api.go configRestartKeys），不在收敛范围内。
+var wsClientController = struct {
+	mu      sync.Mutex
+	started bool
+	conns   map[string]context.CancelFunc // 在跑的 url → 取消函数
+}{conns: map[string]context.CancelFunc{}}
+
+// startWSClientController 启动 WS 客户端控制器（进程启动时调用一次）。
+// 注意：即使此刻 WS_URL 为空也必须调用——否则运行中把 ws-url 热更新进来时没有协程去接管。
+func startWSClientController() {
+	c := &wsClientController
+	c.mu.Lock()
+	c.started = true
+	c.mu.Unlock()
+	reconcileWSClient()
 }
 
-// wsClientOnceLoop 单个中间件 URL 的持续连接循环：连接 → 注册 → 心跳/读循环 → 断开重试
-func wsClientOnceLoop(url string) {
+// reconcileWSClient 把在跑的连接收敛到 WS_URL 的当前值（多退少补）：
+//   - URL 已从配置移除 → 取消对应协程，断开该中间件连接
+//   - 新增 URL → 起新协程连接
+//
+// 幂等：只做差集增删，因此启动时"远端配置触发的收敛 + startWSClientController 的兜底收敛"
+// 两次调用不会重复建连；conns 是"当前在跑哪些连接"的唯一事实来源。
+// ctx 取消只是信号，真正的收尾（wsActiveConns.Delete + CloseNow）由该 URL 自己的协程在 defer 里完成，
+// 控制器从不持有 *websocket.Conn，因此不存在"控制器关连接、协程还在读"的竞态。
+func reconcileWSClient() {
+	c := &wsClientController
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.started {
+		return // 控制器尚未启动（启动早期应用远端配置时），startWSClientController 会兜底收敛
+	}
+
+	urls := splitWSURLs(WS_URL)
+	want := make(map[string]bool, len(urls))
+	for _, u := range urls {
+		want[u] = true
+	}
+
+	for u, cancel := range c.conns {
+		if !want[u] {
+			slog.Info("ws client url removed", "url", u)
+			cancel()
+			delete(c.conns, u)
+		}
+	}
+
+	for _, u := range urls {
+		if _, ok := c.conns[u]; ok {
+			continue
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		c.conns[u] = cancel
+		slog.Info("ws client url added", "url", u, "nodeId", WS_NODE_ID)
+		go wsClientOnceLoop(ctx, u)
+	}
+
+	if len(c.conns) == 0 {
+		slog.Info("ws client disabled (no ws-url)")
+	}
+}
+
+// wsClientOnceLoop 单个中间件 URL 的持续连接循环：连接 → 注册 → 心跳/读循环 → 断开重试。
+// ctx 取消（该 URL 被热更新移除）时立即退出，不再重试。
+func wsClientOnceLoop(ctx context.Context, url string) {
 	for {
-		retryDelay := wsClientOnce(url)
+		retryDelay := wsClientOnce(ctx, url)
 		if retryDelay == 0 {
 			slog.Info("ws client stopped", "url", url)
 			return
 		}
-		time.Sleep(retryDelay)
+		select {
+		case <-ctx.Done():
+			slog.Info("ws client stopped", "url", url)
+			return
+		case <-time.After(retryDelay):
+		}
 	}
 }
 

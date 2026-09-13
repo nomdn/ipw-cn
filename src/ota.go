@@ -2,74 +2,247 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
-	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
-	"resty.dev/v3"
+	"github.com/coder/websocket"
+	"github.com/gin-gonic/gin"
 )
 
-// OTA 自更新：定期检查 GitHub Release，下载与当前平台匹配的新版二进制替换自身并重启。
-// 默认关闭，需显式开启（环境变量 NODE_OTA 或 setting.json 的 node-ota）。
+// ==================== OTA 升级（收集中心下发，节点执行） ====================
+//
+// 控制台（ipw-boce）经 WS 下发 type=ota 指令（或 HTTP 回退 POST /v1/ota，同 config 的鉴权语义），
+// 节点下载新二进制 → 校验 → 预检 → 原子替换 → 重启。下载源二选一：
+//   - url 直发：直接下载该地址
+//   - version + assetBase：节点按自身平台计算资产名 lemonipw-{goos}-{goarch}[.exe]
+//     （GOARCH=arm 无法在运行时区分 GOARM，依次尝试 armv7/armv6/arm），拼出
+//     {assetBase}/{version}/lemonipw-... 逐一尝试
+//   - sha256 提供时强校验（hex，兼容 "sha256:" 前缀）
+//
+// 进度经 WS 回 type=ota_result {requestId, ok, stage, error}：
+//   accepted → downloading → verifying → installing → restarting（ok=false 时 error 说明原因）。
+// 进程重启后连接必然断开，"最终结果"无法经原连接回传——收集中心以节点重连注册上报的
+// 新版本号判定成败（见 ipw-boce ota.go 的任务追踪）。
+//
+// 本地开关：node-ota=false（env NODE_OTA）时节点拒绝一切 OTA 指令并回传原因，
+// 供只读文件系统 / 编排托管的部署使用（替换二进制不可行，升级走各自部署渠道）。
+//
+// 交接逻辑与 middleware-go/ota.go 保持一致：
+// 预检 → 原子替换 → 优雅停机 → 拉起新进程 → 健康检查确认 → 老进程退出；失败回滚 .old。
 
 const (
-	otaReleaseAPI    = "https://api.github.com/repos/nomdn/ipw-cn/releases/latest"
-	otaFirstDelay    = 5 * time.Minute // 启动后首次检查的延迟（避免与数据库下载冲突）
-	otaCheckInterval = 6 * time.Hour   // 常规检查间隔
-	otaMinSize       = 1 * 1024 * 1024 // 下载文件最小体积，防止拿到错误页/占位文件
+	otaMinSize         = 1 * 1024 * 1024  // 下载文件最小体积，防止拿到错误页/占位文件
+	otaDownloadTimeout = 10 * time.Minute // 单次下载超时
 )
 
-var (
-	otaMu      sync.Mutex
-	otaLastRun time.Time
-)
+// otaAssetBaseDefault 按版本下发且未指定 assetBase 时的默认发布地址
+const otaAssetBaseDefault = "https://github.com/nomdn/ipw-cn/releases/download"
 
-type otaRelease struct {
-	TagName string `json:"tag_name"`
-	Assets  []struct {
-		Name               string `json:"name"`
-		BrowserDownloadURL string `json:"browser_download_url"`
-		Size               int64  `json:"size"`
-	} `json:"assets"`
-}
-
-// otaEnabled 判断是否启用 OTA（"true" / "1" / "yes" / "on" 视为开启）
-func otaEnabled() bool {
-	switch strings.ToLower(strings.TrimSpace(NODE_OTA)) {
-	case "true", "1", "yes", "on":
-		return true
+// parseOTASwitch 解析 OTA 开关的字面值——启动加载（ENV / setting.json）、远端下发、运行时 PATCH
+// 三处共用，保证什么算关闭的口径只有一份。
+//
+// 语义是缺省允许、显式关闭（见本文件头）：true/1/yes/on 与空值都算开启，
+// false/0/no/off 算关闭。known=false 表示写法认不出来——运行时 PATCH 据此回
+// unknown 且不覆盖原值，启动期与远端下发则按缺省（允许）处理，不因一个手滑的
+// 字面值把节点锁死。
+func parseOTASwitch(raw string) (enabled, known bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "true", "1", "yes", "on":
+		return true, true
+	case "false", "0", "no", "off":
+		return false, true
 	}
-	return false
+	return true, false
 }
 
-// initOTA 在后台启动 OTA 检查循环，未启用时直接返回
-func initOTA(ghproxy string) {
-	if !otaEnabled() {
-		slog.Debug("OTA disabled")
+// otaMu 单飞：同一时刻只允许一个 OTA 任务（重复下发直接拒绝）
+var otaMu sync.Mutex
+
+// otaRequest OTA 下发报文（WS ota 消息的 data 与 POST /v1/ota 的 body 同构）
+type otaRequest struct {
+	RequestID string `json:"requestId"`
+	URL       string `json:"url"`       // 直发下载地址（与 version 二选一，url 优先）
+	Version   string `json:"version"`   // 目标版本（release tag，如 v1.2.3 / 1.2.3 均可）
+	AssetBase string `json:"assetBase"` // 发布资产基址（version 模式用；空 = otaAssetBaseDefault）
+	SHA256    string `json:"sha256"`    // 可选，内容校验（hex64）
+}
+
+// otaProgress 阶段回报函数：WS 触发时回 ota_result，HTTP 触发时为 nil（只记日志）
+type otaProgress func(ok bool, stage, errMsg string)
+
+// ==================== WS 入口 ====================
+
+// wsHandleOTA 处理收集中心下发的 OTA 指令（ws.go type=ota 调用）。
+// 先同步回 accepted 表明节点认识该指令（老版本节点静默忽略，收集中心据此给出过旧提示），
+// 再异步执行下载/替换/重启。
+func wsHandleOTA(c *websocket.Conn, data []byte) {
+	var req otaRequest
+	if err := json.Unmarshal(data, &req); err != nil {
+		otaReport(c, req.RequestID, false, "accepted", "bad payload: "+err.Error())
 		return
 	}
-	slog.Info("OTA enabled", "current_version", VERSION, "check_interval", otaCheckInterval.String())
+	// 本地开关（node-ota=false，只读容器等不可自更新部署）：明确拒绝并回传原因，
+	// 收集中心据此立即判任务失败，而不是干等超时
+	if !NODE_OTA {
+		otaReport(c, req.RequestID, false, "accepted", "节点已禁用 OTA（node-ota=false）")
+		return
+	}
+	otaReport(c, req.RequestID, true, "accepted", "")
+	go otaRun(req, func(ok bool, stage, errMsg string) {
+		otaReport(c, req.RequestID, ok, stage, errMsg)
+	})
+}
 
-	go func() {
-		// 首次延迟，避免启动瞬间与数据库下载抢占带宽或触发重启
-		time.Sleep(otaFirstDelay)
-		for {
-			checkOTAUpdate(ghproxy)
-			jitter := time.Duration(rand.Int63n(int64(time.Hour)))
-			time.Sleep(otaCheckInterval + jitter)
+// otaReport 回一帧 ota_result（进度或失败原因）
+func otaReport(c *websocket.Conn, requestID string, ok bool, stage, errMsg string) {
+	if c == nil {
+		return
+	}
+	wsSend(c, wsMsg{Type: "ota_result", Data: wsRaw(map[string]any{
+		"requestId": requestID, "ok": ok, "stage": stage, "error": errMsg,
+	})})
+}
+
+// ==================== HTTP 入口 ====================
+
+// registerOTARoute 注册 POST /v1/ota（收集中心 HTTP 回退通道）。
+// 鉴权与 /v1/config 一致：access-token 未配置时整个 HTTP OTA 管理面关闭（RCE 面不能裸奔）。
+func registerOTARoute(r *gin.Engine) {
+	g := r.Group("/v1/ota")
+	if ACCESS_TOKEN == "" {
+		slog.Warn("ota HTTP API disabled: access-token not set, use WS channel instead")
+		g.POST("", func(c *gin.Context) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "OTA 接口已关闭：节点未配置 access-token，请通过 WS 通道下发",
+			})
+		})
+		return
+	}
+	g.Use(tokenCheck())
+	g.POST("", func(c *gin.Context) {
+		if !NODE_OTA {
+			c.JSON(http.StatusForbidden, gin.H{"error": "节点已禁用 OTA（node-ota=false）"})
+			return
 		}
-	}()
+		var req otaRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload: " + err.Error()})
+			return
+		}
+		if err := otaValidate(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		// 异步执行：下载可能耗时数分钟，HTTP 无进度通道，结果看节点日志与重连后的版本号
+		go otaRun(req, nil)
+		c.JSON(http.StatusAccepted, gin.H{"ok": true, "started": true})
+	})
+}
+
+// otaValidate 校验下发参数（url 与 version 至少其一；sha256 合法时规整为小写 hex64）
+func otaValidate(req *otaRequest) error {
+	req.URL = strings.TrimSpace(req.URL)
+	req.Version = strings.TrimSpace(req.Version)
+	req.SHA256 = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(req.SHA256), "sha256:"))
+	if req.URL == "" && req.Version == "" {
+		return fmt.Errorf("url 与 version 至少填一项")
+	}
+	if req.URL != "" {
+		if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+			return fmt.Errorf("url 必须是 http(s) 地址")
+		}
+	}
+	if req.SHA256 != "" {
+		if len(req.SHA256) != 64 {
+			return fmt.Errorf("sha256 必须是 64 位 hex")
+		}
+		if _, err := hex.DecodeString(req.SHA256); err != nil {
+			return fmt.Errorf("sha256 必须是合法 hex")
+		}
+		req.SHA256 = strings.ToLower(req.SHA256)
+	}
+	return nil
+}
+
+// ==================== 执行引擎 ====================
+
+// otaRun 执行 OTA：解析下载源 → 下载校验 → 预检 → 替换 → 重启。
+// 每个 ok=false 的阶段回报后终止；重启前的最后回报是 "restarting"（连接随后断开）。
+func otaRun(req otaRequest, progress otaProgress) {
+	report := func(ok bool, stage, errMsg string) {
+		if errMsg == "" {
+			slog.Info("[ota]", "stage", stage, "ok", ok)
+		} else {
+			slog.Info("[ota]", "stage", stage, "ok", ok, "msg", errMsg)
+		}
+		if progress != nil {
+			progress(ok, stage, errMsg)
+		}
+	}
+
+	if !otaMu.TryLock() {
+		report(false, "accepted", "已有 OTA 任务在执行中，请稍后再试")
+		return
+	}
+	defer otaMu.Unlock()
+
+	if err := otaValidate(&req); err != nil {
+		report(false, "accepted", err.Error())
+		return
+	}
+
+	exePath, err := os.Executable()
+	if err != nil {
+		report(false, "accepted", "cannot locate executable: "+err.Error())
+		return
+	}
+	exePath, err = filepath.EvalSymlinks(exePath)
+	if err != nil {
+		report(false, "accepted", "cannot resolve executable path: "+err.Error())
+		return
+	}
+
+	// 下载到与目标同分区（保证 rename 原子替换）
+	tmpPath := filepath.Join(filepath.Dir(exePath), "ota-update.tmp")
+	report(true, "downloading", "")
+	if err := otaDownload(req, tmpPath); err != nil {
+		_ = os.Remove(tmpPath)
+		report(false, "downloading", err.Error())
+		return
+	}
+
+	// 预检：试运行新二进制（-v 打印版本即退出），损坏/架构不符的文件在停机前就拦下
+	report(true, "verifying", "")
+	if err := preflightBinary(tmpPath); err != nil {
+		_ = os.Remove(tmpPath)
+		report(false, "verifying", err.Error())
+		return
+	}
+
+	report(true, "installing", "")
+	if err := replaceBinary(tmpPath, exePath); err != nil {
+		report(false, "installing", err.Error())
+		return
+	}
+
+	report(true, "restarting", "")
+	// 给 WS 把 restarting 帧写出去留一点时间，然后交接（连接随进程结束断开）
+	time.Sleep(300 * time.Millisecond)
+	slog.Info("[ota] binary replaced, restarting")
+	restartSelf(exePath)
 }
 
 // otaAssetNames 按优先级返回当前平台可能的发布资产名（与 build_and_release.yml 命名一致）
@@ -78,221 +251,101 @@ func otaAssetNames() []string {
 	if runtime.GOOS == "windows" {
 		suffix = ".exe"
 	}
-	arch := runtime.GOARCH
 	// GOARCH=arm 时无法在运行时区分 GOARM（armv7/armv6），依次尝试
-	if runtime.GOOS == "linux" && arch == "arm" {
-		return []string{
-			"lemonipw-linux-armv7",
-			"lemonipw-linux-armv6",
-			"lemonipw-linux-arm",
-		}
+	if runtime.GOOS == "linux" && runtime.GOARCH == "arm" {
+		return []string{"lemonipw-linux-armv7", "lemonipw-linux-armv6", "lemonipw-linux-arm"}
 	}
-	return []string{fmt.Sprintf("lemonipw-%s-%s%s", runtime.GOOS, arch, suffix)}
+	return []string{fmt.Sprintf("lemonipw-%s-%s%s", runtime.GOOS, runtime.GOARCH, suffix)}
 }
 
-// compareVersion 比较版本号：latest > current 返回正数，相等返回 0，否则返回负数；
-// 非数字段按字典序比较。latest 为空（无法获取远端版本）时返回 0，不做更新。
-func compareVersion(latest, current string) int {
-	if strings.TrimSpace(latest) == "" {
-		return 0
-	}
-	trim := func(s string) string {
-		s = strings.TrimSpace(s)
-		s = strings.TrimPrefix(s, "v")
-		s = strings.TrimPrefix(s, "V")
-		if i := strings.IndexAny(s, "-+"); i >= 0 { // 忽略预发布后缀
-			s = s[:i]
+// otaDownload 把下发参数解析成候选下载地址并下载到 dst（url 直发只有一个候选；
+// version 模式按平台资产名生成多个候选逐一尝试）
+func otaDownload(req otaRequest, dst string) error {
+	var urls []string
+	if req.URL != "" {
+		urls = []string{req.URL}
+	} else {
+		base := strings.TrimSuffix(strings.TrimSpace(req.AssetBase), "/")
+		if base == "" {
+			base = otaAssetBaseDefault
 		}
-		return s
-	}
-	a := strings.Split(trim(latest), ".")
-	b := strings.Split(trim(current), ".")
-	for i := 0; i < len(a) || i < len(b); i++ {
-		var x, y int
-		var xe, ye error
-		if i < len(a) {
-			x, xe = strconv.Atoi(a[i])
+		tag := req.Version
+		if !strings.HasPrefix(tag, "v") {
+			tag = "v" + tag // 本仓库 release 一律 v 前缀（CI 由 v* 标签触发），宽容无前缀写法
 		}
-		if i < len(b) {
-			y, ye = strconv.Atoi(b[i])
-		}
-		switch {
-		case xe == nil && ye == nil:
-			if x != y {
-				return x - y
+		for _, name := range otaAssetNames() {
+			u := fmt.Sprintf("%s/%s/%s", base, tag, name)
+			// 延续原版自更新的加速语义：GitHub 官方基址且节点配了 gh-proxy 时自动加前缀；
+			// url 直发不改写（管理员指定的地址保持原样）
+			if GH_PROXY != "" && strings.Contains(base, "github.com") {
+				u = strings.TrimRight(GH_PROXY, "/") + "/" + u
 			}
-		case xe == nil: // 只有当前版本非数字
-			return 1
-		case ye == nil:
-			return -1
-		default: // 两段都非数字，按字典序
-			if a[i] != b[i] {
-				if a[i] > b[i] {
-					return 1
-				}
-				return -1
-			}
+			urls = append(urls, u)
 		}
 	}
-	return 0
-}
 
-// majorSame 判断 latest 与 current 的 major 段是否相同。
-// 任一段无法解析（如本地构建 VERSION 为空）时返回 true（放行，不拦截更新）。
-func majorSame(latest, current string) bool {
-	parseMajor := func(s string) (int, bool) {
-		s = strings.TrimSpace(s)
-		s = strings.TrimPrefix(s, "v")
-		s = strings.TrimPrefix(s, "V")
-		if i := strings.IndexAny(s, "-+."); i >= 0 {
-			s = s[:i]
+	var lastErr error
+	for _, u := range urls {
+		err := otaDownloadOne(u, dst, req.SHA256)
+		if err == nil {
+			return nil
 		}
-		n, err := strconv.Atoi(s)
-		if err != nil {
-			return 0, false
-		}
-		return n, true
+		slog.Warn("[ota] download candidate failed", "url", u, "error", err)
+		lastErr = err
+		_ = os.Remove(dst)
 	}
-	lm, lok := parseMajor(latest)
-	cm, cok := parseMajor(current)
-	if !lok || !cok {
-		return true
-	}
-	return lm == cm
+	return lastErr
 }
 
-// fetchLatestRelease 查询 GitHub 最新 Release 信息
-func fetchLatestRelease() (*otaRelease, error) {
-	client := resty.New().SetTimeout(30 * time.Second)
-	defer client.Close()
-
-	resp, err := client.R().
-		SetHeader("Accept", "application/vnd.github+json").
-		SetHeader("User-Agent", "lemon-ipw-ota").
-		Get(otaReleaseAPI)
-	if err != nil {
-		return nil, err
-	}
-	if resp.IsError() {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode())
-	}
-	var rel otaRelease
-	if err := json.Unmarshal(resp.Bytes(), &rel); err != nil {
-		return nil, err
-	}
-	if rel.TagName == "" {
-		return nil, fmt.Errorf("empty tag_name")
-	}
-	return &rel, nil
-}
-
-// findAssetURL 在 Release 资产中查找当前平台的下载链接，同时返回资产大小用于完整性校验
-func findAssetURL(rel *otaRelease) (string, string, int64) {
-	for _, want := range otaAssetNames() {
-		for _, a := range rel.Assets {
-			if a.Name == want {
-				return a.BrowserDownloadURL, a.Name, a.Size
-			}
-		}
-	}
-	return "", "", 0
-}
-
-// checkOTAUpdate 执行一次检查：有新版本则下载替换并重启
-func checkOTAUpdate(ghproxy string) {
-	otaMu.Lock()
-	defer otaMu.Unlock()
-	otaLastRun = time.Now()
-
-	rel, err := fetchLatestRelease()
-	if err != nil {
-		slog.Warn("OTA check failed", "error", err)
-		return
-	}
-
-	cmp := compareVersion(rel.TagName, VERSION)
-	if cmp <= 0 {
-		slog.Debug("OTA already up to date", "latest", rel.TagName, "current", VERSION)
-		return
-	}
-
-	// major 版本变化（如 3.x → 4.x）通常含破坏性变更，不自动更新，需人工升级
-	if !majorSame(rel.TagName, VERSION) {
-		slog.Warn("OTA skipped: major version upgrade requires manual action",
-			"latest", rel.TagName, "current", VERSION)
-		return
-	}
-
-	assetURL, assetName, assetSize := findAssetURL(rel)
-	if assetURL == "" {
-		slog.Warn("OTA no matching asset for this platform",
-			"tag", rel.TagName, "goos", runtime.GOOS, "goarch", runtime.GOARCH)
-		return
-	}
-
-	slog.Info("OTA new version found", "tag", rel.TagName, "current", VERSION, "asset", assetName)
-
-	exePath, err := os.Executable()
-	if err != nil {
-		slog.Error("OTA cannot locate executable", "error", err)
-		return
-	}
-	exePath, err = filepath.EvalSymlinks(exePath)
-	if err != nil {
-		slog.Error("OTA cannot resolve executable path", "error", err)
-		return
-	}
-
-	// 下载到同目录（保证与目标同分区，rename 原子替换），
-	// 临时文件使用远端资产名（如 lemonipw-linux-amd64）+ .tmp 后缀，避免与运行中的 exe 冲突
-	tmpPath := filepath.Join(filepath.Dir(exePath), assetName+".tmp")
-	if err := downloadOTA(ghproxy+assetURL, tmpPath, assetSize); err != nil {
-		slog.Error("OTA download failed", "error", err)
-		os.Remove(tmpPath)
-		return
-	}
-
-	// 预检：停机前先试运行新二进制（-v 打印版本即退出），确认文件可执行、架构匹配。
-	// 损坏/被杀毒隔离的文件若直到交接时才发现，子进程会秒退导致服务中断
-	if err := preflightBinary(tmpPath); err != nil {
-		slog.Error("OTA preflight failed, keep current version", "error", err)
-		os.Remove(tmpPath)
-		return
-	}
-
-	if err := replaceBinary(tmpPath, exePath); err != nil {
-		slog.Error("OTA replace failed", "error", err)
-		return
-	}
-
-	slog.Info("OTA binary replaced, restarting", "tag", rel.TagName)
-	restartSelf(exePath)
-}
-
-// downloadOTA 下载二进制到临时文件，并做体积校验（Release 声明的资产大小精确比对 + 最小体积兜底）。
-// 注意：GitHub Release 未提供签名/哈希清单，无法做内容级认证，体积校验只能防截断与错装文件。
-func downloadOTA(url, dst string, expectSize int64) error {
-	client := resty.New().SetTimeout(10 * time.Minute)
-	defer client.Close()
-
-	resp, err := client.R().SetOutputFileName(dst).SetSaveResponse(true).Get(url)
+// otaDownloadOne 下载单个地址到 dst：体积下限 + 可选 sha256 强校验
+func otaDownloadOne(url, dst, wantSHA string) error {
+	client := &http.Client{Timeout: otaDownloadTimeout}
+	resp, err := client.Get(url)
 	if err != nil {
 		return err
 	}
-	if resp.IsError() {
-		return fmt.Errorf("HTTP %d", resp.StatusCode())
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	f, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	hash := sha256.New()
+	_, copyErr := io.Copy(io.MultiWriter(f, hash), resp.Body)
+	closeErr := f.Close()
+	if copyErr != nil || closeErr != nil {
+		_ = os.Remove(dst)
+		if copyErr != nil {
+			return copyErr
+		}
+		return closeErr
 	}
 	fi, err := os.Stat(dst)
 	if err != nil {
 		return err
 	}
 	if fi.Size() < otaMinSize {
+		_ = os.Remove(dst)
 		return fmt.Errorf("downloaded file too small: %d bytes", fi.Size())
 	}
-	if expectSize > 0 && fi.Size() != expectSize {
-		return fmt.Errorf("downloaded size mismatch: got %d, want %d", fi.Size(), expectSize)
+	if wantSHA != "" {
+		got := hex.EncodeToString(hash.Sum(nil))
+		if !strings.EqualFold(got, wantSHA) {
+			_ = os.Remove(dst)
+			return fmt.Errorf("sha256 mismatch: got %s", got)
+		}
 	}
 	return nil
+}
+
+// preflightBinary 试运行新二进制（-v 自检：打印版本后立即退出，不读配置不占端口），
+// 确认文件可执行、架构匹配。10s 超时防损坏文件卡死。
+func preflightBinary(path string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return exec.CommandContext(ctx, path, "-v").Run()
 }
 
 // replaceBinary 用新二进制替换当前可执行文件：
@@ -311,20 +364,16 @@ func replaceBinary(tmpPath, exePath string) error {
 	}
 	if runtime.GOOS != "windows" {
 		if err := os.Chmod(exePath, 0o755); err != nil {
-			slog.Warn("OTA chmod failed", "error", err)
+			slog.Warn("[ota] chmod failed", "error", err)
 		}
 	}
 	return nil
 }
 
 // restartSelf 用新二进制重启进程：
-//   - Unix：syscall.Exec 原地替换进程镜像（PID 不变，systemd/Docker 无感；Go 的 socket 带
-//     CLOEXEC，exec 瞬间旧监听关闭、新进程正常重绑）
+//   - Unix：syscall.Exec 原地替换进程镜像（PID 不变，systemd/Docker 无感）
 //   - Windows：运行中的 exe 只能重命名不能替换，采用优雅交接：
-//     1) 优雅停机：停止接收新请求并等待在途请求完成，端口释放
-//     2) 拉起新进程：端口已空闲，子进程可正常绑定（旧实现先 os.Exit 再赌子进程抢端口，
-//     输了就"Server failed to start"退出且 Windows 无守护接管，节点直接下线）
-//     3) 轮询子进程健康检查通过后老进程才退出；超时则以退出码 1 结束
+//     优雅停机（端口释放）→ 拉起新进程 → 健康检查通过后老进程退出；失败回滚 .old
 func restartSelf(exePath string) {
 	if runtime.GOOS == "windows" {
 		gracefulShutdown()
@@ -334,45 +383,32 @@ func restartSelf(exePath string) {
 		cmd.Stderr = os.Stderr
 		cmd.Env = os.Environ()
 		if err := cmd.Start(); err != nil {
-			slog.Error("OTA restart failed, waiting for supervisor", "error", err)
+			slog.Error("[ota] restart failed, waiting for supervisor", "error", err)
 			os.Exit(1)
 		}
 
-		if waitChildReady(cmd, 10*time.Minute) {
-			slog.Info("OTA new process ready, old process exiting", "new_pid", cmd.Process.Pid)
+		if otaWaitChildReady(cmd, 10*time.Minute) {
+			slog.Info("[ota] new process ready, old process exiting", "new_pid", cmd.Process.Pid)
 			os.Exit(0)
 		}
-		slog.Error("OTA new process not ready (exited or timed out), rolling back", "new_pid", cmd.Process.Pid)
+		slog.Error("[ota] new process not ready (exited or timed out), rolling back", "new_pid", cmd.Process.Pid)
 
-		// 回滚：新版本起不来，用 .old 备份恢复服务，而不是陪它一起下线
-		if rollbackToOld(exePath) {
-			slog.Warn("OTA rolled back to previous version, old process exiting")
+		if otaRollbackToOld(exePath) {
+			slog.Warn("[ota] rolled back to previous version, old process exiting")
 			os.Exit(0)
 		}
 		os.Exit(1)
 	}
 
 	if err := syscall.Exec(exePath, os.Args, os.Environ()); err != nil {
-		slog.Error("OTA exec failed, wait for supervisor to restart", "error", err)
+		slog.Error("[ota] exec failed, wait for supervisor to restart", "error", err)
 		os.Exit(1)
 	}
 }
 
-// preflightBinary 试运行新二进制（-v 自检：打印版本后立即退出，不读配置不占端口），
-// 确认文件可执行、架构匹配。10s 超时防损坏文件卡死。
-func preflightBinary(path string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	// Stdout/Stderr 为 nil 时输出直接丢弃
-	return exec.CommandContext(ctx, path, "-v").Run()
-}
-
-// waitChildReady 轮询新进程的健康检查接口（GET /），确认其完成端口绑定并对外服务。
+// otaWaitChildReady 轮询新进程的健康检查接口（GET /），确认其完成端口绑定并对外服务。
 // 返回 true = 就绪；false = 子进程启动期间退出（立即判定失败）或超时未就绪。
-// 超时给足 10 分钟：子进程在数据库文件缺失时（首次启动/文件损坏）会同步拉取约 450MB
-// 库文件后才监听端口，属正常慢启动而非故障——所以判定失败的依据是"子进程退出"
-// （进程死了立即返回），而不是固定超时。
-func waitChildReady(cmd *exec.Cmd, timeout time.Duration) bool {
+func otaWaitChildReady(cmd *exec.Cmd, timeout time.Duration) bool {
 	client := &http.Client{Timeout: 2 * time.Second}
 	url := "http://127.0.0.1:" + PORTS + "/"
 	deadline := time.Now().Add(timeout)
@@ -400,22 +436,22 @@ func waitChildReady(cmd *exec.Cmd, timeout time.Duration) bool {
 	}
 }
 
-// rollbackToOld 用 .old 备份恢复服务：新版本起不来时，把旧二进制换回原位并重新拉起。
-// 返回 true 表示旧版本已就绪。恢复失败时尽力把新二进制挪回原位后返回 false。
-func rollbackToOld(exePath string) bool {
+// otaRollbackToOld 用 .old 备份恢复服务：新版本起不来时，把旧二进制换回原位并重新拉起。
+// 返回 true 表示旧版本已就绪。
+func otaRollbackToOld(exePath string) bool {
 	oldPath := exePath + ".old"
 	if _, err := os.Stat(oldPath); err != nil {
-		slog.Error("OTA rollback skipped: no .old backup", "error", err)
+		slog.Error("[ota] rollback skipped: no .old backup", "error", err)
 		return false
 	}
 	failed := exePath + ".failed"
 	_ = os.Remove(failed)
 	if err := os.Rename(exePath, failed); err != nil {
-		slog.Error("OTA rollback: cannot move failed binary", "error", err)
+		slog.Error("[ota] rollback: cannot move failed binary", "error", err)
 		return false
 	}
 	if err := os.Rename(oldPath, exePath); err != nil {
-		slog.Error("OTA rollback: cannot restore old binary", "error", err)
+		slog.Error("[ota] rollback: cannot restore old binary", "error", err)
 		_ = os.Rename(failed, exePath) // 尽力恢复现场
 		return false
 	}
@@ -424,13 +460,13 @@ func rollbackToOld(exePath string) bool {
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
 	if err := cmd.Start(); err != nil {
-		slog.Error("OTA rollback: cannot start old binary", "error", err)
+		slog.Error("[ota] rollback: cannot start old binary", "error", err)
 		return false
 	}
-	if waitChildReady(cmd, 10*time.Minute) {
-		slog.Warn("OTA rollback serving traffic on previous version", "pid", cmd.Process.Pid)
+	if otaWaitChildReady(cmd, 10*time.Minute) {
+		slog.Warn("[ota] rollback serving traffic on previous version", "pid", cmd.Process.Pid)
 		return true
 	}
-	slog.Error("OTA rollback: old binary also failed to become ready")
+	slog.Error("[ota] rollback: old binary also failed to become ready")
 	return false
 }

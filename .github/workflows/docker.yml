@@ -63,6 +63,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 版本注入 src/Dockerfile（build-args 见下方构建步骤）：
+      # VERSION 取 ref 名——打 v* 标签时与 build_and_release.yml 的二进制产物一致（带 v 前缀），
+      # 手动触发时为分支名（与 merge 阶段打的 main 标签对应）
+      - name: Set version metadata
+        run: |
+          echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+          echo "COMMIT=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -87,6 +96,11 @@ jobs:
         with:
           context: ${{ matrix.context }}
           platforms: ${{ matrix.platforms }}
+          # 只有 src/Dockerfile 声明了这三个 ARG；middleware-go 未声明，BuildKit 会静默忽略
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            COMMIT=${{ env.COMMIT }}
+            BUILD_TIME=${{ env.BUILD_TIME }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=ghcr.io/${{ github.repository }}/${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.platform_id }}

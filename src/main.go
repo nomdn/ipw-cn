@@ -16,7 +16,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -246,10 +245,9 @@ var (
 	REPORT_URL           string        // 数据上报：收集中心 HTTP 接口基址（report-url / REPORT_URL），WS 全部掉线时的兜底通道
 	REPORT_TOKEN         string        // 数据上报：/report 鉴权 token（report-token / REPORT_TOKEN）
 	REPORT_INTERVAL      int           // 数据上报间隔秒（report-interval-seconds / REPORT_INTERVAL_SECONDS），缺省 15
-	NODE_OTA             string        // OTA 自更新开关（node-ota / NODE_OTA），"true" 时启用
 	TRUSTED_PROXIES      string        // 可信代理列表（trusted-proxies / TRUSTED_PROXIES），逗号分隔 IP/CIDR，供 ClientIP 判定
-	httpServer           *http.Server  // 显式持有的 HTTP 服务（Windows OTA 优雅重启需要先 Shutdown）
-	otaHandoverWait      chan struct{} // 非 nil 表示 Windows OTA 优雅重启模式：Serve 关闭后 main 停在此等待老进程退出
+	NODE_OTA             bool          // OTA 升级开关（node-ota / NODE_OTA）：缺省允许收集中心下发；只读容器等不可自更新部署显式设 false，节点拒绝指令并回传原因
+	httpServer           *http.Server  // 显式持有的 HTTP 服务（收到退出信号时优雅停机需要先 Shutdown）
 	VERSION              string
 	COMMIT               string
 	BUILD_TIME           string
@@ -959,9 +957,15 @@ func pingHandler(c *gin.Context) {
 	c.JSON(200, rawResult.(*TCPingResult))
 }
 
+// healchCheck 健康检查（GET /）。除 status 外回报版本号：中间件对 HTTP 版节点（无 WS 连接）
+// 正是靠这个接口探活，顺带取版本用于节点状态页展示。
 func healchCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "ok",
+		"version": VERSION,
+		// 能力清单同 register 报文：中间件对纯 HTTP 节点探活时一并取回，
+		// 用于在下发 config 前判断该节点能否理解对应指令（见 ws.go nodeCapabilities）
+		"capabilities": nodeCapabilities(),
 	})
 }
 func tokenCheck() gin.HandlerFunc {
@@ -1031,67 +1035,18 @@ func applyRemoteConfig() {
 		slog.Warn("Failed to fetch remote config, falling back to local config", "url", url, "error", err)
 		return
 	}
-	// ignore 列表：数组中的配置项不被远端覆盖（逐键判断跳过）
-	ignored := func(key string) bool {
-		for _, k := range REMOTE_IGNORE_CONFIG {
-			if k == key {
-				return true
-			}
-		}
-		return false
-	}
-	if v := configValue(CONFIG, "port"); v != "" && !ignored("port") {
-		PORTS = v
-	}
-	if v := configValue(CONFIG, "gh-proxy"); v != "" && !ignored("gh-proxy") {
-		GH_PROXY = v
-	}
-	if v := configValue(CONFIG, "single-stack"); v != "" && !ignored("single-stack") {
-		SINGLE_STACK = strings.ToLower(v)
-	}
-	if v := configValue(CONFIG, "dns-server"); v != "" && !ignored("dns-server") {
-		DNS_SERVER = v
-	}
-	if v := configValue(CONFIG, "dnssec-server"); v != "" && !ignored("dnssec-server") {
-		DNSSEC_DNS_SERVER = v
-	}
-	if v := configValue(CONFIG, "ipdb"); v != "" && !ignored("ipdb") {
-		IPDB = v
-	}
-	if v := configValue(CONFIG, "cors"); v != "" && !ignored("cors") {
-		CORS = v
-	}
-	// block-private-ips 与 setting.json 格式一致，允许远端覆盖
-	if v := configValue(CONFIG, "block-private-ips"); v != "" && !ignored("block-private-ips") {
-		ssrf.SetEnabled(v != "false" && v != "0")
-	}
-	// WS 客户端配置（远端可覆盖，除非在 ignore 列表中）
-	if v := configValue(CONFIG, "ws-url"); v != "" && !ignored("ws-url") {
-		WS_URL = v
-	}
-	if v := configValue(CONFIG, "node-id"); v != "" && !ignored("node-id") {
-		WS_NODE_ID = v
-	}
-	if v := configValue(CONFIG, "node-key"); v != "" && !ignored("node-key") {
-		WS_NODE_KEY = v
-	}
-	// 数据上报收集中心（远端可统一下发；report-token 属凭据，不随远端覆盖）
-	if v := configValue(CONFIG, "report-url"); v != "" && !ignored("report-url") {
-		REPORT_URL = v
-	}
-	// OTA 自更新开关（远端可统一开启/关闭节点的自更新）
-	if v := configValue(CONFIG, "node-ota"); v != "" && !ignored("node-ota") {
-		NODE_OTA = v
-	}
-	// 可信代理列表（远端可统一下发）
-	if v := configValue(CONFIG, "trusted-proxies"); v != "" && !ignored("trusted-proxies") {
-		TRUSTED_PROXIES = v
-	}
-	// access-token 不在此覆盖：保持原有优先级（环境变量 > setting.json）
+	// 键映射统一在 applyConfigMap（与本地 PATCH / WS 指令共用，见 config_api.go）；
+	// 忽略名单由 remoteIgnoreList() 给出：受保护凭据（access-token / report-token）
+	// + 操作员自选的 remote-ignore-config —— 凭据始终保持"ENV > setting.json"的本地优先级
+	applied, unknown, _ := applyConfigMap(CONFIG, remoteIgnoreList())
 	if CORS != "" {
 		ACCEPT_DOMAINS = splitAndTrim(CORS, ",")
 	}
-	slog.Info("Remote config applied", "url", url)
+	slog.Info("Remote config applied", "url", url, "applied", applied, "unknown", unknown)
+	if protected := protectedKeysIn(CONFIG); len(protected) > 0 {
+		slog.Warn("远端配置里的凭据键已被忽略（凭据由节点本地管理，见 configRemoteProtectedKeys）",
+			"keys", protected, "url", url)
+	}
 }
 
 func readConfig() {
@@ -1107,7 +1062,6 @@ func readConfig() {
 	CORS = os.Getenv("CORS")
 	ACCESS_TOKEN = os.Getenv("ACCESS_TOKEN")
 	TRUSTED_PROXIES = os.Getenv("TRUSTED_PROXIES")
-	ssrf.SetEnabled(os.Getenv("BLOCK_PRIVATE_IPS") != "false" && os.Getenv("BLOCK_PRIVATE_IPS") != "0")
 
 	// SINGLE_STACK is intentionally excluded: empty string is a valid value (dual-stack).
 
@@ -1141,6 +1095,20 @@ func readConfig() {
 	if TRUSTED_PROXIES == "" {
 		TRUSTED_PROXIES = viper.GetString("trusted-proxies")
 	}
+	// block-private-ips：SSRF 防护开关，env 优先、其次 setting.json，缺省开启（见 ssrf 包）。
+	// 必须在 viper.ReadInConfig 之后解析：早期版本只读 ENV，setting.json 里的同名键在启动阶段
+	// 被静默忽略（只有运行中 patch / 远端配置才会生效），与本文件其余键的"env > setting.json"口径不一致。
+	blockPrivateRaw := strings.TrimSpace(os.Getenv("BLOCK_PRIVATE_IPS"))
+	if blockPrivateRaw == "" {
+		blockPrivateRaw = strings.TrimSpace(viper.GetString("block-private-ips"))
+	}
+	ssrf.SetEnabled(blockPrivateRaw != "false" && blockPrivateRaw != "0")
+	// OTA 升级开关：仅显式关闭才禁用（缺省允许收集中心下发 OTA，见 ota.go）
+	otaRaw := strings.TrimSpace(os.Getenv("NODE_OTA"))
+	if otaRaw == "" {
+		otaRaw = strings.TrimSpace(viper.GetString("node-ota"))
+	}
+	NODE_OTA, _ = parseOTASwitch(otaRaw)
 	if PORTS == "" {
 		PORTS = "8080"
 	}
@@ -1184,11 +1152,6 @@ func readConfig() {
 		}
 	} else if REPORT_INTERVAL <= 0 {
 		REPORT_INTERVAL = 15
-	}
-	// NODE_OTA：OTA 自更新开关（环境变量 NODE_OTA 或 setting.json 的 node-ota）
-	NODE_OTA = os.Getenv("NODE_OTA")
-	if NODE_OTA == "" {
-		NODE_OTA = viper.GetString("node-ota")
 	}
 	// REMOTE_IGNORE_CONFIG：不被远端覆盖的配置项列表（JSON 数组字符串，env 优先）
 	if raw := os.Getenv("REMOTE_IGNORE_CONFIG"); raw != "" {
@@ -1296,17 +1259,13 @@ func main() {
 
 	slog.Info("Starting server", "port", PORTS, "gh_proxy", GH_PROXY, "single_stack", SINGLE_STACK, "dns_server", DNS_SERVER, "CORS_ACCEPT", ACCEPT_DOMAINS)
 
-	// WS 客户端：接入中间件 WS 通道（配置 WS_URL 时启用，HTTP 接口不变）
-	if WS_URL != "" {
-		go wsClientLoop()
-		slog.Info("WS client enabled", "url", WS_URL, "nodeId", WS_NODE_ID)
-	}
+	// WS 客户端：接入中间件 WS 通道（HTTP 接口不变）。
+	// 控制器常驻——即使当前 ws-url 为空也启动，否则运行中把 ws-url 热更新进来时没有协程去接管；
+	// 改 ws-url 由 reconcileWSClient 多退少补（无需重启），改 node-id / node-key 需重启进程。
+	startWSClientController()
 
 	// 数据上报：WS 在线走 WS 广播，否则 HTTP POST 收集中心 /report（详见 report.go）
 	startNodeReporter()
-
-	// OTA 自更新：定期检查 GitHub Release 并替换二进制（配置 NODE_OTA / node-ota 启用）
-	initOTA(GH_PROXY)
 
 	// 缓存清扫：各 sync.Map 只在同 key 重访时惰性淘汰过期条目，
 	// 公网端点被唯一 key 洪打时内存会无限增长，这里定期清扫
@@ -1361,10 +1320,15 @@ func main() {
 		}
 	}
 
+	// 运行时配置接口（/v1/config）：鉴权同业务接口，但不计入拨测统计
+	registerConfigRoutes(r)
+
+	// OTA 升级接口（POST /v1/ota）：收集中心 HTTP 回退通道，鉴权语义同 config（见 ota.go）
+	registerOTARoute(r)
+
 	r.GET("/", healchCheck)
 
-	// 显式持有 http.Server：Windows OTA 优雅重启需要先 Shutdown 释放端口再拉起新进程，
-	// 避免 r.Run 的隐式 Server 无法受控关闭、父子进程抢端口
+	// 显式持有 http.Server：收到退出信号时先 Shutdown 释放端口，避免 r.Run 的隐式 Server 无法受控关闭
 	httpServer = &http.Server{Handler: r}
 	ln, err := net.Listen("tcp", ":"+PORTS)
 	if err != nil {
@@ -1379,15 +1343,8 @@ func main() {
 		}
 	}()
 
-	// Windows OTA：Server 被 restartSelf 的优雅停机关闭后，main 停在这里不退出，
-	// 由 restartSelf 在新进程健康检查通过后 os.Exit 结束整个老进程
-	if otaEnabled() && runtime.GOOS == "windows" {
-		otaHandoverWait = make(chan struct{})
-		<-otaHandoverWait
-		return
-	}
-	// 非 OTA 交接模式：main 必须阻塞，否则 Server goroutine 随 main 返回而消亡，
-	// 进程启动后立即退出。阻塞在退出信号上，收到后走优雅停机。
+	// main 必须阻塞，否则 Server goroutine 随 main 返回而消亡，进程启动后立即退出。
+	// 阻塞在退出信号上，收到后走优雅停机。
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	<-sigCh
@@ -1395,7 +1352,7 @@ func main() {
 }
 
 // gracefulShutdown 优雅停止 HTTP 服务：停止接收新请求，等待在途请求完成（上限 30s）。
-// 供 Windows OTA 在拉起新进程前调用，确保监听端口先释放、子进程能正常绑定。
+// 供收到退出信号时调用，确保监听端口先释放再退出进程。
 func gracefulShutdown() {
 	if httpServer == nil {
 		return

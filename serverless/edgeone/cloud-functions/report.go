@@ -11,20 +11,30 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 )
 
-// ==================== 数据上报（节点 → 收集中心 ipw-boce） ====================
+// ==================== 数据上报（EO 节点 → 收集中心 ipw-boce） ====================
 //
-// 节点是唯一记录者：统计与拨测明细都由本节点上报，中间件不在转发路径上计数，不存在双算。
-// 上报通道（报文同构，协议定义见 ipw-boce 的 report.go）：
-//   - WS 客户端启用（WS_URL 配置且至少一条连接在线）→ 经 WS 发 {"type":"report","data":...}
-//   - WS 未启用或全部连接掉线 → HTTP POST 到收集中心 /report（REPORT_URL）
+// 自主线 ipw-cn/src/report.go 提取，按 EO 部署形态裁剪：EO 版不连中间件 WS 通道
+// （无 WebSocket 客户端），因此上报只走一条路——HTTP POST 收集中心 /report。
+// 报文协议与 ipw-boce/report.go 完全一致：
 //
-// 两条来源都要上报：
-//   - HTTP 接口收到的请求（/v1/*）→ nodeReportMiddleware 计数
-//   - 中间件经 WS 下发的拨测（probe）→ nodeRecordWSProbe 计数
+//	POST /report  body = {"instance":"上报方标识","stats":[...],"probes":[...]}
+//
+// 节点是唯一记录者：统计与拨测明细都由本节点上报，收集中心不在转发路径上计数。
+// 覆盖的请求来源只有一条：HTTP 接口收到的 /v1/*（nodeReportMiddleware 计数）。
+//
+// 进程模型前提：本实现假定云函数运行时是**长驻进程**（与 index.go 里缓存清扫 goroutine
+// 同一假设）。若部署为按需冷启动，内存中的计数与明细缓冲会随实例回收丢失——上报只在
+// 实例存活期内累积，间隔到期后即发出。
+//
+// 配置（env 优先，远端配置 REMOTE_CONFIG_URL 最高，见 index.go 的 readConfig/applyRemoteConfig）：
+//
+//	NODE_ID         上报身份（node-id），留空回退 hostname
+//	REPORT_URL      收集中心 HTTP 基址（report-url），留空则不上报
+//	REPORT_TOKEN    /report 鉴权 token（report-token）
+//	REPORT_INTERVAL 上报间隔秒（report-interval-seconds），缺省 15
 
 const (
 	reportMaxProbes = 500
@@ -69,16 +79,16 @@ func nodeIsProbeType(apiType string) bool {
 	return false
 }
 
-// startNodeReporter 启动上报循环（main() 调用）。
-// 循环常驻：上报通道（ws-url / report-url）都可能被热更新启用；若沿用"启动时没有通道就不启动"，
-// 后续热更新出通道也不会有人上报。
+// startNodeReporter 启动上报循环（main() 调用，须在 readConfig 之后）。
+// 循环常驻：即使当前没有配置 REPORT_URL 也照常起——留空只是"本轮不上报"，
+// 便于将来接入热更新/远端配置后无需重启即可开启上报。
 func startNodeReporter() {
 	if REPORT_INTERVAL <= 0 {
 		REPORT_INTERVAL = 15
 	}
 	nodeProbeCh = make(chan nodeProbeRec, 2048)
 	go nodeReportLoop()
-	slog.Info("node reporter enabled", "ws", WS_URL != "", "httpFallback", REPORT_URL, "interval", REPORT_INTERVAL)
+	slog.Info("node reporter enabled", "httpReport", REPORT_URL, "interval", REPORT_INTERVAL, "nodeId", nodeReportNodeID())
 }
 
 // nodeReportMiddleware /v1 组统计中间件：归属规则过滤 → 计数 → 拨测类补明细
@@ -108,31 +118,6 @@ func nodeReportMiddleware() gin.HandlerFunc {
 				Source: "http", CreatedAt: time.Now().Unix(),
 			})
 		}
-	}
-}
-
-// nodeRecordWSProbe WS 拨测出口（ws.go wsHandleProbe 调用）。
-// 中间件已不在转发路径上计数，WS 下发的拨测同样由本节点上报（唯一记录者）；
-// requestId 只作为明细的关联标识带出，不参与归属判断。
-func nodeRecordWSProbe(requestID, apiType, raw string, query map[string]string, status int, latency time.Duration) {
-	if apiType == "" {
-		return
-	}
-	nodeRecordAPI(apiType, status, latency)
-	if nodeIsProbeType(apiType) {
-		q := ""
-		for k, v := range query {
-			if q != "" {
-				q += "&"
-			}
-			q += k + "=" + v
-		}
-		nodeRecordProbe(nodeProbeRec{
-			RequestID: requestID,
-			NodeID:    nodeReportNodeID(), APIType: apiType, Raw: raw, Query: q,
-			Status: status, LatencyMs: latency.Milliseconds(), Source: "ws",
-			CreatedAt: time.Now().Unix(),
-		})
 	}
 }
 
@@ -172,10 +157,10 @@ func nodeRecordProbe(rec nodeProbeRec) {
 	}
 }
 
-// nodeReportNodeID 上报身份：优先 node-id（WS_NODE_ID），否则 hostname
+// nodeReportNodeID 上报身份：优先 node-id（NODE_ID），否则 hostname
 func nodeReportNodeID() string {
-	if WS_NODE_ID != "" {
-		return WS_NODE_ID
+	if NODE_ID != "" {
+		return NODE_ID
 	}
 	if h, err := os.Hostname(); err == nil && h != "" {
 		return h
@@ -183,7 +168,7 @@ func nodeReportNodeID() string {
 	return "unknown"
 }
 
-// nodeAPIFromPath 从 gin 路由模板提取 apiType 与拨测目标（对齐 WS probe 的 raw 格式）
+// nodeAPIFromPath 从 gin 路由模板提取 apiType 与拨测目标（对齐主线 WS probe 的 raw 格式）
 func nodeAPIFromPath(c *gin.Context) (apiType, raw string) {
 	path := c.FullPath() // 形如 /v1/tcping/:ip
 	if !strings.HasPrefix(path, "/v1/") {
@@ -201,7 +186,7 @@ func nodeAPIFromPath(c *gin.Context) (apiType, raw string) {
 			raw = c.Param("domain")
 		}
 	case "speed":
-		raw = c.Param("version") + c.Param("url") // v4/example.com（对齐 WS probe raw 格式）
+		raw = c.Param("version") + c.Param("url") // v4/example.com
 	case "dns":
 		raw = c.Param("type") + c.Param("domain") // a/example.com
 	case "detail", "ssl":
@@ -212,26 +197,26 @@ func nodeAPIFromPath(c *gin.Context) (apiType, raw string) {
 	return apiType, raw
 }
 
-// nodeReportLoop 周期上报：WS 在线走 WS 广播（所有已注册中间件），否则 HTTP POST 收集中心
+// nodeReportLoop 周期上报：取走计数与明细缓冲 → HTTP POST 收集中心 /report
 func nodeReportLoop() {
 	ticker := time.NewTicker(time.Duration(REPORT_INTERVAL) * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
+		if REPORT_URL == "" {
+			continue // 未配置收集中心地址：本轮不上报（配置就绪后自动开始）
+		}
 		payload := nodeBuildPayload()
 		if payload == nil {
 			continue
 		}
-		sent := wsBroadcastReport(payload)
-		if !sent && REPORT_URL != "" {
-			if err := nodeHTTPReport(payload); err != nil {
-				slog.Warn("node http report failed", "error", err)
-			}
+		if err := nodeHTTPReport(payload); err != nil {
+			slog.Warn("node http report failed", "error", err)
 		}
 	}
 }
 
 // nodeBuildPayload 取走当前计数与拨测缓冲，组装上报报文；无数据返回 nil。
-// minute 传 0 = 收集器按自己时钟入桶（节点时钟不可信时不影响聚合口径）
+// minute 传节点自己的分钟桶（收集端另有 minute=0 → 按自身时钟入桶的兜底口径）
 func nodeBuildPayload() map[string]any {
 	nodeStatsMu.Lock()
 	snap := nodeStats
@@ -271,24 +256,8 @@ func nodeBuildPayload() map[string]any {
 	return payload
 }
 
-// wsBroadcastReport 经 WS 通道向所有在线中间件广播 report 消息；无在线连接返回 false（触发 HTTP 兜底）
-func wsBroadcastReport(payload map[string]any) bool {
-	sent := false
-	data, _ := json.Marshal(payload)
-	wsActiveConns.Range(func(_, v any) bool {
-		if c, ok := v.(*websocket.Conn); ok && c != nil {
-			if err := wsSendErr(c, wsMsg{Type: "report", NodeID: WS_NODE_ID, Data: data}); err != nil {
-				slog.Warn("node ws report send failed", "error", err)
-			} else {
-				sent = true
-			}
-		}
-		return true
-	})
-	return sent
-}
-
-// nodeHTTPReport HTTP 兜底上报（WS 未启用/全部掉线时）
+// nodeHTTPReport 上报到收集中心 /report。
+// at-most-once：失败只记日志不重试——统计是累加语义，重试会导致重复计算。
 func nodeHTTPReport(payload map[string]any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {

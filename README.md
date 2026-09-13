@@ -12,11 +12,14 @@ curl -fsSL https://raw.githubusercontent.com/nomdn/ipw-cn/main/install.sh -o ins
 
 完整部署（后端节点 / 独立中间件 / 前端）与配置说明见 [文档](https://github.com/nomdn/ipw-cn/tree/main/docs)：
 
+- [功能总览](docs/info/features.md)（探测能力、IP 数据源、可靠性设计）
 - [快速开始](docs/guide/getting-started.md)
 - [后端节点部署](docs/guide/deploy-node.md)
 - [中间件部署](docs/guide/deploy-middleware.md)
 - [前端部署](docs/guide/deploy-frontend.md)
 - [配置文件](docs/guide/config.md)
+- [节点 API 与协议](docs/guide/node-api.md)（业务接口、管理接口、WS 协议、上报协议）
+- [公开 API（/api/v1）](docs/guide/public-api.md)（收集中心程序化接口：鉴权、端点与响应示例、公开状态接口）
 
 ## 项目结构
 

@@ -122,14 +122,6 @@ case "${WS_CHOICE,,}" in
 esac
 
 echo ""
-echo "--- OTA 自更新（可选）---"
-read -r -p "启用 OTA 自动升级（跟随 GitHub Release，major 版本不自动升）？[y/N]: " OTA_CHOICE
-NODE_OTA=""
-case "${OTA_CHOICE,,}" in
-    y|yes) NODE_OTA="true" ;;
-esac
-
-echo ""
 echo "--- 其他环境变量（可选）---"
 echo "输入额外的 Environment= 项，每行一个（如 GH_PROXY=https://ghproxy.com/），空行结束："
 EXTRA_ENVS=""
@@ -157,7 +149,6 @@ echo "access-token: ${ACCESS_TOKEN:+已设置 (隐藏)}"
 echo "DNS:          $DNS_SERVER"
 echo "ipdb:         $IPDB"
 echo "WS 接入:      $(if [ -n "$WS_URL" ]; then printf '%s (id=%s, key=%s)' "$WS_URL" "$NODE_ID" "${NODE_KEY:+已设置}"; else printf '未启用'; fi)"
-echo "OTA 自更新:   ${NODE_OTA:-未启用}"
 echo "========================================"
 read -r -p "确认安装？[Y/n]: " CONFIRM
 case "${CONFIRM,,}" in
@@ -216,7 +207,6 @@ add_env REMOTE_CONFIG_URL "$REMOTE_CONFIG_URL"
 add_env WS_URL "$WS_URL"
 add_env NODE_ID "$NODE_ID"
 add_env NODE_KEY "$NODE_KEY"
-add_env NODE_OTA "$NODE_OTA"
 if [ -n "$EXTRA_ENVS" ]; then
     while IFS= read -r line; do
         [ -n "$line" ] || continue
