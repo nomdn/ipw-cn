@@ -3,7 +3,7 @@
     前端的一系列配置
 */
 const config = {
-    siteUrl: "https://ipw.wsmdn.top/",
+    siteUrl: "https://nipw.cn/",
     // 站点名称：用于页面标题 / 描述 / 页脚品牌展示
     siteName: "柠檬味ipw.cn",
     // 是否启用前端内置中间件（server/routes/middleware/[...slug].get.ts 本地转发）。
