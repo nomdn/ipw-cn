@@ -27,8 +27,8 @@ const config = {
     umamiScriptUrl: "https://umami.wsmdn.top/zako.js",
     umamiWebsiteId: "69a91329-b110-4cf7-a04a-be4360b1a8d3",
     // 中华人民共和国备案系统
-    ICP: "苏ICP备2026012471号",
-    GongAn: "苏公网安备32132402000813号",
+    ICP: "",
+    GongAn: "",
     // 全站是否禁止搜索引擎索引
     noindex: false,
     // Worker IP查询接口
