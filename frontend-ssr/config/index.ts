@@ -67,11 +67,6 @@ const config = {
                 id: "lntl-cn-hk-kowloon",
                 url: "https://lntl-cn-hk-kowloon.api-ipw.wsmdn.top/"
             },
-            {
-                label: "中国 河北 秦皇岛 联通",
-                id: "cn-hebei-qinhuangdao",
-                url: "https://cn-hebei-qinhuangdao.api-ipw.wsmdn.top/"
-            }
         ],
         IPv4: [
             {
@@ -106,16 +101,6 @@ const config = {
                 url: ""
             },
             {
-                label: "湖北 十堰 电信",
-                id: "shiyan",
-                url: ""
-            },
-            {
-                label: "陕西 西安二 电信",
-                id: "xian2",
-                url: ""
-            },
-            {
                 label: "香港 Cogent",
                 id: "hongkong",
                 url: ""
@@ -144,12 +129,6 @@ const config = {
                 id: "cn-wuhan-chinatelecom",
                 url: ""
             },
-            // IP 直连的节点：URL 留空，仅经独立中间件转发
-            {
-                label: "上海 腾讯云 BGP",
-                id: "tencent-sh",
-                url: ""
-            }
         ]
     }
 }
