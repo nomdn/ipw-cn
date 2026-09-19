@@ -3,7 +3,7 @@
     前端的一系列配置
 */
 const config = {
-    siteUrl: "https://ipw.wsmdn.top/",
+    siteUrl: "https://nipw.cn/",
     // 站点名称：用于页面标题 / 描述 / 页脚品牌展示
     siteName: "柠檬味ipw.cn",
     // 是否启用前端内置中间件（server/routes/middleware/[...slug].get.ts 本地转发）。
@@ -27,8 +27,8 @@ const config = {
     umamiScriptUrl: "https://umami.wsmdn.top/zako.js",
     umamiWebsiteId: "69a91329-b110-4cf7-a04a-be4360b1a8d3",
     // 中华人民共和国备案系统
-    ICP: "苏ICP备2026012471号",
-    GongAn: "苏公网安备32132402000813号",
+    ICP: "",
+    GongAn: "",
     // 全站是否禁止搜索引擎索引
     noindex: false,
     // Worker IP查询接口
@@ -67,11 +67,6 @@ const config = {
                 id: "lntl-cn-hk-kowloon",
                 url: "https://lntl-cn-hk-kowloon.api-ipw.wsmdn.top/"
             },
-            {
-                label: "中国 河北 秦皇岛 联通",
-                id: "cn-hebei-qinhuangdao",
-                url: "https://cn-hebei-qinhuangdao.api-ipw.wsmdn.top/"
-            }
         ],
         IPv4: [
             {
@@ -106,16 +101,6 @@ const config = {
                 url: ""
             },
             {
-                label: "湖北 十堰 电信",
-                id: "shiyan",
-                url: ""
-            },
-            {
-                label: "陕西 西安二 电信",
-                id: "xian2",
-                url: ""
-            },
-            {
                 label: "香港 Cogent",
                 id: "hongkong",
                 url: ""
@@ -144,12 +129,6 @@ const config = {
                 id: "cn-wuhan-chinatelecom",
                 url: ""
             },
-            // IP 直连的节点：URL 留空，仅经独立中间件转发
-            {
-                label: "上海 腾讯云 BGP",
-                id: "tencent-sh",
-                url: ""
-            }
         ]
     }
 }

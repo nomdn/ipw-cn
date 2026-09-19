@@ -95,8 +95,9 @@ useHead({
         { name: 'robots', content: 'noindex, nofollow' },
         { name: 'googlebot', content: 'noindex, nofollow' },
         { name: 'bingbot', content: 'noindex, nofollow' },
+        { name:'baidu-site-verification', content: 'codeva-xzdbvF8gQu'}
       ]
-    : [],
+    : [{ name:'baidu-site-verification', content: 'codeva-xzdbvF8gQu'}],
 });
 onMounted(() => {
   mediaQueryList = window.matchMedia('(max-width: 768px)');
