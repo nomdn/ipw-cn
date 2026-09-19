@@ -337,6 +337,15 @@ func otaDownloadOne(url, dst, wantSHA string) error {
 			return fmt.Errorf("sha256 mismatch: got %s", got)
 		}
 	}
+	// 下载文件默认不带执行位（os.Create 跟随 umask，通常 0644），而 preflightBinary
+	// 在 replaceBinary 的 chmod 之前就要试运行它；Linux 下不显式加 +x 会 EACCES（Permission denied）。
+	// 故此处下载落盘后即补执行位，确保 preflight 与最终 replace 都能 exec。
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(dst, 0o755); err != nil {
+			_ = os.Remove(dst)
+			return fmt.Errorf("chmod downloaded binary: %w", err)
+		}
+	}
 	return nil
 }
 
