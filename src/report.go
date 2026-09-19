@@ -63,7 +63,9 @@ type nodeProbeRec struct {
 // dnssec 属功能性校验（结果是否签名/可信），不逐条进明细，只进统计聚合。
 func nodeIsProbeType(apiType string) bool {
 	switch apiType {
-	case "tcping", "speed", "detail", "ssl", "dns":
+	// 与中心 store.go 的 isProbeType 白名单对齐：location 归属地查询也逐条进明细，
+	// 否则节点只上报 location 统计、不上报明细，导致中心大盘有 Location 统计而明细为空。
+	case "tcping", "speed", "detail", "ssl", "dns", "location":
 		return true
 	}
 	return false
