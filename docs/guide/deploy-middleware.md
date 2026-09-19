@@ -90,14 +90,16 @@ middleware-go 内置 WS 服务端，后端节点可作为 **WS 客户端**连入
 
 | 方向 | type | data 说明 |
 |------|------|-----------|
-| 节点 → middleware | `register` | `{ "nodeId": "...", "key": "..." }`，连接后首条消息，同 id 新连接顶掉旧连接；`key` 为注册凭证，与 setting.json `ws-keys` 配置比对 |
+| 节点 → middleware | `register` | `{ "nodeId": "...", "key": "...", "version": "...", "capabilities": [...] }`，连接后首条消息，同 id 新连接顶掉旧连接；`key` 为注册凭证，与 setting.json `ws-keys` 配置比对 |
+| 节点 → middleware | `probe_result` | `{ "requestId": "...", "status": 200, "body": <JSON 值> }`（body 为 JSON 字符串时按原文透传） |
+| 节点 → middleware | `ping` / `pong` | 心跳：节点每 10s 发 `ping`（middleware 回 `pong`）；`pong` 为对 middleware `ping` 的应答 |
+| 节点 → middleware | `report` | 统计 + 拨测明细的周期上报（同 `/report` body）。节点会**向所有已连接中间件广播**（多活），消费者是收集中心 ipw-boce；middleware-go 只做转发与拨测代理、不在转发路径采集，收到后**静默丢弃**（不打"未知消息"日志） |
+| 节点 → middleware | `config_result` / `ota_result` | 运行时配置 / OTA 指令的应答。只有对端下发过 `config` / `ota` 才会出现；middleware-go 不下发这类指令（远程运维归收集中心），正常收不到，收到同样静默丢弃 |
 | middleware → 节点 | `register_ok` | `{ "heartbeatSeconds": 20 }` |
 | middleware → 节点 | `register_error` | `{ "code": 401, "command": "invalid key" }`（注册凭证错误时返回并断开连接） |
 | middleware → 节点 | `probe` | `{ "requestId": "...", "apiType": "tcping", "raw": "qq.com", "query": {"port":"443"} }`，拨测请求（HTTP/WS 双通道时前端请求仍走 HTTP，middleware 内部转 WS） |
-| 节点 → middleware | `probe_result` | `{ "requestId": "...", "status": 200, "body": <JSON 值> }`（body 为 JSON 字符串时按原文透传） |
-| middleware → 节点 | `ping` | 心跳，节点回 `pong` |
+| middleware → 节点 | `ping` | 心跳（每 20s），节点回 `pong` |
 | middleware → 节点 | `status` | 状态/统计上报：`{ "uptimeSeconds": ..., "totalRequests": ..., "errorRequests": ... }`（每 20s） |
-| 节点 → middleware | `command` | 指令下发，如 `{ "command": "reload_config" }`（重读配置；与并发请求存在竞态，生产建议重启生效） |
 
 ### 节点侧接入（WS 客户端）
 

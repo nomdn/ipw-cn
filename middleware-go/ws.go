@@ -20,7 +20,9 @@ import (
 // 现有 HTTP 接口（/v1/* /middleware/*）完全不变，WS 是独立端口上的新增数据面。
 //
 // 消息信封（JSON 文本帧）：{ "type": "...", "nodeId": "...", "ts": <unix秒>, "data": {...} }
-//   - 节点 → middleware：register / probe_result / pong / command
+//   - 节点 → middleware：register / ping / pong / probe_result / report / config_result / ota_result
+//     其中 report（统计与拨测明细上报）与 config_result / ota_result（远程运维应答）的消费者是
+//     收集中心 ipw-boce，本中间件只是转发与拨测代理，收到即丢弃（见下方 switch 内注释）。
 //   - middleware → 节点：register_ok / register_error / probe / ping / status
 //
 // probe 消息 data：{ "requestId": "...", "apiType": "tcping", "raw": "qq.com", "query": {"port":"443"} }
@@ -182,6 +184,15 @@ func (s *wsServer) Handler(w http.ResponseWriter, r *http.Request) {
 			if registered {
 				s.sendJSON(c, wsMessage{Type: "pong", NodeID: peer.id, TS: time.Now().Unix()})
 			}
+
+		case "report", "config_result", "ota_result":
+			// 协议已知、但本中间件不消费的帧 —— 刻意显式列出、收到即丢弃，绝不能落到 default：
+			//   - report：节点按 report-interval-seconds 把统计与拨测明细**广播给所有在线 ws 连接**（多活），
+			//     它的消费者是收集中心 ipw-boce（中间件不在转发路径上采集，不落库也不计数）。
+			//   - config_result / ota_result：只在对端下发过 config / ota 指令后才会出现，本中间件不下发
+			//     这类指令（远程运维归收集中心），因此正常情形收不到。
+			// 注意：这几个帧曾落到 default 被当成"未知消息"打印，节点每个上报周期刷一行
+			// （如 "unknown message type from cn-jiangsu: report"），日志噪音随节点数 × 上报频率线性增长。
 
 		default:
 			log.Printf("[ws] unknown message type from %s: %s", peer.id, msg.Type)
