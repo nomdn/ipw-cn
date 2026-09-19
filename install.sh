@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 # ============================================================
-# 1IPW.CN 后端节点一键安装脚本
+# 后端节点一键安装脚本
 #   - 自动检测架构并下载最新 release 二进制
 #   - 交互式输入配置（环境变量注入，无需 setting.json）
 #   - 生成并启用 systemd 守护进程
@@ -78,8 +78,7 @@ read -r -p "单栈模式 SINGLE_STACK（留空=双栈，ipv4 或 ipv6）: " SING
 
 read -r -p "访问令牌 access-token（留空=不启用鉴权）: " ACCESS_TOKEN
 
-read -r -p "DNS 服务器 [119.28.28.28:53]（主从逗号分隔，如 119.28.28.28:53,223.5.5.5:53）: " DNS_SERVER
-DNS_SERVER=${DNS_SERVER:-119.28.28.28:53}
+read -r -p "DNS 服务器（留空=启动时自动探测系统 DNS；主从逗号分隔，如 119.28.28.28:53,223.5.5.5:53）: " DNS_SERVER
 
 read -r -p "DNSSEC 专用 DNS（留空=沿用上面 dns-server）: " DNSSEC_DNS_SERVER
 
@@ -93,31 +92,30 @@ read -r -p "CORS 允许来源（逗号分隔，留空=不限）: " CORS
 
 read -r -p "远端配置地址 remote-config-url（留空=不启用）: " REMOTE_CONFIG_URL
 
+read -r -p "节点 id NODE_ID（回车自动生成 UUID；WS 注册与 HTTP 上报共用）: " NODE_ID
+if [ -z "$NODE_ID" ]; then
+    NODE_ID=$(gen_uuid)
+    echo "节点 id（自动生成 UUID）: $NODE_ID"
+fi
+
 echo ""
 echo "--- WS 通道接入（可选，接入独立中间件）---"
 read -r -p "接入中间件 WS 通道？[y/N]: " WS_CHOICE
 WS_URL=""
-NODE_ID=""
 NODE_KEY=""
 WS_USED_DEFAULT=""
 case "${WS_CHOICE,,}" in
     y|yes)
-        read -r -p "  中间件 WS 完整地址（含 wss:// 前缀与 /ws 路径，如 wss://host:8092/ws；留空=贡献节点给柠檬 wss://middleware-1.api-ipw.wsmdn.top/ws；逗号分隔多个将同时连接全部）: " WS_URL
+        read -r -p "  中间件 WS 完整地址（含 wss:// 前缀与 /ws 路径，如 wss://host:8092/ws；留空=贡献节点给柠檬 wss://boce-api.api-ipw.wsmdn.top/ws；逗号分隔多个将同时连接全部）: " WS_URL
         if [ -z "$WS_URL" ]; then
-            WS_URL="wss://middleware-1.api-ipw.wsmdn.top/ws"
+            WS_URL="wss://boce-api.api-ipw.wsmdn.top/ws"
             WS_USED_DEFAULT="true"
         fi
-        read -r -p "  节点 id（回车自动生成 UUID）: " NODE_ID
-        if [ -z "$NODE_ID" ]; then
-            NODE_ID=$(gen_uuid)
-            echo "  节点 id（自动生成 UUID）: $NODE_ID"
+        read -r -p "  注册 key（留空自动生成，中间件 ws-keys 必须包含此节点，否则注册被拒 401）: " NODE_KEY
+        if [ -z "$NODE_KEY" ]; then
+            NODE_KEY=$(gen_uuid | tr -d '-')
+            echo "  注册 key（自动生成）: $NODE_KEY"
         fi
-        while [ -z "$NODE_KEY" ]; do
-            read -r -p "  注册 key（必填，中间件 ws-keys 必须包含此节点，否则注册被拒 401）: " NODE_KEY
-            if [ -z "$NODE_KEY" ]; then
-                echo "  错误：不加 key 禁止启用 WS，必须提供注册 key"
-            fi
-        done
         ;;
 esac
 
@@ -144,11 +142,12 @@ echo "========================================"
 echo "安装目录:     $INSTALL_DIR"
 echo "服务名:       lemon-ipw"
 echo "监听端口:     $PORTS"
+echo "节点 id:      $NODE_ID"
 echo "单栈模式:     ${SINGLE_STACK:-双栈}"
 echo "access-token: ${ACCESS_TOKEN:+已设置 (隐藏)}"
-echo "DNS:          $DNS_SERVER"
+echo "DNS:          ${DNS_SERVER:-自动探测（系统 DNS）}"
 echo "ipdb:         $IPDB"
-echo "WS 接入:      $(if [ -n "$WS_URL" ]; then printf '%s (id=%s, key=%s)' "$WS_URL" "$NODE_ID" "${NODE_KEY:+已设置}"; else printf '未启用'; fi)"
+echo "WS 接入:      $(if [ -n "$WS_URL" ]; then printf '%s (注册 key=%s)' "$WS_URL" "$NODE_KEY"; else printf '未启用'; fi)"
 echo "========================================"
 read -r -p "确认安装？[Y/n]: " CONFIRM
 case "${CONFIRM,,}" in
