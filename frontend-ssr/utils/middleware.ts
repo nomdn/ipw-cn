@@ -31,11 +31,19 @@ function isConnectionError(e: any): boolean {
 // 401 未授权、403 被 CDN/WAF 风控拦截、418 被反爬/限流标记、502 中间件/上游不可用 —— 换一个节点往往就能恢复
 const RETRY_STATUS_CODES = new Set([401, 403, 418, 502])
 
-// 过滤掉 useFetch 专属选项（对 $fetch 无意义），其余（method/query/params/headers/body/timeout 等）原样透传
+// 过滤掉 useFetch 专属选项（对 $fetch 无意义），其余（method/query/params/headers/body/timeout 等）原样透传。
+//
+// 默认关闭 ofetch 内置重试（retry: false）：
+//   ofetch 对 GET 默认重试 1 次，且「拿不到响应（网络层错误）」会按 500 参与重试（见 ofetch onError：
+//   responseCode = response.status || 500）。于是 502、429、超时、"连不上"这几种最贵的失败，
+//   都会在**同一个节点**上被立即重打一遍（retryDelay 默认 0，无退避），
+//   请求数与等待时间同时 ×2 —— 而外层候选循环本来就会换节点重试，这层纯属重复。
+//   调用方若显式传 retry，以调用方为准（rest 在后覆盖）。
+const DEFAULT_RETRY = false
+
 function toFetchOptions(options?: any) {
-    if (!options) return undefined
-    const { immediate, watch, key, deep, server, lazy, default: _default, transform, pick, getCachedData, dedupe, ...rest } = options
-    return rest
+    const { immediate, watch, key, deep, server, lazy, default: _default, transform, pick, getCachedData, dedupe, ...rest } = options || {}
+    return { retry: DEFAULT_RETRY, ...rest }
 }
 
 // useMiddlewareFetch：在 Vue 页面中调用中间件（替代直接 useFetch('/middleware/...')）。
@@ -44,6 +52,7 @@ function toFetchOptions(options?: any) {
 // Nuxt useAsyncData 在 key 变化时会重新绑定 data/error 状态，导致切换后的数据无法可靠渲染）：
 //   - 依次尝试 config.Middleware 中的外部节点 + 前端自带中间件兜底；
 //   - 仅当"节点无法连接"或上游返回 401/403/418 时切下一个候选；
+//   - 每次 $fetch 默认 retry: false，同一条通道不会被重打第二遍（重试统一由本循环承担）；
 //   - 成功后 data 立即更新为最终节点的数据，调用方 await execute() 后可直接读取并渲染；
 //   - 全部候选失败时 error 为最终错误。
 export function useMiddlewareFetch<T = any>(url: MaybeRefOrGetter<string>, options?: any) {

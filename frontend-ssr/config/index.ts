@@ -43,11 +43,11 @@ const config = {
             id: "cn-jiangsu",
             url: "https://cn-jiangsu.api-ipw.wsmdn.top/"
         },
-        {
-            label: "中国 湖北 武汉 电信",
-            id: "cn-wuhan-chinatelecom",
-            url: ""
-        },
+        // {
+        //     label: "中国 湖北 武汉 电信",
+        //     id: "cn-wuhan-chinatelecom",
+        //     url: ""
+        // },
         {
             label: "中国 四川 沙渠 电信[ZFC]",
             id: "cn2-sichuan",
@@ -105,12 +105,12 @@ const config = {
                 id: "hongkong",
                 url: ""
             },
-            // WS 通道节点：URL 留空，拨测经中间件 WS 转发
-            {
-                label: "呼和浩特移动",
-                id: "2faa15e6-18a7-4355-b422-ca53277d8d77",
-                url: ""
-            }
+            // // WS 通道节点：URL 留空，拨测经中间件 WS 转发
+            // {
+            //     label: "呼和浩特移动",
+            //     id: "2faa15e6-18a7-4355-b422-ca53277d8d77",
+            //     url: ""
+            // }
         ],
         DualStack: [
 
@@ -119,16 +119,16 @@ const config = {
                 id: "cn-jiangsu",
                 url: "https://cn-jiangsu.api-ipw.wsmdn.top/"
             },
-            {
-                label: "中国 广东 深圳 龙岗 坪地街道 中国移动",
-                id: "cn-shenzhen",
-                url: "https://cn-shenzhen.api-ipw.wsmdn.top/"
-            },
-            {
-                label: "中国 湖北 武汉 电信",
-                id: "cn-wuhan-chinatelecom",
-                url: ""
-            },
+            // {
+            //     label: "中国 广东 深圳 龙岗 坪地街道 中国移动",
+            //     id: "cn-shenzhen",
+            //     url: "https://cn-shenzhen.api-ipw.wsmdn.top/"
+            // },
+            // {
+            //     label: "中国 湖北 武汉 电信",
+            //     id: "cn-wuhan-chinatelecom",
+            //     url: ""
+            // },
         ]
     }
 }

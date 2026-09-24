@@ -157,6 +157,16 @@ async function queryDNS() {
 }
 
 
+// 行内「数据格是否该渲染」判定。
+//
+// 结果表共 6 列（服务器 / 类型 / 记录 / 记录数 / 耗时 / TTL）；后三列（记录数、耗时、TTL）
+// 只在真正拿到结果时才有意义。加载中与失败两种状态由「记录」那格用 colspan=4 横跨到表尾，
+// 若此时再渲染后三格，整行就会变成 2+4+3=9 格 —— 表格按最大列数排版，凭空多出 3 列，
+// 表头只剩 6 列、右侧留出空档，错误行也跟着错位。
+function hasData(result: any) {
+  return !result?.loading && !result?.error
+}
+
 onMounted(() => {
   
   const domainParam = route.query.domain as string
@@ -242,9 +252,11 @@ const doc = page.value;
               </span>
             </td>
             
-            <td class="table-value" v-if="!result.loading">{{result.data?.record?.length || 0}}</td>
-            <td class="table-value" v-if="!result.loading">{{formatTime(result.data?.duration)}}</td>
-            <td class="table-value" v-if="!result.loading">{{result.data?.ttl}}</td>
+            <!-- 后三格必须与「记录」格的 colspan 互斥：加载中/失败时该格已跨满到表尾，
+                 这里再渲染就会多出 3 列（见 hasData 注释） -->
+            <td class="table-value" v-if="hasData(result)">{{result.data?.record?.length || 0}}</td>
+            <td class="table-value" v-if="hasData(result)">{{formatTime(result.data?.duration)}}</td>
+            <td class="table-value" v-if="hasData(result)">{{result.data?.ttl}}</td>
           </tr>
         </tbody>
         

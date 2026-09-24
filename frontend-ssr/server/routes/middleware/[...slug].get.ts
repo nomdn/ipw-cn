@@ -137,6 +137,9 @@ export default defineEventHandler(async (event) => {
                 method: 'GET',
                 headers: authHeaders,
                 timeout: 15_000,
+                // 关闭 ofetch 内置重试：上游超时/5xx 时它会在同一节点立即重打一遍（retryDelay 默认 0，无退避），
+                // 把 15s 超时变成 30s。重试统一由前端候选循环承担。
+                retry: false,
             }).catch((error: any) => {
                 console.error(`Error fetching from ${apiBaseUrl}:`, error)
                 const errStatus = error?.status ?? error?.statusCode
@@ -179,6 +182,7 @@ export default defineEventHandler(async (event) => {
                 method: 'GET',
                 headers: authHeaders,
                 timeout: 30_000, // tcping/测速上游本身较慢，给更长超时
+                retry: false, // 同上：不让 ofetch 把 30s 超时放大成 60s
             }).catch((error: any) => {
                 console.error(`Error fetching from ${apiBaseUrl}:`, error)
                 const errStatus = error?.status ?? error?.statusCode

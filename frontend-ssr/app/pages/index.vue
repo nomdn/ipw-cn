@@ -81,28 +81,42 @@ const ipAddress = ref('');
 const yourIPv4 = ref('');
 const yourIPv6 = ref('');
 
-onMounted(async () => {
-  try {
-    highlightedCode.value = await highlightCode(code, 'bash');
-  } catch {
-    highlightedCode.value = '';
-  }
+// 三处 IP 查询的共同请求参数。
+// retry: false —— 关掉 ofetch 对 GET 的默认重试：某个域名不通时，默认会在无退避的情况下再打一遍，
+// 等于把等待时间翻倍（401/超时这类错误不会自己好，重试纯属浪费用户时间）。
+const ipFetchOptions = { retry: false } as const;
 
-  const [dualStack, ipV4, ipV6] = await Promise.allSettled([
-    $fetch<string>(config.DualStackAPI),
-    $fetch<string>(config.v4OnlyAPI),
-    $fetch<string>(config.v6OnlyAPI)
-  ]);
+onMounted(() => {
+  // 代码高亮与三个 IP 查询互不依赖，一起发出即可。
+  // 注意别写成"先 await 高亮再发请求"：shiki 首次要把语言包拉下来，会把三次查询整体推后数百毫秒。
+  void highlightCode(code, 'bash')
+    .then((html) => {
+      highlightedCode.value = html;
+    })
+    .catch(() => {
+      highlightedCode.value = '';
+    });
 
-  if (dualStack.status === 'fulfilled') {
-    ipAddress.value = dualStack.value;
-  }
-  if (ipV4.status === 'fulfilled') {
-    yourIPv4.value = ipV4.value;
-  }
-  if (ipV6.status === 'fulfilled') {
-    yourIPv6.value = ipV6.value;
-  }
+  // 三个地址各自独立请求、各自渲染：谁先回来谁先上屏。
+  // 不用 Promise.allSettled 包起来等齐——那样只要有一个慢（例如纯 IPv4 网络下 v6 接口要等超时），
+  // 已经拿到的 IPv4 与双栈结果也得一起干等。
+  $fetch<string>(config.DualStackAPI, ipFetchOptions)
+    .then((ip) => {
+      ipAddress.value = ip;
+    })
+    .catch(() => {
+      // 单个接口失败不影响其它两行展示，保持"查询中"占位
+    });
+  $fetch<string>(config.v4OnlyAPI, ipFetchOptions)
+    .then((ip) => {
+      yourIPv4.value = ip;
+    })
+    .catch(() => {});
+  $fetch<string>(config.v6OnlyAPI, ipFetchOptions)
+    .then((ip) => {
+      yourIPv6.value = ip;
+    })
+    .catch(() => {});
 });
 </script>
 
