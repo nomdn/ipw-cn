@@ -23,7 +23,6 @@
     "@tailwindcss/vite": "^4.3.3",
     "@vueuse/core": "^14.4.0",
     "@vueuse/nuxt": "^14.4.0",
-    "better-sqlite3": "^12.11.1",
     "element-plus": "^2.14.3",
     "github-markdown-css": "^5.9.0",
     "github-slugger": "^2.0.0",

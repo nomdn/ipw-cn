@@ -26,6 +26,8 @@ export default defineNuxtConfig({
       include: [
         'is-ip',
         'shiki',
+        'dayjs',
+        'lodash-unified'
       ]
     },
   },
