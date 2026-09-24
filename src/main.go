@@ -957,14 +957,25 @@ func pingHandler(c *gin.Context) {
 	c.JSON(200, rawResult.(*TCPingResult))
 }
 
-// healchCheck 健康检查（GET /）。除 status 外回报版本号：中间件对 HTTP 版节点（无 WS 连接）
-// 正是靠这个接口探活，顺带取版本用于节点状态页展示。
+// healchCheck 健康检查（GET /）。只回答"进程是否活着"，不回报版本与能力
+// —— 版本号与能力清单走 GET /info（见 nodeInfoHandler）。
+//
+// 分开的理由：健康检查是免鉴权的对外端点，被负载均衡、OTA 就绪探测、运维 curl 打，
+// 混进版本号等于向公网公开"这个节点跑的是哪个版本"，也让一个只该回答存活的端点
+// 承担了与本意无关的职责。
 func healchCheck(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// nodeInfoHandler 节点信息（GET /info）：节点版本号 + 能力清单。
+//
+// 注册在 /v1 组之外，所以与健康检查一样免鉴权，也不计入拨测统计
+// （收集中心对纯 HTTP 版节点探活后取回，见 ipw-boce nodeHealth.go）。
+// 用途：节点状态页展示版本；下发 config 等管理指令前判断节点能否理解对应指令。
+// 能力清单与 WS register 报文同源（见 ws.go nodeCapabilities）。
+func nodeInfoHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"status": "ok",
-		"version": VERSION,
-		// 能力清单同 register 报文：中间件对纯 HTTP 节点探活时一并取回，
-		// 用于在下发 config 前判断该节点能否理解对应指令（见 ws.go nodeCapabilities）
+		"version":      VERSION,
 		"capabilities": nodeCapabilities(),
 	})
 }
@@ -1327,6 +1338,8 @@ func main() {
 	registerOTARoute(r)
 
 	r.GET("/", healchCheck)
+	// 节点信息（版本 + 能力清单）：与健康检查分开，免鉴权、不计入统计（见 nodeInfoHandler）
+	r.GET("/info", nodeInfoHandler)
 
 	// 显式持有 http.Server：收到退出信号时先 Shutdown 释放端口，避免 r.Run 的隐式 Server 无法受控关闭
 	httpServer = &http.Server{Handler: r}
