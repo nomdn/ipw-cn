@@ -89,18 +89,136 @@ const happyEyeballsV6Delay = 150 * time.Millisecond
 // whoisConnectTimeout 单 IP 连接 + 读写超时上限
 const whoisConnectTimeout = 10 * time.Second
 
+// whoisLibTimeout likexian/whois 单跳超时上限（库的超时按「跳」计，同一跳内读写共享该预算）。
+// 库默认 30s：一旦注册商转介指向不可达地址（如 Cloudflare 后的网站域名，43 端口被丢弃），
+// 单跳干等 30s，整条查询必然超过中心拨测默认 30s 超时。
+// 主路径只剩 IANA + 注册局两跳（转介已改为独立限时补查），2×6s 仍在中心超时之内。
+const whoisLibTimeout = 6 * time.Second
+
+// whoisReferralTimeout 自行补查注册商转介的总超时。
+// 转介只是「锦上添花」，失败即放弃，绝不阻塞已到手的注册局数据。
+const whoisReferralTimeout = 3 * time.Second
+
 // QueryWhois 执行 WHOIS 查询并解析结构化数据
-// 使用 likexian/whois 库查询原始响应，再用 whois-parser 解析为结构化数据
-// 首次失败后 fallback：内置 TLD 映射 → IANA 查询服务器地址 →
-// 用 ResolveA/AAAA(自定义DNS) 解析IP → Happy Eyeballs 双栈竞争拨号
+// 主路径：likexian/whois 走「IANA → 注册局」两跳，**不追注册商转介**（转介由 chaseReferral 单独限时补），
+// 这样即便转介服务器不可达也只在 ~1s 内拿到注册局记录，不会干等满库的 30s 超时。
+// 兜底：主路径拿不到内容时才 fallback（内置 TLD 映射 → IANA 查服务器 → 自定义 DNS 解析 IP →
+// Happy Eyeballs 双栈竞争拨号）。
 func QueryWhois(domain string) (*WhoisResult, error) {
-	raw, err := whois.Whois(domain)
-	if err != nil {
-		raw, err = whoisRetryWithFallback(domain, err)
+	raw, err := queryWhoisRegistry(domain)
+
+	// 库在「连接成功但读失败」等场景会同时返回部分数据与错误，此时数据不能丢；
+	// 因此只在「内容为空」或「带错误」时让 fallback 再兜一次，并取内容更长的一方。
+	if err != nil || raw == "" {
+		if fb, fbErr := whoisRetryWithFallback(domain, err); len(fb) > len(raw) {
+			raw, err = fb, fbErr
+		}
 	}
+
+	// 仅当注册局响应干净（err == nil）时才补查注册商转介
+	if err == nil && raw != "" {
+		if extra := chaseReferral(domain, raw); extra != "" {
+			raw += extra
+		}
+	}
+
 	result := parseWhoisResult(domain, raw)
 	result.Error = errString(err)
 	return result, nil
+}
+
+// queryWhoisRegistry 走 IANA → 注册局两跳取注册局记录，关闭库的转介链
+// （转介改由 chaseReferral 限时补查，避免被不可达的转介服务器拖满 30s）
+func queryWhoisRegistry(domain string) (string, error) {
+	return whois.NewClient().
+		SetDisableReferral(true).
+		SetTimeout(whoisLibTimeout).
+		Whois(domain)
+}
+
+// chaseReferral 从注册局响应里取出注册商转介服务器，限时补查一次
+// 任何失败（无转介 / 不可达 / 超时）都返回空串，绝不影响已到手的注册局数据
+func chaseReferral(domain, raw string) string {
+	server, port := extractReferralServer(raw)
+	if server == "" {
+		return ""
+	}
+	// 转介指向的仍是刚查过的注册局服务器（库自带判断的同款保护）
+	if ext := getExtension(domain); strings.EqualFold(tldWhoisServers[ext], server) {
+		return ""
+	}
+
+	v4IPs, v6IPs, err := resolveWhoisServerIPs(server)
+	if err != nil {
+		return ""
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), whoisReferralTimeout)
+	defer cancel()
+
+	data, err := happyEyeballsWhoisQuery(ctx, domain, v4IPs, v6IPs, port)
+	if err != nil {
+		return ""
+	}
+	return data
+}
+
+// referralKeys 指向「下一个 WHOIS 服务器」的字段名（小写，按优先级前缀匹配）
+var referralKeys = []string{"registrar whois server", "referralserver", "whois", "referral"}
+
+// normalizeReferralValue 规整转介地址：去协议前缀 / 路径 / 认证尾巴，拆出 host 与 port
+// 返回 "" 表示不是可用的 whois 转介。rwhois 是另一种协议，拨过去同样是白等，直接跳过
+func normalizeReferralValue(value string) (string, string) {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.HasPrefix(strings.ToLower(value), "rwhois:") {
+		return "", ""
+	}
+	for _, prefix := range []string{"http://", "https://", "whois://"} {
+		value = strings.TrimPrefix(value, prefix)
+	}
+	if i := strings.IndexAny(value, "/,"); i != -1 {
+		value = value[:i]
+	}
+	value = strings.TrimSpace(value)
+
+	host, port := value, "43"
+	if h, p, err := net.SplitHostPort(value); err == nil {
+		host, port = h, p
+	}
+	// 合法性：必须是形如 whois.example.com 的主机名，排除 "Server: xxx" 之类的误匹配
+	if host == "" || strings.ContainsAny(host, " \t:/,") || !strings.Contains(host, ".") {
+		return "", ""
+	}
+	return host, port
+}
+
+// extractReferralServer 从注册局响应中解析注册商转介的 WHOIS 服务器与端口，取不到返回 ("", "")
+// 覆盖两种写法：字段式（Registrar WHOIS Server: / ReferralServer: / whois:）
+// 与注释式（%referral whois://host:4321/auth-area=.）
+func extractReferralServer(raw string) (string, string) {
+	for _, line := range strings.Split(raw, "\n") {
+		// 归一化：去掉 % / # 注释前缀
+		line = strings.TrimLeft(strings.TrimSpace(line), "%# \t")
+		if line == "" {
+			continue
+		}
+		lower := strings.ToLower(line)
+		for _, key := range referralKeys {
+			if !strings.HasPrefix(lower, key) {
+				continue
+			}
+			// 从 lower 切分，避免 ToLower 改变长度时错位（主机名大小写不敏感）
+			rest := strings.TrimSpace(lower[len(key):])
+			rest = strings.TrimSpace(strings.TrimPrefix(rest, ":"))
+			if rest == "" {
+				continue
+			}
+			if server, port := normalizeReferralValue(rest); server != "" {
+				return server, port
+			}
+		}
+	}
+	return "", ""
 }
 
 // errString safely converts an error to string
@@ -187,12 +305,13 @@ func resolveWhoisServerIPs(server string) (v4IPs, v6IPs []string, err error) {
 // - 等待 happyEyeballsV6Delay 后并发拨号所有 IPv6 IP
 // - 取第一个成功完成 WHOIS 查询的结果返回
 // - 其他仍在运行的 goroutine 通过 context 取消尽快退出
-func happyEyeballsWhoisQuery(domain string, v4IPs, v6IPs []string, port string) (string, error) {
+// parent 带 deadline 时（追注册商转介），到点即整体放弃
+func happyEyeballsWhoisQuery(parent context.Context, domain string, v4IPs, v6IPs []string, port string) (string, error) {
 	if len(v4IPs) == 0 && len(v6IPs) == 0 {
 		return "", fmt.Errorf("no IPs available for WHOIS query")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
 	type outcome struct {
@@ -269,7 +388,7 @@ func whoisRetryWithFallback(domain string, firstErr error) (string, error) {
 	}
 
 	// Happy Eyeballs 双栈竞争拨号 + 并发多 IP
-	raw, err := happyEyeballsWhoisQuery(domain, v4IPs, v6IPs, "43")
+	raw, err := happyEyeballsWhoisQuery(context.Background(), domain, v4IPs, v6IPs, "43")
 	if err != nil {
 		return "", err
 	}
