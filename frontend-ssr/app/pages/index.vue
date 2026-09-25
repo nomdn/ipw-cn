@@ -3,7 +3,6 @@ import { computed, ref, onMounted } from 'vue';
 import { isIPv6 } from 'is-ip';
 import { config } from '../../config/index';
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue';
-import { highlightCode } from '../../utils/shiki';
 import { isIPv4 } from '../../utils/tools';
 const route = useRoute();
 const canonicalUrl = computed(() => new URL(route.path, config.siteUrl).toString());
@@ -81,15 +80,16 @@ const ipAddress = ref('');
 const yourIPv4 = ref('');
 const yourIPv6 = ref('');
 
-// 三处 IP 查询的共同请求参数。
-// retry: false —— 关掉 ofetch 对 GET 的默认重试：某个域名不通时，默认会在无退避的情况下再打一遍，
-// 等于把等待时间翻倍（401/超时这类错误不会自己好，重试纯属浪费用户时间）。
-const ipFetchOptions = { retry: false } as const;
-
 onMounted(() => {
   // 代码高亮与三个 IP 查询互不依赖，一起发出即可。
   // 注意别写成"先 await 高亮再发请求"：shiki 首次要把语言包拉下来，会把三次查询整体推后数百毫秒。
-  void highlightCode(code, 'bash')
+  //
+  // 用动态 import 而非顶层静态 import：shiki 的引擎核心 + 语言/主题注册表约 160KB，
+  // 首页只为这 4 行 curl 示例需要它。静态 import 会把它拽进首屏同步加载的关键路径
+  // （构建后体现为一个 164KB 的 chunk 出现在 modulepreload 列表）；动态 import 后
+  // 它单独成 chunk，首屏渲染不再等它。
+  void import('../../utils/shiki')
+    .then(({ highlightCode }) => highlightCode(code, 'bash'))
     .then((html) => {
       highlightedCode.value = html;
     })
@@ -100,6 +100,13 @@ onMounted(() => {
   // 三个地址各自独立请求、各自渲染：谁先回来谁先上屏。
   // 不用 Promise.allSettled 包起来等齐——那样只要有一个慢（例如纯 IPv4 网络下 v6 接口要等超时），
   // 已经拿到的 IPv4 与双栈结果也得一起干等。
+  //
+  // retry: false —— ofetch 默认会对 GET 重发一次：网络层失败时它拿不到 response，就按 500 计
+  // （500 在默认重试白名单里），且默认延迟为 0，立即重发。于是"这个节点连不上"会被原样重做一遍，
+  // 用户白等一倍时间（实测 ofetch 1.5.1：裸调用触发 2 次真实 fetch，传 retry:false 后只剩 1 次；
+  // 浏览器自身不会重试，底层 fetch 对同一请求只被调用过一次）。
+  const ipFetchOptions = { retry: false } as const;
+
   $fetch<string>(config.DualStackAPI, ipFetchOptions)
     .then((ip) => {
       ipAddress.value = ip;
@@ -135,10 +142,10 @@ onMounted(() => {
     <div class="one-line">
       <b>IPv6</b>&nbsp<p v-if="yourIPv6">{{ yourIPv6 }}</p><RouterLink :to="`/location?ip=${yourIPv6}`" target="_blank" v-if="yourIPv6">&nbsp查询归属地</RouterLink><RouterLink v-else to="/doc/user/enable_ipv6" target="_blank">没有IPv6地址,查看如何开启IPv6</RouterLink>
     </div>
-    <div style="font-size: 1.5em;">
-      <h3 v-if="ipAddress && isIPv6(ipAddress)"><el-icon><CircleCheckFilled style="color: lightgreen;"/></el-icon>您的网络IPv6优先</h3>
-      <h3 v-else-if="ipAddress && isIPv4(ipAddress)"><el-icon><CircleCloseFilled style="color: red;"/></el-icon>您的网络IPv4优先</h3>
-      <h3 v-else><el-icon><CircleCloseFilled /></el-icon>查询中，请稍后</h3>
+    <div class="ip-priority">
+      <h2 v-if="ipAddress && isIPv6(ipAddress)"><el-icon><CircleCheckFilled style="color: lightgreen;"/></el-icon>您的网络IPv6优先</h2>
+      <h2 v-else-if="ipAddress && isIPv4(ipAddress)"><el-icon><CircleCloseFilled style="color: red;"/></el-icon>您的网络IPv4优先</h2>
+      <h2 v-else><el-icon><CircleCloseFilled /></el-icon>查询中，请稍后</h2>
     </div>
      <blockquote>
       手机默认开启 IPv6，宽带开启 IPv6 请参阅<a href="/doc/user/enable_ipv6" target="_blank">文档</a>
@@ -153,6 +160,17 @@ onMounted(() => {
 @import "../style.css";
 .el-menu--horizontal > .el-menu-item:nth-child(1) {
   margin-right: auto;
+}
+
+/* 网络优先级提示：原来是「div 1.5em × h3」，但 h1 之后直跳 h3 违反标题层级（heading-order），
+   语义上应为 h2。style.css 给 h3 显式定了 1.3em / 窄屏 1.1em，h2 只有 1.5em 一档，
+   所以这里把字号按原样补回，避免语义修正顺带改了视觉（含 margin：UA 的 h3 是 1em，h2 是 0.83em）。 */
+.ip-priority {
+  font-size: 1.5em;
+}
+.ip-priority h2 {
+  font-size: 1.3em;
+  margin: 1em 0;
 }
 
 .code-block {
@@ -173,6 +191,9 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .ip-priority h2 {
+    font-size: 1.1em;
+  }
   .code-block {
     padding: 0.75rem;
     font-size: 0.8em;

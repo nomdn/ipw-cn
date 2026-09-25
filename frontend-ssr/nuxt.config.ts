@@ -35,15 +35,22 @@ export default defineNuxtConfig({
   url: config.siteUrl, 
   name: 'Lemon IPW' 
   },
+  // Element Plus 样式走按需引入：@element-plus/nuxt 默认 importStyle: 'css'，
+  // 模板里用到的每个组件都会各自带上 `element-plus/es/components/<组件>/style/css`
+  // （其内部再链到 theme-chalk/base.css，`:root` 的 --el-* 变量就在那里定义）。
+  // 所以这里**不要**再引 element-plus/dist/index.css —— 那是整库样式（原始 360KB），
+  // 而首页实测 98% 的规则用不到，却全压在关键路径上。
   css: [
-    // 1. 引入 Element Plus 基础样式 (如果你还没有引入的话)
-    'element-plus/dist/index.css',
-    
-    // 2. 🌟 关键：引入 Element Plus 官方的暗黑模式 CSS 变量文件
+    // 暗黑模式的 CSS 变量覆盖（html.dark 下的 --el-* 值），按需引入不含它，必须显式引
     'element-plus/theme-chalk/dark/css-vars.css',
   ],
   app:{
     head: {
+      // 站点内容为简体中文。不写时 Nuxt 输出的就是裸 <html>，
+      // 屏幕阅读器会按系统语言瞎猜发音，Lighthouse 的 html-has-lang 也会失败。
+      htmlAttrs: {
+        lang: 'zh-CN',
+      },
       script: [
         {
           // 必须 innerHTML，不能 src（否则异步加载）

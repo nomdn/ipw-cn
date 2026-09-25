@@ -108,8 +108,9 @@ blockquote p {
 blockquote a{
     color: #3EAF7C;
     font-size: 1em;
-    text-decoration: none
-
+    /* 正文里的链接仅靠颜色区分不够（绿 #3EAF7C 与周围正文的对比度远低于 3:1），
+       补下划线提供「非颜色」的视觉区分（link-in-text-block） */
+    text-decoration: underline
 }
 a {
     color: #3EAF7C;
@@ -205,15 +206,15 @@ footer {
       
         color: #3EAF7C;
         font-size: 1em;
-        text-decoration: none
+        /* 与上面的非窄屏规则保持一致：窄屏同样靠下划线做非颜色区分。
+           此处若仍写 none，因其位置在后、特异性相同，会把桌面的 underline 盖掉。 */
+        text-decoration: underline
     }
 }
-html.dark {
-  /* 在暗色模式下，覆盖根元素的文字颜色和背景色 */
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-  --el-color-primary: #3EAF7C;
-}
+/* 注：暗色模式的「根元素」规则（html.dark 的文字色 / 背景色 / 主色变量）已上移到
+   app.vue 的【非 scoped】<style> 块。本文件是被 <style scoped> @import 进来的，
+   凡是作用于 <html> 自身的规则都会被加上 scope 属性而永不匹配。
+   这里只保留作用于「html 后代元素」的规则（后代元素带 scope 属性，能正常命中）。 */
 html.dark blockquote {
   /* 在暗色模式下，覆盖根元素的文字颜色和背景色 */
   color: rgba(255, 255, 255, 0.87);

@@ -11,6 +11,12 @@ const drawer = ref(false);
 const isDark = useDark();
 const toggleDark = useToggle(isDark);
 
+// ==================== 抽屉里的文档菜单 ====================
+// 窄屏下 /doc 页面自己的左侧侧栏会被隐藏（见 app/pages/doc/*.vue），
+// 文档导航改由这里的抽屉承载；宽屏不渲染抽屉，一切照旧。
+const route = useRoute()
+const isDocRoute = computed(() => route.path === '/doc' || route.path.startsWith('/doc/'))
+
 function cleanChineseCharacters(str:string) {
 return str.replace(/[\u4e00-\u9fa5]/g, '');
 }
@@ -129,7 +135,7 @@ onMounted(() => {
 
 <template>
   
-  <el-drawer v-if="isNarrow" v-model="drawer" direction="ltr" style="height: 100%;" size="50%">
+  <el-drawer v-if="isNarrow" v-model="drawer" direction="ltr" style="height: 100%;" :size="isDocRoute ? '80%' : '60%'">
       <router-link to="/ipv6webcheck">
         <p class="menu-item-text">IPv6 网站检测</p>
       </router-link>
@@ -150,16 +156,33 @@ onMounted(() => {
       <router-link to="/whois"><p class="menu-item-text">Whois查询</p></router-link>
       <router-link to="/asn"><p class="menu-item-text">ASN查询</p></router-link>
       <router-link to="/dnssec"><p class="menu-item-text">DNSSEC验证</p></router-link>
+      <!-- 窄屏唯一的文档入口：非文档页面抽屉里不挂整份文档菜单（太长），
+           只留这一个链接，对应宽屏顶栏 index 9 的「文档」项。
+           进入文档页后，抽屉里才会出现完整的文档导航。 -->
+      <router-link v-if="!isDocRoute" to="/doc" @click="drawer = false"><p class="menu-item-text">文档</p></router-link>
+      <!-- 文档导航并进同一个左侧菜单：与 /doc 页面用的是同一个组件。
+           只在文档路由下出现（非文档页面抽屉里就只留工具链接）；
+           文档路由下分组默认展开（手机上没 hover，省一次点击）。
+           :key 是为了让分组开合重新初始化 —— el-menu 只在挂载时读一次 default-openeds，
+           抽屉一旦打开过就不会重挂，不加 key 会停在首次打开时的开合状态。 -->
+      <DocMenu
+        v-if="isDocRoute"
+        :key="'doc-expanded'"
+        expand-all
+        @select="drawer = false"
+      />
   </el-drawer>
   <el-menu
       mode="horizontal"
       :ellipsis="false"
       
     >
-    <el-menu-item index="0">
+    <el-menu-item index="0" aria-label="返回首页">
       <el-icon v-if="isNarrow" @click="drawer = !drawer"><Expand /></el-icon>
-      <router-link to="/">
-        <el-image src="/favicon.svg" style="margin-top: 20px;" /> 
+      <router-link to="/" aria-label="返回首页">
+        <!-- alt 留空是有意的：logo 属装饰图，可访问名由外层链接提供。
+             若把 alt 写成站名，宽屏下会与旁边的 h2 一起被读两遍。 -->
+        <el-image src="/favicon.svg" alt="" style="margin-top: 20px;" /> 
         <h2 style="display: inline-block; margin-left: 10px" v-if="!isNarrow">{{ config.siteName }}</h2>
       </router-link>
     </el-menu-item>
@@ -193,7 +216,8 @@ onMounted(() => {
       </template>
     </el-sub-menu>
     </template>
-    <el-menu-item index="10">
+    <!-- 纯图标菜单项：无可访问名，补 aria-label（图标本身不带文字） -->
+    <el-menu-item index="10" aria-label="切换深色/浅色模式">
       <ClientOnly>
       <el-icon @click="toggleDark()" v-if="isDark" style="cursor: pointer;"><Moon style="height: 20px; width: 20px;"/></el-icon>
       <el-icon @click="toggleDark()" v-else style="cursor: pointer;"><Sunny style="height: 20px; width: 20px;"/></el-icon>
@@ -208,7 +232,9 @@ onMounted(() => {
     <NuxtPage />
   </main>
 
-  <footer>
+  <!-- 文档路由不渲染页脚：文档页是阅读页，正文底部加备案/版权块会打断阅读，
+       且窄屏下与侧栏抽屉的可滚动区域互相挤压。 -->
+  <footer v-if="!isDocRoute">
     <div class="one-line">
       Copyright © nomdn & IP 查询 2026  | <img src="/ipv6-s1.svg" alt="IPv6 相关标识"/> | <img src="/ssl-s1.svg" alt="SSL 相关标识"/> | All right reserved
     </div>
@@ -216,7 +242,7 @@ onMounted(() => {
       <a v-if="config.ICP" href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer" >{{ config.ICP }}</a>
       <span v-if="config.ICP">&nbsp;|&nbsp;</span>
       <el-image v-if="config.GongAn" style="height: 1em; width: 1em;" src="/备案图标.png" />
-      <a :href="'https://beian.mps.gov.cn/#/query/webSearch?code=' + cleanChineseCharacters(config.GongAn)" target="_blank" rel="noreferrer" >{{ config.GongAn }}</a>
+      <a v-if="config.GongAn" :href="'https://beian.mps.gov.cn/#/query/webSearch?code=' + cleanChineseCharacters(config.GongAn)" target="_blank" rel="noreferrer" >{{ config.GongAn }}</a>
       <span v-if="config.GongAn">&nbsp;|&nbsp;</span>
       <a href="https://www.china-ipv6.cn/" target="_blank" rel="noreferrer" >国家IPv6发展监测平台</a>
       &nbsp;|&nbsp;请遵守中国法律法规&nbsp;|&nbsp;
@@ -268,29 +294,77 @@ onMounted(() => {
   --el-color-primary: #3EAF7C;
 }
 html.dark {
+  /* 暗色模式下根元素的文字色与页面底色。
+     这两条必须在【非 scoped】块里：<html> 永远不会带上组件 scope 属性，
+     若写在 <style scoped>（含被 scoped @import 进来的 style.css）里，会被改写成
+     `html.dark[data-v-xxxx]` —— 整条规则永不匹配，底色只能靠浏览器的 color-scheme 兜底。 */
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
   --el-color-primary: #3EAF7C;
 }
 
-/* Drawer 内部链接占满一行 */
+/* Drawer 内部链接占满一行。
+   注意用直接子选择器（> a）：文档菜单（DocMenu）里的 <a> 嵌在 el-menu-item 里，
+   不能被这套「整行大按钮」规则吃掉，否则菜单项会变成上下带 1em 内边距的块。
+   间距三层叠加会挤没文字（body 20px + a 1em + p margin-left 10px），
+   所以 body 归零、a 只留一层、p 的 margin 清掉，字号定死 15px 保证最长的
+   「IPv6/IPv4 地址查询」在 320px 屏的 60% 抽屉里也放得下。 */
 .el-drawer__body {
   overflow-x: hidden;
+  padding: 6px 0;
+  font-size: 15px;
 }
-.el-drawer__body a {
+.el-drawer__body > a {
   display: block !important;
   width: 100% !important;
   box-sizing: border-box;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 1em;
+  padding: 12px 16px;
+  font-size: 15px;
 }
-.el-drawer__body a p {
+.el-drawer__body > a p.menu-item-text {
   display: block !important;
   width: 100% !important;
   box-sizing: border-box;
+  margin: 0;
+  font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 并进抽屉的文档菜单：与上面的工具链接视觉上分段，并去掉菜单自带底色与右边框
+   （.el-menu 默认 border-right，竖排菜单是给页面侧栏用的，在抽屉里会多出一条竖线） */
+.el-drawer__body .el-menu {
+  background-color: transparent;
+  border-right: none;
+  border-top: 1px solid var(--el-border-color-lighter);
+  padding-top: 8px;
+}
+/* 手机上条目多，行高压到 44px 让一屏能多看几项（默认 56px）。
+   文档标题可能很长（如「Windows 10/11 设置 IPv4/IPv6 访问优先级」），
+   截断会丢信息 → 允许换行，高度改 auto 只保 44px 最小行高。 */
+/* 手机上条目多，行高压到 44px 让一屏能多看几项（默认 56px）。
+   注意：element-plus 竖排菜单规则是
+   `.el-menu--vertical:not(..)×3 .el-menu-item`（特异性 5 个类），
+   这里必须 !important 才压得住 height / line-height / white-space。
+   文档标题可能很长（如「Windows 10/11 设置 IPv4/IPv6 访问优先级」），
+   截断会丢信息 → 允许换行，高度改 auto 只保 44px 最小行高。 */
+.el-drawer__body .el-menu .el-menu-item,
+.el-drawer__body .el-menu .el-sub-menu__title {
+  height: auto !important;
+  min-height: 44px;
+  line-height: 1.45 !important;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  white-space: normal !important; /* 长标题裸文本在 li 上，必须解掉 nowrap */
+}
+.el-drawer__body .el-menu .el-menu-item a,
+.el-drawer__body .el-menu .el-menu-item p {
+  white-space: normal;
+  word-break: break-word;
 }
 
 /* 窄屏（≤768px，与 script 中 isNarrow 的 matchMedia 断点一致）：

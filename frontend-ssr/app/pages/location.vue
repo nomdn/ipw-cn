@@ -5,7 +5,6 @@ import {config} from '../../config/index';
 import { useMiddlewareFetch } from '../../utils/middleware';
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue';
 import { useRoute } from 'vue-router'
-import { highlightCode } from '../../utils/shiki'
 import { isIPv4 } from '../../utils/tools';
 const route = useRoute();
 const loading = ref(false);
@@ -118,7 +117,19 @@ function locateIP(IP: string){
 }
 
 onMounted(async () => {
-  html.value = await highlightCode(code, 'bash')
+  // 代码高亮与下面的「取本机 IP / 定位查询」互不依赖，别把它摆在流程最前面 await ——
+  // 否则后面那次 $fetch 要等 160KB 的 shiki 下载完才会发出。
+  // 动态 import 让 shiki（引擎 + 语言/主题注册表）单独成 chunk，首屏渲染不再等它。
+  void import('../../utils/shiki')
+    .then(({ highlightCode }) => highlightCode(code, 'bash'))
+    .then((h) => {
+      html.value = h
+    })
+    .catch(() => {
+      // 连 import 本身都失败时退回原始代码，别让代码块空着
+      html.value = code
+    })
+
   const urlParam = route.query.ip;
   if (urlParam) {
     ipAddress.value = urlParam as string;
