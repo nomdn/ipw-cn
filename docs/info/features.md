@@ -74,6 +74,6 @@
 |------|------|
 | 二进制 / systemd | `install.sh` 一键安装，配置以环境变量注入 |
 | Docker | `src/Dockerfile` 多阶段构建，多架构（amd64 / arm64 / armv7）；镜像不含 IP 库，首次运行现场拉取 |
-| Serverless | EdgeOne Makers、Vercel、AWS Lambda、阿里云函数计算等（均为 IPv4-only，需声明 `SINGLE_STACK=ipv4`） |
+| Serverless | EdgeOne Go 边缘函数、Vercel 部署入口（仓库提供实现；均为 IPv4-only，需声明 `SINGLE_STACK=ipv4`） |
 
 各形态的详细步骤见 [后端节点部署](/guide/deploy-node)。

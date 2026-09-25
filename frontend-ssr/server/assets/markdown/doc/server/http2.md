@@ -35,7 +35,7 @@
 查看 Response Header 来确认服务器支持的 HTTP 的版本。
 
 ```
-$ curl -I https://ipw.cn
+$ curl -I https://nipw.cn
 HTTP/2 200 
 server: nginx
 content-type: text/html

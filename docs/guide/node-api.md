@@ -180,7 +180,7 @@ POST /v1/ota
 
 ## 六、能力清单（capabilities）
 
-节点在 `register` 报文与 `GET /` 中上报自身支持的管理能力，取值为 `probe` / `report` / `config` / `ota` 的数组。
+节点在 `register` 报文与主节点的 `GET /info` 中上报自身支持的管理能力，取值为 `probe` / `report` / `config` / `ota` 的数组。边缘函数版本不提供 `/info`，也不回报能力清单。
 
 收集中心据此做**三态判定**，绝不能把"未知"当作"不支持"：
 

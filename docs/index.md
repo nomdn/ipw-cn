@@ -31,5 +31,5 @@ features:
   - title: 远程运维
     details: 节点上报版本号与能力清单，收集中心展示版本、远程读写运行时配置，并可下发一次性 OTA 升级任务（下载 → 校验 → 替换 → 重启，失败自动回滚）。
   - title: 多平台部署
-    details: 支持二进制，Docker，乃至AWS Lambda，EdgeOne Makers，Vercel和阿里云函数计算
+    details: 支持二进制、Docker，以及 EdgeOne Makers 和 Vercel 部署
 ---

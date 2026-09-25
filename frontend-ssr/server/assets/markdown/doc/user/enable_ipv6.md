@@ -86,13 +86,13 @@ IPv6 网络开启成功后，我们需要验证下是否真正开启成功。
 >该站点仅支持 IPv6 网络访问，IPv4 网络无法访问。
 
 ```json
-// https://6.ipw.cn/
+// https://6.wsmdn.dpdns.org/
 240e:3b7:3b7:3b7::3b7
 ```
-打开 [https://test.wsmdn.dpdns.org/](https://test.wsmdn.dpdns.org/)，**如果返回的 IPVersion 字段为 IPv6，则当前网络 IPv6 访问优先，**如果返回的 IPVersion 字段为 IPv4，则当前网络 IPv4 访问优先。
+打开 [https://test.wsmdn.dpdns.org/](https://test.wsmdn.dpdns.org/)，**如果返回的是 IPv6 地址，则当前网络 IPv6 访问优先，**如果返回的是 IPv4 地址，则当前网络 IPv4 访问优先。
 >[test.wsmdn.dpdns.org](https://test.wsmdn.dpdns.org/) 支持 IPv4/IPv6双栈访问。
 ```json
-// https://test.ipw.cn/
+// https://test.wsmdn.dpdns.org/
 240e:3b7:3b7:3b7::3b7
 ```
 
@@ -197,7 +197,7 @@ PING6(56=40+8+8 bytes)  --> 2402:4e00:40:40::2:331
 16 bytes from 2402:4e00:40:40::2:331, icmp_seq=1 hlim=53 time=16.393 ms
 16 bytes from 2402:4e00:40:40::2:331, icmp_seq=2 hlim=53 time=14.736 ms
 16 bytes from 2402:4e00:40:40::2:331, icmp_seq=3 hlim=53 time=14.062 ms
- --- ipw.cn ping6 statistics ---
+ --- ipw.wsmdn.top ping6 statistics ---
 4 packets transmitted, 4 packets received, 0.0% packet loss
 round-trip min/avg/max/std-dev = 14.062/15.811/18.052/1.547 ms
 ```

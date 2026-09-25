@@ -2,7 +2,7 @@
 <svg width="85px" height="36px" viewBox="0 0 85 36" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
     <title>ssl-s5</title>
     <g id="ssl-s5" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-        <g id="ipw.cn" transform="translate(5.000000, 4.000000)">
+        <g id="nipw.cn" transform="translate(5.000000, 4.000000)">
             <rect stroke="#313238" x="0.5" y="0.5" width="74" height="27" rx="5"></rect>
             <text id="SSL" font-family="PingFang SC, Microsoft YaHei, Source Han Sans SC, Noto Sans SC, sans-serif" font-size="14" font-weight="500" fill="#313238">
                 <tspan x="34" y="19">SSL</tspan>

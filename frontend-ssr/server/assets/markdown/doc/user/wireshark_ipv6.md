@@ -1,11 +1,8 @@
 ﻿# <span style="background-color: #b95442;color: white;font-size: 0.43em;border-radius: 5px;padding: 2px 5px;">转载</span> Wireshare 分析 IPv6 包
 
->[WARNING]
->本文的部分URL已失效，但为了保留原文，未作修改
-
 ## 场景
 
-执行 `curl 6.ipw.cn`，查看本机的 IPv6 通信包。
+执行 `curl 6.wsmdn.top`，查看本机的 IPv6 通信包。
 
 > 如果有 DNS 缓存，可以执行 `sudo killall -HUP mDNSResponder;sudo killall mDNSResponderHelper;sudo dscacheutil -flushcache` 清理缓存
 

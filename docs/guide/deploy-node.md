@@ -224,7 +224,7 @@ systemctl restart lemon-ipw
 
 节点无论是否接入 WS，都会上报自身版本与支持的管理能力：
 
-- **版本号**来自构建时注入的 `VERSION`，随 WS `register` 报文上报（字段 `version`）；纯 HTTP 节点（无 WS 连接）由收集中心探活 `GET /` 时一并取回（响应体含 `version`）。
+- **版本号**来自构建时注入的 `VERSION`，随 WS `register` 报文上报（字段 `version`）；纯 HTTP 主节点（无 WS 连接）由收集中心探活后再请求 `GET /info` 取回（`GET /` 只返回 `{"status":"ok"}`）。边缘函数版本不提供 `/info`。
 - **能力清单**（`capabilities`）取值为 `probe` / `report` / `config` / `ota`，用于让收集中心在下发管理指令前判断该节点能否理解——老版本节点的消息循环没有对应分支，收到管理消息会**静默忽略**，只能靠超时暴露。
 - 收集中心「节点状态」页展示每个节点的版本号，并据此判断哪些节点需要升级；节点升级部署后重新注册即为新版本。
 

@@ -32,7 +32,7 @@ Lemon IPW（柠檬味 ipw.cn 替代品）是一个开源的分布式站点测试
 - 后端（Go）提供全部检测 API，可在任意地区部署测试节点，是分布式查询的核心
 - 独立中间件（middleware-go）使用Fiber技术栈 负责请求转发和 Key 注入
 
-后端支持二进制、Docker 自托管，也支持 AWS Lambda、EdgeOne Makers、Vercel、阿里云函数计算等 Serverless 平台部署。
+后端支持二进制、Docker 自托管，以及仓库中提供的 EdgeOne Go 边缘函数和对应的 Vercel 部署入口。AWS Lambda、阿里云函数计算目前没有对应的实现或部署配置。
 
 ## 技术栈
 
