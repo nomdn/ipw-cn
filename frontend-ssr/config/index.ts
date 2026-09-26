@@ -125,7 +125,7 @@ const config = {
                 url: "https://cn-shenzhen.api-ipw.wsmdn.top/"
             },
             {
-                lable: "河南 安阳 联通",
+                label: "河南 安阳 联通",
                 "id": "anyang-cu"
             }
             // {
