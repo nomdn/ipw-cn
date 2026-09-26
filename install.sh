@@ -70,6 +70,14 @@ echo "========================================"
 
 read -r -p "安装目录 [/opt/lemon-ipw]: " INSTALL_DIR
 INSTALL_DIR=${INSTALL_DIR:-/opt/lemon-ipw}
+# unit 里 WorkingDirectory/ExecStart 按 systemd 语法裸写（不加引号），
+# 路径含空白会被拆成多个参数导致启动失败，这里提前拦掉
+case "$INSTALL_DIR" in
+    *[[:space:]]*)
+        echo "错误：安装目录不能包含空格或制表符（当前值：$INSTALL_DIR）" >&2
+        exit 1
+        ;;
+esac
 
 read -r -p "监听端口 [8080]: " PORTS
 PORTS=${PORTS:-8080}
@@ -222,8 +230,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory="${INSTALL_DIR}"
-ExecStart="${INSTALL_DIR}/lemonipw"
+WorkingDirectory=${INSTALL_DIR}
+ExecStart=${INSTALL_DIR}/lemonipw
 ${ENV_LINES}Restart=always
 RestartSec=5
 
