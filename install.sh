@@ -90,10 +90,10 @@ read -r -p "DNS 服务器（留空=启动时自动探测系统 DNS；主从逗�
 
 read -r -p "DNSSEC 专用 DNS（留空=沿用上面 dns-server）: " DNSSEC_DNS_SERVER
 
-read -r -p "启用 IP 数据库 ipdb（首次启动下载约 450MB）[Y/n]: " IPDB_CHOICE
+read -r -p "启用 IP 数据库 ipdb（首次启动下载约 450MB，用于 IP 归属地/ASN 类拨测）[y/N]: " IPDB_CHOICE
 case "${IPDB_CHOICE,,}" in
-    n|no) IPDB="false" ;;
-    *)    IPDB="true" ;;
+    y|yes) IPDB="true" ;;
+    *)     IPDB="false" ;;
 esac
 
 read -r -p "CORS 允许来源（逗号分隔，留空=不限）: " CORS
@@ -114,11 +114,35 @@ NODE_KEY=""
 WS_USED_DEFAULT=""
 case "${WS_CHOICE,,}" in
     y|yes)
-        read -r -p "  中间件 WS 完整地址（含 wss:// 前缀与 /ws 路径，如 wss://host:8092/ws；留空=贡献节点给柠檬 wss://boce-api.api-ipw.wsmdn.top/ws；逗号分隔多个将同时连接全部）: " WS_URL
+        read -r -p "  中间件 WS 完整地址（含 wss:// 前缀与 /ws 路径，如 wss://host:8092/ws；多个用逗号分隔将同时连接全部；留空=贡献节点给柠檬的两条公共中间件）: " WS_URL
         if [ -z "$WS_URL" ]; then
-            WS_URL="wss://boce-api.api-ipw.wsmdn.top/ws"
+            WS_URL="wss://boce-api.api-ipw.wsmdn.top/ws,wss://middleware-1.api-ipw.wsmdn.top/ws"
             WS_USED_DEFAULT="true"
         fi
+        # 多地址（逗号分隔）：逐段去掉首尾空白并校验 scheme。
+        # 不清理的话空格会原样写进 unit 的 Environment，节点侧解析失败后只会反复重连，很难排查。
+        _ws_norm=""
+        _old_ifs="$IFS"; IFS=','
+        for _seg in $WS_URL; do
+            _seg="${_seg#"${_seg%%[![:space:]]*}"}"
+            _seg="${_seg%"${_seg##*[![:space:]]}"}"
+            case "$_seg" in
+                ws://*|wss://*) ;;
+                "")
+                    IFS="$_old_ifs"
+                    echo "错误：WS 地址含空段（检查是否多写了逗号）" >&2
+                    exit 1
+                    ;;
+                *)
+                    IFS="$_old_ifs"
+                    echo "错误：WS 地址的每一段都需以 ws:// 或 wss:// 开头（问题段：${_seg}）" >&2
+                    exit 1
+                    ;;
+            esac
+            _ws_norm="${_ws_norm:+${_ws_norm},}${_seg}"
+        done
+        IFS="$_old_ifs"
+        WS_URL="$_ws_norm"
         read -r -p "  注册 key（留空自动生成，中间件 ws-keys 必须包含此节点，否则注册被拒 401）: " NODE_KEY
         if [ -z "$NODE_KEY" ]; then
             NODE_KEY=$(gen_uuid | tr -d '-')
@@ -259,8 +283,14 @@ echo "  systemctl restart lemon-ipw     # 重启（改配置后）"
 echo "验证：curl http://127.0.0.1:$PORTS/ 应返回 {\"status\":\"ok\"}"
 if [ -n "$WS_URL" ]; then
     echo ""
-    echo "WS 通道已启用，请把节点注册信息加入中间件 setting.json 的 ws-keys："
+    echo "WS 通道已启用，请把节点注册信息加入每一个对应中间件 setting.json 的 ws-keys（缺一个该条连接会被拒 401）："
     echo "  \"$NODE_ID\": \"$NODE_KEY\""
+    echo "  地址清单："
+    _old_ifs="$IFS"; IFS=','
+    for _seg in $WS_URL; do
+        echo "    - $_seg"
+    done
+    IFS="$_old_ifs"
 fi
 if [ -n "$WS_USED_DEFAULT" ]; then
     echo ""
