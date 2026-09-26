@@ -124,6 +124,10 @@ const config = {
                 id: "cn-shenzhen",
                 url: "https://cn-shenzhen.api-ipw.wsmdn.top/"
             },
+            {
+                lable: "河南 安阳 联通",
+                "id": "anyang-cu"
+            }
             // {
             //     label: "中国 湖北 武汉 电信",
             //     id: "cn-wuhan-chinatelecom",
