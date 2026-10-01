@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 )
 
 // ==================== OTA 升级（收集中心下发，节点执行） ====================
@@ -120,35 +120,32 @@ func otaReport(c *websocket.Conn, requestID string, ok bool, stage, errMsg strin
 
 // registerOTARoute 注册 POST /v1/ota（收集中心 HTTP 回退通道）。
 // 鉴权与 /v1/config 一致：access-token 未配置时整个 HTTP OTA 管理面关闭（RCE 面不能裸奔）。
-func registerOTARoute(r *gin.Engine) {
+func registerOTARoute(r *fiber.App) {
 	g := r.Group("/v1/ota")
 	if ACCESS_TOKEN == "" {
 		slog.Warn("ota HTTP API disabled: access-token not set, use WS channel instead")
-		g.POST("", func(c *gin.Context) {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+		g.Post("", func(c fiber.Ctx) error {
+			return c.Status(http.StatusForbidden).JSON(fiber.Map{
 				"error": "OTA 接口已关闭：节点未配置 access-token，请通过 WS 通道下发",
 			})
 		})
 		return
 	}
 	g.Use(tokenCheck())
-	g.POST("", func(c *gin.Context) {
+	g.Post("", func(c fiber.Ctx) error {
 		if !NODE_OTA {
-			c.JSON(http.StatusForbidden, gin.H{"error": "节点已禁用 OTA（node-ota=false）"})
-			return
+			return c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "节点已禁用 OTA（node-ota=false）"})
 		}
 		var req otaRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload: " + err.Error()})
-			return
+		if err := c.Bind().JSON(&req); err != nil {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload: " + err.Error()})
 		}
 		if err := otaValidate(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		// 异步执行：下载可能耗时数分钟，HTTP 无进度通道，结果看节点日志与重连后的版本号
 		go otaRun(req, nil)
-		c.JSON(http.StatusAccepted, gin.H{"ok": true, "started": true})
+		return c.Status(http.StatusAccepted).JSON(fiber.Map{"ok": true, "started": true})
 	})
 }
 

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 )
 
 // ==================== 数据上报（节点 → 收集中心 ipw-boce） ====================
@@ -83,35 +83,8 @@ func startNodeReporter() {
 	slog.Info("node reporter enabled", "ws", WS_URL != "", "httpFallback", REPORT_URL, "interval", REPORT_INTERVAL)
 }
 
-// nodeReportMiddleware /v1 组统计中间件：归属规则过滤 → 计数 → 拨测类补明细
-func nodeReportMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-		c.Next()
-
-		// 收集中心(ipw-boce)主动调度下发的拨测带 X-Scheduler-Probe 头：
-		// 该次执行由收集中心侧本地落库(source=sched/biz)，本节点跳过计数与明细上报，避免双算。
-		// 真实业务请求（用户/中间件转发）不带此头，仍按"节点是唯一记录者"正常上报。
-		if c.Request.Header.Get("X-Scheduler-Probe") != "" {
-			return
-		}
-
-		apiType, raw := nodeAPIFromPath(c)
-		if apiType == "" {
-			return
-		}
-		latency := time.Since(start)
-		status := c.Writer.Status()
-		nodeRecordAPI(apiType, status, latency)
-		if nodeIsProbeType(apiType) {
-			nodeRecordProbe(nodeProbeRec{
-				NodeID: nodeReportNodeID(), APIType: apiType, Raw: raw,
-				Query: c.Request.URL.RawQuery, Status: status, LatencyMs: latency.Milliseconds(),
-				Source: "http", CreatedAt: time.Now().Unix(),
-			})
-		}
-	}
-}
+// nodeReportMiddleware 已移至 main.go（与 tokenCheck 放在一起，见该文件「鉴权 / 上报中间件」段）。
+// 这里保留的只有上报的数据面：计数、拨测明细缓冲与周期上报。
 
 // nodeRecordWSProbe WS 拨测出口（ws.go wsHandleProbe 调用）。
 // 中间件已不在转发路径上计数，WS 下发的拨测同样由本节点上报（唯一记录者）；
@@ -185,9 +158,18 @@ func nodeReportNodeID() string {
 	return "unknown"
 }
 
-// nodeAPIFromPath 从 gin 路由模板提取 apiType 与拨测目标（对齐 WS probe 的 raw 格式）
-func nodeAPIFromPath(c *gin.Context) (apiType, raw string) {
-	path := c.FullPath() // 形如 /v1/tcping/:ip
+// nodeAPIFromPath 从 fiber 路由模板提取 apiType 与拨测目标（对齐 WS probe 的 raw 格式）。
+//
+// 路由模板经 c.Route().Path 取（形如 /v1/tcping/:ip）。fiber 的通配符不支持命名，
+// 统一是 `*`，取值走 c.Params("*")。两个 fiber 特有的坑：
+//
+//  1. c.Params / c.Route 返回的是**零拷贝字符串**（直接指向请求缓冲）。handler 执行期间
+//     这份缓冲会被复用，所以调用方必须在 c.Next() 之前取值，这里再 Clone 一道双保险。
+//  2. 通配符值**不带**前导斜杠（gin 的 `*url` 带）。原来靠 catch-all 自带 `/` 拼出
+//     "a/example.com"、"v4/example.com" 的 raw 格式，这里显式补回斜杠；detail / ssl
+//     侧原本就 TrimPrefix("/")，fiber 下该操作变成无操作，结果一致。
+func nodeAPIFromPath(c fiber.Ctx) (apiType, raw string) {
+	path := c.Route().Path
 	if !strings.HasPrefix(path, "/v1/") {
 		return "", ""
 	}
@@ -198,20 +180,21 @@ func nodeAPIFromPath(c *gin.Context) (apiType, raw string) {
 	apiType = seg[0]
 	switch apiType {
 	case "tcping", "dnssec", "whois":
-		raw = c.Param("ip")
+		raw = c.Params("ip")
 		if raw == "" {
-			raw = c.Param("domain")
+			raw = c.Params("domain")
 		}
 	case "speed":
-		raw = c.Param("version") + c.Param("url") // v4/example.com（对齐 WS probe raw 格式）
+		raw = c.Params("version") + "/" + c.Params("*") // v4/example.com（对齐 WS probe raw 格式）
 	case "dns":
-		raw = c.Param("type") + c.Param("domain") // a/example.com
+		raw = c.Params("type") + "/" + c.Params("*") // a/example.com
 	case "detail", "ssl":
-		raw = strings.TrimPrefix(c.Param("url"), "/")
+		raw = strings.TrimPrefix(c.Params("*"), "/")
 	case "location", "asn":
-		raw = c.Param("ip")
+		raw = c.Params("ip")
 	}
-	return apiType, raw
+	// Clone：切断对请求缓冲的引用（见上方说明 1）
+	return strings.Clone(apiType), strings.Clone(raw)
 }
 
 // nodeReportLoop 周期上报：WS 在线走 WS 广播（所有已注册中间件），否则 HTTP POST 收集中心

@@ -18,23 +18,32 @@ func CheckWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 	}
 
 	startTime := time.Now()
-	resp, err := httpClient(version).R().EnableTrace().SetContext(ctx).Get(url)
+	resp, err := newProbeRequest(version, ctx).Get(url)
 
 	// HTTPS 请求失败时 fallback 到 HTTP
 	fallbackToHTTP := false
 	if err != nil && strings.HasPrefix(url, "https://") {
+		closeResponseBody(resp) // 丢弃本次失败的响应，避免连接/FD 悬挂（见 closeResponseBody）
 		httpURL := strings.Replace(url, "https://", "http://", 1)
 		startTime = time.Now()
-		resp, err = httpClient(version).R().EnableTrace().SetContext(ctx).Get(httpURL)
+		resp, err = newProbeRequest(version, ctx).Get(httpURL)
 		fallbackToHTTP = true
 	}
 
+	if err != nil {
+		closeResponseBody(resp)
+		return nil, err
+	}
+
+	// 流式计数，不把响应体留在堆上（详见 readBodySize）。
+	// 放在 endTime 之前：改造前 resty 在 Get() 内部就读完了整个响应体，
+	// total_time 一直包含响应体下载耗时，见 speed.go 同处注释。
+	bodySize, err := readBodySize(resp)
 	if err != nil {
 		return nil, err
 	}
 	endTime := time.Now()
 
-	body := resp.Bytes()
 	trace := resp.Request.TraceInfo()
 
 	hostRecord := CleanHostRecord(trace.RemoteAddr)
@@ -50,7 +59,7 @@ func CheckWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 	totalTime := float64(endTime.Sub(startTime).Milliseconds())
 	var downloadSpeed float64
 	if totalTime > 0 {
-		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+		downloadSpeed = float64(bodySize) / 1024.0 / (totalTime / 1000.0)
 	}
 
 	httpStatus := resp.StatusCode()
@@ -68,7 +77,7 @@ func CheckWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 		HTTPConnectTime:  httpConnectTime,
 		FirstByteTime:    firstByteTime,
 		TotalTime:        totalTime,
-		PageSize:         int64(len(body)),
+		PageSize:         bodySize,
 		DownloadSpeed:    downloadSpeed,
 		IsReachable:      true,
 	}

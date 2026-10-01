@@ -37,7 +37,7 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 		testURL := normalizeURL(raw)
 		if cached, ok := websiteCache.Load(testURL); ok {
 			entry := cached.(websiteCacheEntry)
-			if time.Since(entry.timestamp) < 5*time.Minute {
+			if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
 				return 200, entry.result
 			}
 			websiteCache.Delete(testURL)
@@ -52,14 +52,17 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 			},
 		)
 		result := &WebsiteCheckResult{IPv4: ipv4, IPv6: ipv6}
-		websiteCache.Store(testURL, websiteCacheEntry{result: result, timestamp: time.Now()})
+		failed := dualAnyFailed(result.IPv4, result.IPv6, func(d *webtest.WebsiteCheckDetail) bool {
+			return d != nil && !d.IsReachable
+		})
+		websiteCache.Store(testURL, websiteCacheEntry{result: result, timestamp: time.Now(), failed: failed})
 		return 200, result
 
 	case "ssl":
 		testURL := normalizeURL(raw)
 		if cached, ok := sslCache.Load(testURL); ok {
 			entry := cached.(sslCacheEntry)
-			if time.Since(entry.timestamp) < 5*time.Minute {
+			if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
 				return 200, entry.result
 			}
 			sslCache.Delete(testURL)
@@ -74,7 +77,10 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 			},
 		)
 		result := &SSLCheckResult{IPv4: ipv4, IPv6: ipv6}
-		sslCache.Store(testURL, sslCacheEntry{result: result, timestamp: time.Now()})
+		failed := dualAnyFailed(result.IPv4, result.IPv6, func(d *webtest.SSLCheckDetail) bool {
+			return d != nil && !d.IsReachable
+		})
+		sslCache.Store(testURL, sslCacheEntry{result: result, timestamp: time.Now(), failed: failed})
 		return 200, result
 
 	case "speed":
@@ -87,7 +93,7 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 		cacheKey := fmt.Sprintf("%s:%s", testURL, version)
 		if cached, ok := speedCache.Load(cacheKey); ok {
 			entry := cached.(speedCacheEntry)
-			if time.Since(entry.timestamp) < 5*time.Minute {
+			if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
 				return 200, entry.result
 			}
 			speedCache.Delete(cacheKey)
@@ -95,7 +101,7 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 		r, e := webtest.SpeedTest(testURL, version)
 		if e != nil {
 			errorResult := &webtest.WebsiteSpeedTestResult{HostRecord: "Error: " + e.Error()}
-			speedCache.Store(cacheKey, speedCacheEntry{result: errorResult, timestamp: time.Now()})
+			speedCache.Store(cacheKey, speedCacheEntry{result: errorResult, timestamp: time.Now(), failed: true})
 			return 200, errorResult
 		}
 		speedCache.Store(cacheKey, speedCacheEntry{result: r, timestamp: time.Now()})
@@ -123,7 +129,7 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 		cacheKey := fmt.Sprintf("%s:%s:%d", host, port, n)
 		if cached, ok := pingCache.Load(cacheKey); ok {
 			entry := cached.(pingCacheEntry)
-			if time.Since(entry.timestamp) < 5*time.Minute {
+			if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
 				return 200, entry.result
 			}
 			pingCache.Delete(cacheKey)
@@ -138,7 +144,9 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 			},
 		)
 		result := &TCPingResult{IPv4: ipv4, IPv6: ipv6}
-		pingCache.Store(cacheKey, pingCacheEntry{result: result, timestamp: time.Now()})
+		// 只有双栈都失败才算整体失败，单侧失败仍返回了可用的延迟数据（口径同 HTTP handler）
+		failed := tcpingFailed(ipv4) && tcpingFailed(ipv6)
+		pingCache.Store(cacheKey, pingCacheEntry{result: result, timestamp: time.Now(), failed: failed})
 		return 200, result
 
 	case "dns":
@@ -190,7 +198,7 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 		}
 		if cached, ok := whoisCache.Load(raw); ok {
 			entry := cached.(whoisCacheEntry)
-			if time.Since(entry.timestamp) < 5*time.Minute {
+			if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
 				return 200, entry.result
 			}
 			whoisCache.Delete(raw)

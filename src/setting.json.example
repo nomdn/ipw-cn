@@ -17,5 +17,7 @@
     "node-ota": "true",
     "report-url": "",
     "report-token": "",
-    "report-interval-seconds": 15
+    "report-interval-seconds": 15,
+    "max-response-body": "32MB",
+    "memory-limit": ""
 }

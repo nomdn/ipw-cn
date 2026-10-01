@@ -43,7 +43,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v3"
 	"github.com/spf13/viper"
 	"lemon-ipw/ssrf"
 	"lemon-ipw/webtest"
@@ -101,7 +101,8 @@ func protectedKeysIn(cfg map[string]any) []string {
 
 // configRestartKeys 改了内存变量但需重启进程才完全生效的键：
 //
-//   - port / trusted-proxies / cors：监听地址与 gin 中间件在启动时构建并固定
+//   - port / trusted-proxies / cors：监听地址与 fiber 应用配置（buildFiberConfig，含 CORS
+//     中间件）都在启动时构建并固定
 //   - ipdb：ipdb.Init 与 location / asn 路由注册都按启动时的值判定
 //   - report-interval-seconds：上报 ticker 在启动时按该值创建
 //   - node-id / node-key：WS 注册身份在启动时确立；运行中改动只改内存变量，
@@ -188,7 +189,8 @@ func applyConfigMap(cfg map[string]any, ignore []string) (applied, unknown, rest
 			CORS = v
 			ACCEPT_DOMAINS = splitAndTrim(CORS, ",")
 		case "block-private-ips":
-			ssrf.SetEnabled(v != "false" && v != "0")
+			// 与启动口径共用 configDisabled（main.go），避免"启动认 false、热更新认 FALSE"这类漂移
+			ssrf.SetEnabled(!configDisabled(v))
 		case "trusted-proxies":
 			TRUSTED_PROXIES = v
 		case "remote-config-url":
@@ -235,6 +237,25 @@ func applyConfigMap(cfg map[string]any, ignore []string) (applied, unknown, rest
 				continue
 			}
 			NODE_OTA = enabled
+		case "max-response-body":
+			// 热生效：改完即应用到出站客户端（applyResponseBodyLimit 内部有锁）
+			n, ok := parseByteSize(v)
+			if !ok {
+				unknown = append(unknown, key) // 值非法：不覆盖原值，明确报给调用方
+				continue
+			}
+			MAX_RESPONSE_BODY = n
+			applyResponseBodyLimit()
+		case "memory-limit":
+			// 热生效：debug.SetMemoryLimit 支持运行时调整。
+			// 0 表示"回到自动探测 cgroup"，与启动口径一致（见 resources.go）。
+			n, ok := parseByteSize(v)
+			if !ok {
+				unknown = append(unknown, key)
+				continue
+			}
+			MEMORY_LIMIT = n
+			applyMemoryLimit()
 		default:
 			unknown = append(unknown, key)
 			continue
@@ -309,6 +330,8 @@ func configSnapshot() map[string]any {
 		"ws-url":                  WS_URL,
 		"node-id":                 WS_NODE_ID,
 		"node-ota":                NODE_OTA,
+		"max-response-body":       MAX_RESPONSE_BODY,
+		"memory-limit":            MEMORY_LIMIT,
 		"report-url":              REPORT_URL,
 		"report-interval-seconds": REPORT_INTERVAL,
 	}
@@ -388,28 +411,28 @@ func refreshRemoteConfig() (map[string]any, error) {
 // access-token 未配置时**关闭整个 HTTP 管理面**：此时节点业务接口本身也无鉴权，
 // 再暴露配置读写等于公网任何人可改节点配置。WS 通道不受影响——它由节点主动外连中间件，
 // 注册需通过中间件的 ws-keys 校验，指令只发给已注册连接，天然有鉴权。
-func registerConfigRoutes(r *gin.Engine) {
+func registerConfigRoutes(r *fiber.App) {
 	g := r.Group("/v1/config")
 	if ACCESS_TOKEN == "" {
 		slog.Warn("config HTTP API disabled: access-token not set, use WS channel instead")
-		disabled := func(c *gin.Context) {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+		disabled := func(c fiber.Ctx) error {
+			return c.Status(http.StatusForbidden).JSON(fiber.Map{
 				"error": "配置管理接口已关闭：节点未配置 access-token，请通过 WS 通道操作",
 			})
 		}
-		g.GET("", disabled)
-		g.PATCH("", disabled)
-		g.POST("/refresh", disabled)
+		g.Get("", disabled)
+		g.Patch("", disabled)
+		g.Post("/refresh", disabled)
 		return
 	}
 	g.Use(tokenCheck())
-	g.GET("", configGetHandler)
-	g.PATCH("", configPatchHandler)
-	g.POST("/refresh", configRefreshHandler)
+	g.Get("", configGetHandler)
+	g.Patch("", configPatchHandler)
+	g.Post("/refresh", configRefreshHandler)
 }
 
-func configGetHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
+func configGetHandler(c fiber.Ctx) error {
+	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"config":              configSnapshot(),
 		"secretKeys":          sortedKeysBool(configSecretKeys),
 		"restartRequiredKeys": sortedKeysBool(configRestartKeys),
@@ -417,15 +440,13 @@ func configGetHandler(c *gin.Context) {
 	})
 }
 
-func configPatchHandler(c *gin.Context) {
+func configPatchHandler(c fiber.Ctx) error {
 	var body map[string]any
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体须为 JSON 对象：" + err.Error()})
-		return
+	if err := c.Bind().JSON(&body); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "请求体须为 JSON 对象：" + err.Error()})
 	}
 	if len(body) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请求体为空"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "请求体为空"})
 	}
 	// 本地显式 PATCH 不受 remote-ignore-config 限制：那是"防远端覆盖"的白名单
 	applied, unknown, restart := applyConfigMap(body, nil)
@@ -433,17 +454,16 @@ func configPatchHandler(c *gin.Context) {
 	persisted := false
 	if p := c.Query("persist"); p == "1" || strings.EqualFold(p, "true") {
 		if err := persistConfig(body, applied); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "写回 setting.json 失败：" + err.Error(),
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"error":   "写回 setting.json 失败：" + err.Error(),
 				"applied": applied,
 			})
-			return
 		}
 		persisted = true
 	}
 	// 未要求持久化时只改内存：需重启的键不落盘，进程重启后会回到 setting.json / 远端配置的值。
 	// 这是刻意的语义——PATCH 是"当前进程内的即时改动"，要不要固化由调用方用 persist 明确决定。
-	c.JSON(http.StatusOK, gin.H{
+	return c.Status(http.StatusOK).JSON(fiber.Map{
 		"applied":         applied,
 		"unknown":         unknown,
 		"restartRequired": restart,
@@ -452,17 +472,15 @@ func configPatchHandler(c *gin.Context) {
 	})
 }
 
-func configRefreshHandler(c *gin.Context) {
+func configRefreshHandler(c fiber.Ctx) error {
 	res, err := refreshRemoteConfig()
 	if err == errNoRemoteURL {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "remote-config-url 未配置，无法刷新"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "remote-config-url 未配置，无法刷新"})
 	}
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "拉取远端配置失败：" + err.Error(), "source": REMOTE_CONFIG_URL})
-		return
+		return c.Status(http.StatusBadGateway).JSON(fiber.Map{"error": "拉取远端配置失败：" + err.Error(), "source": REMOTE_CONFIG_URL})
 	}
-	c.JSON(http.StatusOK, res)
+	return c.Status(http.StatusOK).JSON(res)
 }
 
 // sortedKeysBool 取 map 键的升序列表（用于向调用方说明哪些键是凭据/需重启）

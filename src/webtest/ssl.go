@@ -19,7 +19,16 @@ func CheckSSL(url string, version string) (*SSLCheckDetail, error) {
 	}
 
 	startTime := time.Now()
-	resp, err := httpClient(version).R().EnableTrace().SetContext(ctx).Get(url)
+	resp, err := newProbeRequest(version, ctx).Get(url)
+	if err != nil {
+		closeResponseBody(resp)
+		return nil, err
+	}
+
+	// 流式计数，不把响应体留在堆上（详见 readBodySize）。
+	// 放在 endTime 之前：改造前 resty 在 Get() 内部就读完了整个响应体，
+	// total_time 一直包含响应体下载耗时，见 speed.go 同处注释。
+	bodySize, err := readBodySize(resp)
 	if err != nil {
 		return nil, err
 	}
@@ -29,10 +38,9 @@ func CheckSSL(url string, version string) (*SSLCheckDetail, error) {
 	hostRecord := CleanHostRecord(trace.RemoteAddr)
 
 	totalTime := float64(endTime.Sub(startTime).Milliseconds())
-	body := resp.Bytes()
 	var downloadSpeed float64
 	if totalTime > 0 {
-		downloadSpeed = float64(len(body)) / 1024.0 / (totalTime / 1000.0)
+		downloadSpeed = float64(bodySize) / 1024.0 / (totalTime / 1000.0)
 	}
 
 	rawResp := resp.RawResponse
