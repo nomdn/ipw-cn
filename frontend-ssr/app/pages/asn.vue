@@ -182,14 +182,14 @@ function getStatusClass(status: string): string {
           <tr v-if="result.dbip_asn?.asn">
             <td class="table-label">DB-IP ASN</td>
             <td class="table-value">
-              AS{{ result.dbip_asn.asn }}
+              {{ result.dbip_asn.asn }}
               <span v-if="result.dbip_asn.org" style="color: #999; font-size: 0.9em;">{{ result.dbip_asn.org }}</span>
             </td>
           </tr>
           <tr v-if="result.ip2location_asn?.asn">
             <td class="table-label">IP2Location ASN</td>
             <td class="table-value">
-              AS{{ result.ip2location_asn.asn }}
+              {{ result.ip2location_asn.asn }}
               <span v-if="result.ip2location_asn.as" style="color: #999; font-size: 0.9em;">{{ result.ip2location_asn.as }}</span>
             </td>
           </tr>
