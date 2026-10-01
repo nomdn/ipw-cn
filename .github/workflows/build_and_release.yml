@@ -1,6 +1,11 @@
 name: Build and Release
 
-
+# 并行构建：原来 8 个 Build step 串行跑在一个 job 里，现在拆成 8 个矩阵任务同时跑
+#   （2 个程序 × 4 个目标系统），构建完各自上传 artifact，最后统一发 Release。
+#
+# 元数据（VERSION / COMMIT / BUILD_TIME）由 meta job 算一次分发下去：
+# 若放到每个矩阵任务里各算一遍，BUILD_TIME 会互不相同，同一个 Release 里的
+# 二进制时间戳就对不上了。
 on:
   push:
     tags:
@@ -8,95 +13,131 @@ on:
   workflow_dispatch:
 
 jobs:
-    build-and-release:
+    # 只负责算版本元数据，秒级完成，不产出 artifact
+    meta:
         runs-on: ubuntu-latest
+        outputs:
+            ldflags: ${{ steps.meta.outputs.ldflags }}
+        steps:
+            - name: Compute version metadata
+              id: meta
+              run: |
+                echo "ldflags=-X main.VERSION=${GITHUB_REF_NAME} -X main.COMMIT=${GITHUB_SHA} -X main.BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+    build:
+        needs: meta
+        runs-on: ubuntu-latest
+        strategy:
+            # 一个目标挂了不影响其余目标，全部跑完再统一看结果
+            fail-fast: false
+            # 纯 include 模式：每条自带全部字段、各自独立成一个任务。
+            # 不要把 app 写成顶层数组再和 os 组合——GitHub 会把能匹配现有组合的
+            # include 条目合并进组合本身，任务数被折叠（docker.yml 里踩过，见 v3.3.0 事故）
+            matrix:
+                include:
+                    - app: lemonipw
+                      dir: src
+                      os: linux
+                    - app: lemonipw
+                      dir: src
+                      os: windows
+                    - app: lemonipw
+                      dir: src
+                      os: darwin
+                    - app: lemonipw
+                      dir: src
+                      os: freebsd
+                    - app: middleware-go
+                      dir: middleware-go
+                      os: linux
+                    - app: middleware-go
+                      dir: middleware-go
+                      os: windows
+                    - app: middleware-go
+                      dir: middleware-go
+                      os: darwin
+                    - app: middleware-go
+                      dir: middleware-go
+                      os: freebsd
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
 
             - name: Setup Go
-              uses: actions/setup-go@v4
+              # v4 基于 Node 16，GitHub 已不再支持该运行时（actionlint 会报 runner too old）
+              uses: actions/setup-go@v5
               with:
                 go-version: '1.26.6' # 与 src/go.mod 声明保持一致，避免依赖 GOTOOLCHAIN 隐式下载
-            - name: Set version metadata
-              run: |
-                echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV  
-                echo "COMMIT=${GITHUB_SHA}" >> $GITHUB_ENV
-                echo "BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
 
-            - name: Build for Linux
-              working-directory: src
+            # 产物统一写到仓库根目录（working-directory 的上一级），命名规则与原串行版完全一致
+            - name: Build ${{ matrix.app }} for ${{ matrix.os }}
+              working-directory: ${{ matrix.dir }}
+              env:
+                APP: ${{ matrix.app }}
+                LDFLAGS: ${{ needs.meta.outputs.ldflags }}
               run: |
-                LDFLAGS="-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BUILD_TIME=${BUILD_TIME}"
-                CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -ldflags "$LDFLAGS" -o ../lemonipw-linux-386
-                CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ../lemonipw-linux-amd64
-                CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../lemonipw-linux-arm64
-                CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "$LDFLAGS" -o ../lemonipw-linux-armv7
-                CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -ldflags "$LDFLAGS" -o ../lemonipw-linux-armv6
-                CGO_ENABLED=0 GOOS=linux GOARCH=loong64 go build -ldflags "$LDFLAGS" -o ../lemonipw-linux-loong64
-            - name: Build for Windows
-              working-directory: src
-              run: |
-                LDFLAGS="-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BUILD_TIME=${BUILD_TIME}"
-                CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -ldflags "$LDFLAGS" -o ../lemonipw-windows-386.exe
-                CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ../lemonipw-windows-amd64.exe
-                CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../lemonipw-windows-arm64.exe
-            - name: Build for macOS
-              working-directory: src
-              run: |
-                LDFLAGS="-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BUILD_TIME=${BUILD_TIME}"
-                CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ../lemonipw-darwin-amd64
-                CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../lemonipw-darwin-arm64
-            - name: Build for FreeBSD
-              working-directory: src
-              run: |
-                LDFLAGS="-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BUILD_TIME=${BUILD_TIME}"
-                CGO_ENABLED=0 GOOS=freebsd GOARCH=386 go build -ldflags "$LDFLAGS" -o ../lemonipw-freebsd-386
-                CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ../lemonipw-freebsd-amd64
-                CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../lemonipw-freebsd-arm64
-            - name: Build middleware-go for Linux
-              working-directory: middleware-go
-              run: |
-                LDFLAGS="-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BUILD_TIME=${BUILD_TIME}"
-                CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -ldflags "$LDFLAGS" -o ../middleware-go-linux-386
-                CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ../middleware-go-linux-amd64
-                CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../middleware-go-linux-arm64
-                CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "$LDFLAGS" -o ../middleware-go-linux-armv7
-                CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -ldflags "$LDFLAGS" -o ../middleware-go-linux-armv6
-                CGO_ENABLED=0 GOOS=linux GOARCH=loong64 go build -ldflags "$LDFLAGS" -o ../middleware-go-linux-loong64
-            - name: Build middleware-go for Windows
-              working-directory: middleware-go
-              run: |
-                LDFLAGS="-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BUILD_TIME=${BUILD_TIME}"
-                CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -ldflags "$LDFLAGS" -o ../middleware-go-windows-386.exe
-                CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ../middleware-go-windows-amd64.exe
-                CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../middleware-go-windows-arm64.exe
-            - name: Build middleware-go for macOS
-              working-directory: middleware-go
-              run: |
-                LDFLAGS="-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BUILD_TIME=${BUILD_TIME}"
-                CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ../middleware-go-darwin-amd64
-                CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../middleware-go-darwin-arm64
-            - name: Build middleware-go for FreeBSD
-              working-directory: middleware-go
-              run: |
-                LDFLAGS="-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BUILD_TIME=${BUILD_TIME}"
-                CGO_ENABLED=0 GOOS=freebsd GOARCH=386 go build -ldflags "$LDFLAGS" -o ../middleware-go-freebsd-386
-                CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -ldflags "$LDFLAGS" -o ../middleware-go-freebsd-amd64
-                CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build -ldflags "$LDFLAGS" -o ../middleware-go-freebsd-arm64
+                set -euo pipefail
+                case "${{ matrix.os }}" in
+                  linux)
+                    CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -ldflags "$LDFLAGS" -o "../${APP}-linux-386"
+                    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o "../${APP}-linux-amd64"
+                    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o "../${APP}-linux-arm64"
+                    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -ldflags "$LDFLAGS" -o "../${APP}-linux-armv7"
+                    CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build -ldflags "$LDFLAGS" -o "../${APP}-linux-armv6"
+                    CGO_ENABLED=0 GOOS=linux GOARCH=loong64 go build -ldflags "$LDFLAGS" -o "../${APP}-linux-loong64"
+                    ;;
+                  windows)
+                    CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -ldflags "$LDFLAGS" -o "../${APP}-windows-386.exe"
+                    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o "../${APP}-windows-amd64.exe"
+                    CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -ldflags "$LDFLAGS" -o "../${APP}-windows-arm64.exe"
+                    ;;
+                  darwin)
+                    CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o "../${APP}-darwin-amd64"
+                    CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o "../${APP}-darwin-arm64"
+                    ;;
+                  freebsd)
+                    CGO_ENABLED=0 GOOS=freebsd GOARCH=386 go build -ldflags "$LDFLAGS" -o "../${APP}-freebsd-386"
+                    CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -ldflags "$LDFLAGS" -o "../${APP}-freebsd-amd64"
+                    CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build -ldflags "$LDFLAGS" -o "../${APP}-freebsd-arm64"
+                    ;;
+                esac
+
+            - name: Upload ${{ matrix.app }}-${{ matrix.os }}
+              uses: actions/upload-artifact@v4
+              with:
+                name: ${{ matrix.app }}-${{ matrix.os }}
+                # 只捞本任务自己产出的二进制；middleware-go/ 目录名不带连字符，不会误匹配
+                path: ${{ matrix.app }}-*
+                if-no-files-found: error
+
+    # 只在打 tag 时发 Release；workflow_dispatch 手动跑则只构建、可从 run 页面下载 artifact
+    release:
+        needs: build
+        if: github.ref_type == 'tag'
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Download all build artifacts
+              uses: actions/download-artifact@v4
+              with:
+                path: dist
+                merge-multiple: true
+
             - name: Prepare config files for release
               run: |
                 # 后端：发布 src/ 下的 setting.json.example；中间件：只发布 setting.json.example
-                cp src/setting.json.example setting.json.example
-                cp middleware-go/setting.json.example middleware.setting.json.example
+                cp src/setting.json.example dist/setting.json.example
+                cp middleware-go/setting.json.example dist/middleware.setting.json.example
+
             - name: Release
               uses: softprops/action-gh-release@v3
-              if: github.ref_type == 'tag'
               with:
                 name: Release ${{ github.ref_name }}
                 tag_name: ${{ github.ref_name }}
                 token: ${{ secrets.MINT_TOKEN }}
-                
+
                 generate_release_notes: true
                 body: |
                   ## 配置文件说明
@@ -116,34 +157,4 @@ jobs:
                   cp middleware.setting.json.example middleware-go/setting.json
                   ```
 
-                files: |
-                  lemonipw-linux-386
-                  lemonipw-linux-amd64
-                  lemonipw-linux-arm64
-                  lemonipw-linux-armv7
-                  lemonipw-linux-armv6
-                  lemonipw-linux-loong64
-                  lemonipw-windows-386.exe
-                  lemonipw-windows-amd64.exe
-                  lemonipw-windows-arm64.exe
-                  lemonipw-darwin-amd64
-                  lemonipw-darwin-arm64
-                  lemonipw-freebsd-386
-                  lemonipw-freebsd-amd64
-                  lemonipw-freebsd-arm64
-                  middleware-go-linux-386
-                  middleware-go-linux-amd64
-                  middleware-go-linux-arm64
-                  middleware-go-linux-armv7
-                  middleware-go-linux-armv6
-                  middleware-go-linux-loong64
-                  middleware-go-windows-386.exe
-                  middleware-go-windows-amd64.exe
-                  middleware-go-windows-arm64.exe
-                  middleware-go-darwin-amd64
-                  middleware-go-darwin-arm64
-                  middleware-go-freebsd-386
-                  middleware-go-freebsd-amd64
-                  middleware-go-freebsd-arm64
-                  setting.json.example
-                  middleware.setting.json.example
+                files: dist/*
