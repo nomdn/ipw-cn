@@ -4,7 +4,9 @@
 #   - 自动检测架构并下载最新 release 二进制
 #   - 交互式输入配置（环境变量注入，无需 setting.json）
 #   - 生成并启用 systemd 守护进程
-# 用法：sudo bash install.sh
+#   - 非 root 运行时会提示是否改用 systemd --user（用户级服务）
+# 用法：sudo bash install.sh      # 系统级安装（推荐，开机自启、独立于登录会话）
+#       bash install.sh          # 非 root：确认后走 systemd --user，仅对当前用户生效
 # ============================================================
 
 text="
@@ -20,15 +22,58 @@ echo "$text"
 
 set -e
 
-# ---------- 前置检查 ----------
+# ---------- 前置检查与 systemd 作用域 ----------
+
+# system = 系统级：写 /etc/systemd/system，开机自启走 multi-user.target（需 root）
+# user   = 用户级：写 ~/.config/systemd/user，开机自启走 default.target（systemd --user，无需 root）
+SYSTEMD_MODE="system"
+
 if [ "$(id -u)" -ne 0 ]; then
-    echo "错误：需要 root 权限（写入 /etc/systemd/system 与安装目录），请用 sudo 运行" >&2
-    exit 1
+    echo "提示：当前不是 root 环境，无法写入 /etc/systemd/system 与系统安装目录。"
+    read -r -p "是否改用 systemd --user（用户级服务，仅对当前用户生效）？[y/N]: " USE_USER_SYSTEMD
+    case "${USE_USER_SYSTEMD,,}" in
+        y|yes) SYSTEMD_MODE="user" ;;
+        *)
+            echo "已取消：如需系统级安装，请用 sudo 重新运行" >&2
+            exit 1
+            ;;
+    esac
 fi
+
 if ! command -v systemctl >/dev/null 2>&1; then
     echo "错误：未检测到 systemd（systemctl 不存在），无法创建守护进程" >&2
     exit 1
 fi
+# 用户级实例依赖登录会话与 DBus，容器 / cron 等环境常常拿不到，提前拦掉
+if [ "$SYSTEMD_MODE" = "user" ] && ! systemctl --user list-units >/dev/null 2>&1; then
+    echo "错误：当前环境无法使用 systemd --user（无用户级 systemd 实例或缺少 DBus 会话）" >&2
+    echo "      可改用 sudo bash install.sh 做系统级安装" >&2
+    exit 1
+fi
+
+SERVICE_NAME="lemon-ipw"
+if [ "$SYSTEMD_MODE" = "user" ]; then
+    SERVICE_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/${SERVICE_NAME}.service"
+    DEFAULT_INSTALL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/lemon-ipw"
+    UNIT_USER_LINE=""
+    UNIT_NETWORK_LINES=""
+    UNIT_WANTED_BY="default.target"
+else
+    SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+    DEFAULT_INSTALL_DIR="/opt/lemon-ipw"
+    # 系统级 unit 的 User= 行与 network-online 依赖；用户级没有这两个概念
+    UNIT_USER_LINE="User=root
+"
+    UNIT_NETWORK_LINES="After=network-online.target
+Wants=network-online.target
+"
+    UNIT_WANTED_BY="multi-user.target"
+fi
+
+# 统一 systemctl / journalctl 调用（用户级自动补 --user）
+sc() { if [ "$SYSTEMD_MODE" = "user" ]; then systemctl --user "$@"; else systemctl "$@"; fi; }
+jc() { if [ "$SYSTEMD_MODE" = "user" ]; then journalctl --user "$@"; else journalctl "$@"; fi; }
+
 if ! command -v wget >/dev/null 2>&1 && ! command -v curl >/dev/null 2>&1; then
     echo "错误：未找到 wget 或 curl，无法下载" >&2
     exit 1
@@ -68,8 +113,8 @@ echo "========================================"
 echo " 配置后端节点（直接回车使用默认值）"
 echo "========================================"
 
-read -r -p "安装目录 [/opt/lemon-ipw]: " INSTALL_DIR
-INSTALL_DIR=${INSTALL_DIR:-/opt/lemon-ipw}
+read -r -p "安装目录 [$DEFAULT_INSTALL_DIR]: " INSTALL_DIR
+INSTALL_DIR=${INSTALL_DIR:-$DEFAULT_INSTALL_DIR}
 # unit 里 WorkingDirectory/ExecStart 按 systemd 语法裸写（不加引号），
 # 路径含空白会被拆成多个参数导致启动失败，这里提前拦掉
 case "$INSTALL_DIR" in
@@ -173,6 +218,11 @@ echo " 配置汇总"
 echo "========================================"
 echo "安装目录:     $INSTALL_DIR"
 echo "服务名:       lemon-ipw"
+if [ "$SYSTEMD_MODE" = "user" ]; then
+    echo "服务作用域:   用户级（systemd --user，仅对当前用户生效）"
+else
+    echo "服务作用域:   系统级（systemd）"
+fi
 echo "监听端口:     $PORTS"
 echo "节点 id:      $NODE_ID"
 echo "单栈模式:     ${SINGLE_STACK:-双栈}"
@@ -214,7 +264,9 @@ chmod +x "$INSTALL_DIR/lemonipw"
 echo "二进制已安装到 $INSTALL_DIR/lemonipw"
 
 # ---------- 生成 systemd 服务 ----------
-SERVICE_FILE="/etc/systemd/system/lemon-ipw.service"
+
+# 用户级 unit 目录（~/.config/systemd/user）默认可能不存在
+mkdir -p "$(dirname "$SERVICE_FILE")"
 
 # 收集环境变量（仅非空的写入，避免空值覆盖默认）
 # 值里的双引号/反斜杠需要转义，否则会提前终止 systemd 的引号包裹、损坏 unit
@@ -248,38 +300,55 @@ fi
 cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=Lemon IPW Backend Node
-After=network-online.target
-Wants=network-online.target
-
+${UNIT_NETWORK_LINES}
 [Service]
 Type=simple
-User=root
-WorkingDirectory=${INSTALL_DIR}
+${UNIT_USER_LINE}WorkingDirectory=${INSTALL_DIR}
 ExecStart=${INSTALL_DIR}/lemonipw
 ${ENV_LINES}Restart=always
 RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=${UNIT_WANTED_BY}
 EOF
 
 echo "已生成服务文件 $SERVICE_FILE"
 
 # ---------- 启动服务 ----------
-systemctl daemon-reload
+sc daemon-reload
 # restart 而非 enable --now：重跑安装改配置后旧进程必须重启才会生效
-systemctl enable lemon-ipw
-systemctl restart lemon-ipw
-systemctl status lemon-ipw --no-pager | head -15
+sc enable lemon-ipw
+sc restart lemon-ipw
+sc status lemon-ipw --no-pager | head -15
+
+# 用户级服务默认随最后一个会话结束而停止，注销后要继续跑必须开 linger
+if [ "$SYSTEMD_MODE" = "user" ]; then
+    if loginctl show-user "$(id -un)" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
+        echo "linger 已启用：用户注销后服务继续运行"
+    elif loginctl enable-linger "$(id -un)" >/dev/null 2>&1; then
+        echo "已启用 linger：用户注销后服务继续运行"
+    else
+        echo "提示：未能自动启用 linger，注销后服务会被停止。请手动执行：" >&2
+        echo "      sudo loginctl enable-linger $(id -un)" >&2
+    fi
+fi
 
 echo ""
 echo "========================================"
 echo " 安装完成"
 echo "========================================"
+# 用户级服务的运维命令都要带 --user，否则看到的是系统级命名空间（空）
+if [ "$SYSTEMD_MODE" = "user" ]; then
+    CTL_CMD="systemctl --user"
+    JRN_CMD="journalctl --user -u"
+else
+    CTL_CMD="systemctl"
+    JRN_CMD="journalctl -u"
+fi
 echo "常用命令："
-echo "  systemctl status lemon-ipw      # 查看状态"
-echo "  journalctl -u lemon-ipw -f      # 查看日志"
-echo "  systemctl restart lemon-ipw     # 重启（改配置后）"
+echo "  $CTL_CMD status lemon-ipw      # 查看状态"
+echo "  $JRN_CMD lemon-ipw -f      # 查看日志"
+echo "  $CTL_CMD restart lemon-ipw     # 重启（改配置后）"
 echo "验证：curl http://127.0.0.1:$PORTS/ 应返回 {\"status\":\"ok\"}"
 if [ -n "$WS_URL" ]; then
     echo ""

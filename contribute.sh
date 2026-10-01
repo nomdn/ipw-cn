@@ -9,9 +9,11 @@
 #   - 安装完成后打印节点信息，提交给管理员登记即可上线
 #
 # 用法：
-#   sudo bash contribute.sh                  # 全默认：自动端口 + 接 WS
+#   sudo bash contribute.sh                  # 全默认：系统级安装 + 自动端口 + 接 WS
 #   sudo bash contribute.sh --ipdb           # 启用 IP 数据库（首启后台下载 ~450MB）
 #   sudo bash contribute.sh --port 34567     # 指定端口
+#   bash contribute.sh                       # 非 root：自动装成 systemd --user 用户级服务（不询问）
+#   bash contribute.sh --user                # 显式指定用户级（与上面的自动降级等价）
 #   sudo bash contribute.sh --dry-run        # 只生成并打印信息，不下载、不落盘
 # ============================================================
 
@@ -29,6 +31,7 @@ OPT_WS_URL=""
 OPT_VERSION=""
 OPT_GH_PROXY=""
 OPT_IPDB="false"
+OPT_SCOPE=""
 DRY_RUN="false"
 
 usage() {
@@ -40,6 +43,8 @@ usage() {
   --version <tag>   指定版本（默认：取 GitHub 最新 release）
   --gh-proxy <p>    GitHub 下载加速前缀，如 https://ghfast.top/
   --ipdb            启用 IP 数据库（首次启动后台下载，约 450MB；默认关闭）
+  --user            用户级安装（systemd --user，unit 写 ~/.config/systemd/user，无需 root）
+  --system          系统级安装（unit 写 /etc/systemd/system，需 root；非 root 下指定会直接报错）
   --dry-run         只做检查与信息生成，不下载、不写 systemd
   -h, --help        显示本帮助
 EOF
@@ -51,6 +56,8 @@ while [ $# -gt 0 ]; do
     key="$1"
     case "$key" in
         --ipdb)     OPT_IPDB="true";  shift; continue ;;
+        --user)     OPT_SCOPE="user";   shift; continue ;;
+        --system)   OPT_SCOPE="system"; shift; continue ;;
         --dry-run)  DRY_RUN="true";  shift; continue ;;
         -h|--help)  usage; exit 0 ;;
         --port|--ws-url|--version|--gh-proxy) ;;
@@ -131,15 +138,49 @@ pick_port() {
     exit 1
 }
 
+# ---------- 权限与 systemd 作用域 ----------
+
+# system = 系统级：写 /etc/systemd/system，开机自启走 multi-user.target（需 root）
+# user   = 用户级：写 ~/.config/systemd/user，开机自启走 default.target（systemd --user）
+if [ "$(id -u)" -ne 0 ]; then
+    case "$OPT_SCOPE" in
+        system)
+            # dry-run 只在本地打印信息，不落盘，不必真有 root
+            if [ "$DRY_RUN" != "true" ]; then
+                echo "错误：--system 需要 root 权限（写 /etc/systemd/system），请用 sudo 运行或改用 --user" >&2
+                exit 1
+            fi
+            SYSTEMD_MODE="system"
+            ;;
+        user)
+            SYSTEMD_MODE="user"
+            ;;
+        *)
+            # 非 root 且未指定作用域：本脚本定位是"静默安装"，直接降为用户级，不打断询问
+            SYSTEMD_MODE="user"
+            echo "提示：当前不是 root 环境，自动改用 systemd --user（用户级服务，仅对当前用户生效）。" >&2
+            echo "      如需系统级安装，请用 sudo 重新运行。" >&2
+            ;;
+    esac
+else
+    SYSTEMD_MODE="system"
+    if [ "$OPT_SCOPE" = "user" ]; then
+        SYSTEMD_MODE="user"
+        echo "提示：以 root 身份使用 --user，unit 会写到 root 的用户级目录（~/.config/systemd/user）" >&2
+    fi
+fi
+
 # ---------- 环境检查 ----------
 
 if [ "$DRY_RUN" != "true" ]; then
-    if [ "$(id -u)" -ne 0 ]; then
-        echo "错误：需要 root 权限（写入 /etc/systemd/system 与安装目录），请用 sudo 运行" >&2
-        exit 1
-    fi
     if ! command -v systemctl >/dev/null 2>&1; then
         echo "错误：未检测到 systemd（systemctl 不存在），无法创建守护进程" >&2
+        exit 1
+    fi
+    # 用户级实例依赖登录会话与 DBus，容器 / cron 等环境常常拿不到，提前拦掉
+    if [ "$SYSTEMD_MODE" = "user" ] && ! systemctl --user list-units >/dev/null 2>&1; then
+        echo "错误：当前环境无法使用 systemd --user（无用户级 systemd 实例或缺少 DBus 会话）" >&2
+        echo "      可改用 sudo bash contribute.sh 做系统级安装" >&2
         exit 1
     fi
     if ! command -v wget >/dev/null 2>&1 && ! command -v curl >/dev/null 2>&1; then
@@ -147,6 +188,19 @@ if [ "$DRY_RUN" != "true" ]; then
         exit 1
     fi
 fi
+
+# 运维命令按作用域切换（用户级必须带 --user，否则查的是系统级命名空间）
+if [ "$SYSTEMD_MODE" = "user" ]; then
+    CTL_CMD="systemctl --user"
+    JRN_CMD="journalctl --user -u"
+    SCOPE_LABEL="用户级 systemd --user"
+else
+    CTL_CMD="systemctl"
+    JRN_CMD="journalctl -u"
+    SCOPE_LABEL="系统级 systemd"
+fi
+sc() { if [ "$SYSTEMD_MODE" = "user" ]; then systemctl --user "$@"; else systemctl "$@"; fi; }
+jc() { if [ "$SYSTEMD_MODE" = "user" ]; then journalctl --user "$@"; else journalctl "$@"; fi; }
 
 # ---------- 架构检测 ----------
 case "$(uname -m)" in
@@ -168,9 +222,24 @@ RELEASE_ASSET="lemonipw-linux-${ARCH_TAG}"
 # 二进制 / 安装目录 / 服务名统一固定为 lemon 系列，便于运维识别与排查；
 # 一台机器只跑一份，重跑本脚本 = 覆盖同名服务与目录。
 BIN_BASE="lemonipw"
-INSTALL_DIR="/opt/lemon-ipw"
 SERVICE_NAME="lemon-ipw"
-SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+if [ "$SYSTEMD_MODE" = "user" ]; then
+    INSTALL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/lemon-ipw"
+    SERVICE_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/${SERVICE_NAME}.service"
+    UNIT_USER_LINE=""
+    UNIT_NETWORK_LINES=""
+    UNIT_WANTED_BY="default.target"
+else
+    INSTALL_DIR="/opt/lemon-ipw"
+    SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+    # 系统级 unit 的 User= 行与 network-online 依赖；用户级没有这两个概念
+    UNIT_USER_LINE="User=root
+"
+    UNIT_NETWORK_LINES="After=network-online.target
+Wants=network-online.target
+"
+    UNIT_WANTED_BY="multi-user.target"
+fi
 
 # 同名服务已存在（例如这台机器已经跑着一个节点）：再跑一次会用新生成的
 # 节点标识覆盖旧配置，旧节点在收集中心的记录就失效了，先提醒一句。
@@ -345,11 +414,11 @@ ${ws_block}
    2. 若接收方希望以 HTTP 方式直连本节点，需放行 ${PORTS}/TCP 且该端口公网可达。
    3. IP 数据库: ${ipdb_disp}
 ----------------------------------------
- 运维命令:
-   状态: systemctl status ${SERVICE_NAME}
-   日志: journalctl -u ${SERVICE_NAME} -f
-   重启: systemctl restart ${SERVICE_NAME}
-   卸载: systemctl disable --now ${SERVICE_NAME} && rm -f ${SERVICE_FILE} && rm -rf ${INSTALL_DIR}
+ 运维命令（${SCOPE_LABEL}）:
+   状态: ${CTL_CMD} status ${SERVICE_NAME}
+   日志: ${JRN_CMD} ${SERVICE_NAME} -f
+   重启: ${CTL_CMD} restart ${SERVICE_NAME}
+   卸载: ${CTL_CMD} disable --now ${SERVICE_NAME} && rm -f ${SERVICE_FILE} && rm -rf ${INSTALL_DIR}
  节点信息备份: ${INSTALL_DIR}/node-info.txt
 ========================================
 EOF
@@ -363,6 +432,7 @@ if [ "$DRY_RUN" = "true" ]; then
     echo "下载地址: ${DOWNLOAD_URL}"
     echo "安装目录: ${INSTALL_DIR}"
     echo "服务名:   ${SERVICE_NAME}"
+    echo "作用域:   ${SCOPE_LABEL}"
     echo "随机:     端口=${PORTS} 节点id=${NODE_ID}"
     print_info
     exit 0
@@ -403,33 +473,45 @@ add_env NODE_KEY "$NODE_KEY"
 add_env ACCESS_TOKEN "$ACCESS_TOKEN"
 add_env IPDB "$OPT_IPDB"
 
+# 用户级 unit 目录（~/.config/systemd/user）默认可能不存在
+mkdir -p "$(dirname "$SERVICE_FILE")"
+
 cat > "$SERVICE_FILE" << EOF
 [Unit]
 Description=Lemon IPW Backend Node
-After=network-online.target
-Wants=network-online.target
-
+${UNIT_NETWORK_LINES}
 [Service]
 Type=simple
-User=root
-WorkingDirectory=${INSTALL_DIR}
+${UNIT_USER_LINE}WorkingDirectory=${INSTALL_DIR}
 ExecStart=${INSTALL_DIR}/${BIN_BASE}
 ${ENV_LINES}Restart=always
 RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=${UNIT_WANTED_BY}
 EOF
 
 # ---------- 启动服务 ----------
 
-systemctl daemon-reload
-systemctl enable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
+sc daemon-reload
+sc enable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
 sleep 2
-if ! systemctl is-active --quiet "$SERVICE_NAME"; then
+if ! sc is-active --quiet "$SERVICE_NAME"; then
     echo "错误：服务未能启动，最近日志：" >&2
-    journalctl -u "$SERVICE_NAME" --no-pager -n 20 >&2 || true
+    jc -u "$SERVICE_NAME" --no-pager -n 20 >&2 || true
     exit 1
+fi
+
+# 用户级服务默认随最后一个会话结束而停止，注销后要继续跑必须开 linger
+if [ "$SYSTEMD_MODE" = "user" ]; then
+    if loginctl show-user "$(id -un)" -p Linger 2>/dev/null | grep -q 'Linger=yes'; then
+        echo "linger 已启用：用户注销后服务继续运行"
+    elif loginctl enable-linger "$(id -un)" >/dev/null 2>&1; then
+        echo "已启用 linger：用户注销后服务继续运行"
+    else
+        echo "提示：未能自动启用 linger，注销后服务会被停止。请手动执行：" >&2
+        echo "      sudo loginctl enable-linger $(id -un)" >&2
+    fi
 fi
 
 # ---------- 落一份信息备份（节点标识随机，记不住） ----------
