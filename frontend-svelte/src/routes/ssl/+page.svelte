@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import CircleCheck from '@lucide/svelte/icons/circle-check';
-	import CircleX from '@lucide/svelte/icons/circle-x';
-	import Info from '@lucide/svelte/icons/info';
+	import CircleCheckFilled from '#lib/components/icons/CircleCheckFilled.svelte';
+	import CircleCloseFilled from '#lib/components/icons/CircleCloseFilled.svelte';
+	import InfoFilled from '#lib/components/icons/InfoFilled.svelte';
 	import { config } from '#lib/config/index.ts';
 	import { queryNodePool } from '#lib/node-pool.ts';
 	import { extractHost, getStatusCodeClass, formatTime, formatSpeed } from '#lib/tools.ts';
@@ -333,11 +333,11 @@
 	{#if result && result.ipv4 && result.ipv4.is_reachable && !result.ipv4.is_expired && (!result.ipv6 || (!result.ipv6.is_expired && result.ipv6.is_reachable))}
 		<div>
 			<h3>
-				结论：<CircleCheck class="inline-block size-[1em] align-[-0.12em] fill-current text-[lightgreen]" />
+				结论：<CircleCheckFilled class="ak-inline-icon text-[lightgreen]" />
 				网站{extractHost(testDomain)} 证书有效
 			</h3>
 			<p>
-				<Info class="inline-block size-[1em] align-[-0.12em] fill-current text-[lightgreen]" />
+				<InfoFilled class="ak-inline-icon text-[lightgreen]" />
 				请把下方代码贴到网站底部，把这个好消息告诉你的用户，以便用户核验。
 			</p>
 			{@render badges(SSL_BADGES)}
@@ -347,11 +347,11 @@
 	{#if result && result.ipv4 && result.ipv4.is_reachable && !result.ipv4.is_expired && result.ipv6 && result.ipv6.is_reachable && result.ipv6.is_expired}
 		<div>
 			<h3>
-				结论：<CircleCheck class="inline-block size-[1em] align-[-0.12em] fill-current text-[lightgreen]" />
+				结论：<CircleCheckFilled class="ak-inline-icon text-[lightgreen]" />
 				网站{extractHost(testDomain)} 证书有效,但不支持IPv6访问
 			</h3>
 			<p>
-				<Info class="inline-block size-[1em] align-[-0.12em] fill-current text-[lightgreen]" />
+				<InfoFilled class="ak-inline-icon text-[lightgreen]" />
 				请把下方代码贴到网站底部，把这个好消息告诉你的用户，以便用户核验。
 			</p>
 			{@render badges(SSL_BADGES)}
@@ -359,7 +359,7 @@
 	{:else if result && result.ipv4 && result.ipv4.is_reachable && result.ipv4.is_expired}
 		<div>
 			<h3>
-				结论：<CircleX class="inline-block size-[1em] align-[-0.12em] text-red-600" />
+				结论：<CircleCloseFilled class="ak-inline-icon text-[red]" />
 				网站{testDomain} 证书无效
 			</h3>
 			<h2>都没有证书了这网站还活啥</h2>
@@ -368,7 +368,7 @@
 	{:else if result && result.ipv4 && !result.ipv4.is_reachable && result.ipv6 && !result.ipv6.is_reachable}
 		<div>
 			<h3>
-				结论：<CircleX class="inline-block size-[1em] align-[-0.12em] text-red-600" />
+				结论：<CircleCloseFilled class="ak-inline-icon text-[red]" />
 				网站{testDomain} 不可达
 			</h3>
 			<h2>...</h2>

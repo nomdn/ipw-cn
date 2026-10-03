@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import CircleCheck from '@lucide/svelte/icons/circle-check';
-	import CircleX from '@lucide/svelte/icons/circle-x';
-	import Info from '@lucide/svelte/icons/info';
-	import MapPin from '@lucide/svelte/icons/map-pin';
+	import CircleCheckFilled from '#lib/components/icons/CircleCheckFilled.svelte';
+	import CircleCloseFilled from '#lib/components/icons/CircleCloseFilled.svelte';
+	import InfoFilled from '#lib/components/icons/InfoFilled.svelte';
+	import Position from '#lib/components/icons/Position.svelte';
 	import { config } from '#lib/config/index.ts';
 	import { queryNodePool } from '#lib/node-pool.ts';
 	import { extractHost, getStatusCodeClass, formatTime, formatSize, formatSpeed } from '#lib/tools.ts';
@@ -180,7 +180,7 @@
 						<td class="table-value">
 							<div class="one-line">
 								<a href={`/ipv6?ip=${result.ipv4.host_record}`}>{result.ipv4.host_record}</a>
-								<MapPin class="inline-block size-[1em] align-[-0.12em]" />
+								<Position class="ak-inline-icon" />
 							</div>
 						</td>
 						<td class="table-value">
@@ -190,7 +190,7 @@
 								{:else}
 									<span>-</span>
 								{/if}
-								<MapPin class="inline-block size-[1em] align-[-0.12em]" />
+								<Position class="ak-inline-icon" />
 							</div>
 						</td>
 					</tr>
@@ -281,11 +281,11 @@
 	{#if result && result.ipv4 && result.ipv6 && result.ipv4.is_reachable && result.ipv6.is_reachable}
 		<div>
 			<h3>
-				结论：<CircleCheck class="inline-block size-[1em] align-[-0.12em] fill-current text-[lightgreen]" />
+				结论：<CircleCheckFilled class="ak-inline-icon text-[lightgreen]" />
 				网站{extractHost(testDomain)} 支持IPv6访问
 			</h3>
 			<p>
-				<Info class="inline-block size-[1em] align-[-0.12em] fill-current text-[lightgreen]" />
+				<InfoFilled class="ak-inline-icon text-[lightgreen]" />
 				请把下方代码贴到网站底部，把这个好消息告诉你的用户，以便用户核验。
 			</p>
 			{@render badgeList(SITE_BADGES)}
@@ -296,7 +296,7 @@
 	{:else if result && result.ipv4 && result.ipv6 && result.ipv4.is_reachable && !result.ipv6.is_reachable}
 		<div>
 			<h3>
-				结论：<CircleX class="inline-block size-[1em] align-[-0.12em] text-red-600" />
+				结论：<CircleCloseFilled class="ak-inline-icon text-[red]" />
 				网站{extractHost(testDomain)} 不支持IPv6访问
 			</h3>
 			<h2>国家正在支持IPv6发展，我建议你赶紧想办法给IPv6适配</h2>
@@ -305,7 +305,7 @@
 	{:else if result && !result.ipv6?.is_reachable && !result.ipv4?.is_reachable}
 		<div>
 			<h3>
-				结论：<CircleX class="inline-block size-[1em] align-[-0.12em] text-red-600" />
+				结论：<CircleCloseFilled class="ak-inline-icon text-[red]" />
 				网站{extractHost(testDomain)} 不可达
 			</h3>
 			<h2>...</h2>
@@ -314,7 +314,7 @@
 	{:else if result && result.ipv4 && result.ipv6 && !result.ipv4.is_reachable && result.ipv6.is_reachable}
 		<div>
 			<h3>
-				结论：<CircleX class="inline-block size-[1em] align-[-0.12em] text-red-600" />
+				结论：<CircleCloseFilled class="ak-inline-icon text-[red]" />
 				网站{extractHost(testDomain)} 不支持IPv4访问
 			</h3>
 			<h2>

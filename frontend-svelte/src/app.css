@@ -14,7 +14,8 @@
    （见 frontend-ssr/app/style.css 的历史结论），链接色单独由 site.css 定义。
    ------------------------------------------------------------------ */
 :root {
-	--radius: 0.625rem;
+	/* 基础圆角 = element-plus 的 --el-border-radius-base（下面 @theme 里映射到 rounded-md/lg） */
+	--radius: 4px;
 
 	--background: oklch(1 0 0);
 	--foreground: oklch(0.145 0 0);
@@ -84,11 +85,26 @@
 	--sidebar-ring: oklch(0.556 0 0);
 }
 
+/*
+字体**不在这里处理**。旧站从头到尾没有设置过 font-family（element-plus 里那份
+--el-font-family 也从未被任何规则引用），所以它渲染的就是浏览器默认字体。
+Tailwind preflight 默认给的 `ui-sans-serif, system-ui, "Segoe UI", …` 栈在 Windows 上
+命中 Segoe UI Variable，中英文都比旧站细 —— 这就是「字体变细」的根因。
+处理方式（含实测字体指纹）见 `site.css` 第 1.5 节：把 font-family 还原成 UA 默认。
+这里刻意不再覆盖 --font-sans，免得页面里出现第二套字体口径。
+*/
+
+/*
+圆角：对齐 element-plus 的圆角阶梯（`--el-border-radius-small: 2px` /
+`--el-border-radius-base: 4px`），而不是 shadcn 默认的 10px —— 旧站的输入框、按钮、
+下拉弹层全是 4px，shadcn 默认的「大圆角」一眼就不是原版。
+不再用 `calc(var(--radius) ± Npx)` 那种链式推导：那样 lg 会等于 10px，与 EP 对不上。
+*/
 @theme inline {
-	--radius-sm: calc(var(--radius) - 4px);
-	--radius-md: calc(var(--radius) - 2px);
-	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) + 4px);
+	--radius-sm: 2px;
+	--radius-md: 4px;
+	--radius-lg: 4px;
+	--radius-xl: 6px;
 
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);

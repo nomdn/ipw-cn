@@ -1,18 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	// 图标走 `@lucide/svelte/icons/<name>` 子路径导入，而不是从包根 import：
-	// 包根的 dist/lucide-svelte.js 里有一句 `export * from './icons/index.js'`，
-	// 但发布出来的 tarball 里并没有 dist/icons/index.js（barrel 文件缺失），
-	// 于是从根导入会直接 "Module not found"。子路径导入同时也让 tree-shaking 更干净
-	// —— 这也是 shadcn-svelte 自己生成的组件采用的方式。
-	import Moon from '@lucide/svelte/icons/moon';
-	import Sun from '@lucide/svelte/icons/sun';
-	import MenuIcon from '@lucide/svelte/icons/menu';
+	import Expand from '#lib/components/icons/Expand.svelte';
+	import Moon from '#lib/components/icons/Moon.svelte';
+	import Sunny from '#lib/components/icons/Sunny.svelte';
+	import ArrowDown from '#lib/components/icons/ArrowDown.svelte';
 	import { config } from '#lib/config/index.ts';
 	import { menu, drawerLinks, isDocPath, type MenuEntry, type NavGroup, type NavItem } from '#lib/nav.ts';
 	import { resolveTheme, toggleTheme } from '#lib/theme.ts';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import DocMenu from '#lib/components/DocMenu.svelte';
@@ -32,6 +27,10 @@
 		menu.filter((e): e is NavItem | NavGroup => e.kind !== 'divider' && viewportWidth < e.minWidth)
 	);
 
+	// 断点必须与旧站完全一致：旧站用的是 matchMedia('(max-width: 768px)')。
+	// 这里刻意**不用 Tailwind 的 md: 变体** —— md 是 min-width:768px，在正好 768px 时
+	// 会和 max-width:768px 同时成立，窄屏布局和宽屏布局会一起冒出来（就是那个
+	// 「窄屏下出现两个汉堡按钮」的现象之一）。
 	function onResize() {
 		viewportWidth = window.innerWidth;
 		isNarrow = window.innerWidth <= 768;
@@ -46,166 +45,139 @@
 </script>
 
 <!--
-  顶栏。与旧站（element-plus 水平菜单）相比，这里换成语义化的 <header>/<nav>/<ul>/<li>/<a>：
-  旧站之所以要写一大堆 CSS 去压制 EP 的内部结构（把内层 a 撑满 li 以满足 target-size、
-  给装饰分隔线改回 tabindex、给 logo 链接补条件 aria-label），根因就是 EP 的 el-menu
-  会往 DOM 上写 role="menuitem" 与 tabindex。原生结构没有这些问题，代码量少一大截。
--->
-<header class="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur">
-	<div class="mx-auto flex h-16 max-w-[1800px] items-center gap-2 px-4">
-		<!-- logo：宽屏显示站名，窄屏只留图标 + 汉堡按钮 -->
-		<a
-			href="/"
-			class="flex shrink-0 items-center gap-2 text-foreground no-underline"
-			aria-label={isNarrow ? '返回首页' : undefined}
-		>
-			{#if isNarrow}
-				<MenuIcon class="size-6 md:hidden" aria-hidden="true" />
-			{/if}
-			<img
-				src="/favicon.svg"
-				alt=""
-				width="50"
-				height="50"
-				class="size-[38px] shrink-0"
-			/>
-			<h2 class="hidden text-lg font-semibold whitespace-nowrap md:inline-block">
-				{config.siteName}
-			</h2>
-		</a>
+  顶栏。结构对齐旧站的 el-menu（mode="horizontal"）：
 
-		<!-- 宽屏导航：SSR 先按宽屏渲染，水合后按真实视口折叠 -->
+    窄屏：[汉堡] [logo]  …  [明暗切换]
+    宽屏：[logo 站名] [菜单项…] [分隔线] [分组 ▾] … [更多 ▾] [明暗切换]
+
+  · logo 那一项带 margin-right:auto —— 宽屏余量顶在左侧、菜单整体靠右（旧站同款）；
+  · 全部分隔线、尺寸、hover 规则都在 site.css 的 .ak-menu-* 里，
+    数值取自 element-plus 源码（见那一节的注释），别在这里用 Tailwind 类拼尺寸，
+    否则折叠断点会整体失准；
+  · 汉堡图标只有**一个** —— 就在 logo 左侧，就是旧站 index 0 那一项里的 Expand 图标。
+    （之前 logo 链接里还塞了一个纯装饰的汉堡，加上真正的触发按钮，窄屏看起来是两个。）
+-->
+<header class="ak-header">
+	<ul class="ak-menu">
+		<li class="ak-menu-logo">
+			{#if isNarrow}
+				<Sheet.Root bind:open={drawerOpen}>
+					<Sheet.Trigger>
+						{#snippet child({ props })}
+							<button {...props} class="ak-menu-icon ak-menu-burger" aria-label="打开导航菜单">
+								<Expand />
+							</button>
+						{/snippet}
+					</Sheet.Trigger>
+					<!-- 抽屉宽度按旧站：文档路由 80%（要放整份文档目录），其它 60%。
+					     内容样式见 site.css 的 .ak-drawer*（照搬旧站对 el-drawer 的非 scoped 覆盖）。 -->
+					<Sheet.Content
+						side="left"
+						class={isDocRoute ? 'ak-drawer-sheet ak-drawer-sheet-doc' : 'ak-drawer-sheet'}
+					>
+						<nav class="ak-drawer" aria-label="移动端导航">
+							{#each drawerLinks as link (link.to)}
+								<a href={link.to} onclick={() => (drawerOpen = false)}>{link.label}</a>
+							{/each}
+							{#if !isDocRoute}
+								<!-- 非文档页抽屉里只留一个文档入口（旧站同款）：整份目录太长 -->
+								<a href="/doc" onclick={() => (drawerOpen = false)}>文档</a>
+							{:else}
+								<div class="ak-drawer-doc">
+									<DocMenu expandAll onSelect={() => (drawerOpen = false)} />
+								</div>
+							{/if}
+						</nav>
+					</Sheet.Content>
+				</Sheet.Root>
+			{/if}
+
+			<a href="/" aria-label={isNarrow ? '返回首页' : undefined}>
+				<img src="/favicon.svg" alt="" width="50" height="50" />
+				{#if !isNarrow}
+					<h2>{config.siteName}</h2>
+				{/if}
+			</a>
+		</li>
+
 		{#if !isNarrow}
-			<nav aria-label="主导航" class="hidden min-w-0 flex-1 md:block">
-				<ul class="flex items-center gap-1 pl-2">
-					{#each visible as entry (entry.kind === 'divider' ? `div-${entry.minWidth}` : entry.index)}
-						{#if entry.kind === 'item'}
-							<li>
-								<a
-									href={entry.to}
-									class="inline-flex h-9 items-center rounded-md px-3 text-sm whitespace-nowrap text-foreground no-underline hover:bg-muted"
-								>
-									{entry.label}
-								</a>
-							</li>
-						{:else if entry.kind === 'group'}
-							<li>
-								<DropdownMenu.Root>
-									<DropdownMenu.Trigger>
+			{#each visible as entry (entry.kind === 'divider' ? `div-${entry.minWidth}` : entry.index)}
+				{#if entry.kind === 'item'}
+					<li><a href={entry.to} class="ak-menu-item">{entry.label}</a></li>
+				{:else if entry.kind === 'group'}
+					<li>
+						<DropdownMenu.Root>
+							<DropdownMenu.Trigger>
+								{#snippet child({ props })}
+									<button {...props} class="ak-menu-group">
+										{entry.label}
+										<!-- 箭头与「展开时旋转 180°」都用 CSS 管：
+										     bits-ui 会把 data-state 写在触发按钮上（见 site.css）。 -->
+										<ArrowDown class="ak-menu-arrow" />
+									</button>
+								{/snippet}
+							</DropdownMenu.Trigger>
+							<DropdownMenu.Content align="start" class="ak-popover">
+								{#each entry.children as sub (sub.index)}
+									<DropdownMenu.Item>
 										{#snippet child({ props })}
-											<button
-												{...props}
-												class="inline-flex h-9 items-center rounded-md px-3 text-sm whitespace-nowrap hover:bg-muted"
-											>
-												{entry.label}
-											</button>
+											<a {...props} href={sub.to}>{sub.label}</a>
 										{/snippet}
-									</DropdownMenu.Trigger>
-									<DropdownMenu.Content align="start">
+									</DropdownMenu.Item>
+								{/each}
+							</DropdownMenu.Content>
+						</DropdownMenu.Root>
+					</li>
+				{:else}
+					<!-- 分组之间的竖分隔条：纯装饰，aria-hidden -->
+					<li aria-hidden="true" class="ak-menu-divider"></li>
+				{/if}
+			{/each}
+
+			<!-- 折叠项统一收进「更多」 -->
+			{#if hidden.length}
+				<li>
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							{#snippet child({ props })}
+								<button {...props} class="ak-menu-group">
+									更多
+									<ArrowDown class="ak-menu-arrow" />
+								</button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="start" class="ak-popover">
+							{#each hidden as entry (entry.index)}
+								{#if entry.kind === 'item'}
+									<DropdownMenu.Item>
+										{#snippet child({ props })}
+											<a {...props} href={entry.to}>{entry.label}</a>
+										{/snippet}
+									</DropdownMenu.Item>
+								{:else}
+									<DropdownMenu.Group>
+										<DropdownMenu.GroupHeading>{entry.label}</DropdownMenu.GroupHeading>
 										{#each entry.children as sub (sub.index)}
 											<DropdownMenu.Item>
 												{#snippet child({ props })}
-													<a {...props} href={sub.to} class="no-underline">{sub.label}</a>
+													<a {...props} href={sub.to}>{sub.label}</a>
 												{/snippet}
 											</DropdownMenu.Item>
 										{/each}
-									</DropdownMenu.Content>
-								</DropdownMenu.Root>
-							</li>
-						{:else}
-							<!-- 分组之间的竖分隔条：纯装饰，aria-hidden（旧站为了躲开 axe 的
-							     aria-hidden-focus / aria-required-attr 折腾过一轮，原生 span 没这问题）。 -->
-							<li aria-hidden="true" class="mx-1 h-5 w-px shrink-0 self-center bg-border"></li>
-						{/if}
-					{/each}
-
-					<!-- 折叠项统一收进「更多」 -->
-					{#if hidden.length}
-						<li>
-							<DropdownMenu.Root>
-								<DropdownMenu.Trigger>
-									{#snippet child({ props })}
-										<button
-											{...props}
-											class="inline-flex h-9 items-center rounded-md px-3 text-sm whitespace-nowrap hover:bg-muted"
-										>
-											更多
-										</button>
-									{/snippet}
-								</DropdownMenu.Trigger>
-								<DropdownMenu.Content align="start">
-									{#each hidden as entry (entry.index)}
-										{#if entry.kind === 'item'}
-											<DropdownMenu.Item>
-												{#snippet child({ props })}
-													<a {...props} href={entry.to} class="no-underline">{entry.label}</a>
-												{/snippet}
-											</DropdownMenu.Item>
-										{:else}
-											<DropdownMenu.Group>
-												<DropdownMenu.GroupHeading>{entry.label}</DropdownMenu.GroupHeading>
-												{#each entry.children as sub (sub.index)}
-													<DropdownMenu.Item>
-														{#snippet child({ props })}
-															<a {...props} href={sub.to} class="no-underline">{sub.label}</a>
-														{/snippet}
-													</DropdownMenu.Item>
-												{/each}
-											</DropdownMenu.Group>
-										{/if}
-									{/each}
-								</DropdownMenu.Content>
-							</DropdownMenu.Root>
-						</li>
-					{/if}
-				</ul>
-			</nav>
-		{:else}
-			<!-- 窄屏：汉堡按钮打开左侧抽屉（内挂工具链接；文档路由下追加文档导航） -->
-			<Sheet.Root bind:open={drawerOpen}>
-				<Sheet.Trigger>
-					{#snippet child({ props })}
-						<Button {...props} variant="ghost" size="icon" aria-label="打开导航菜单">
-							<MenuIcon class="size-5" aria-hidden="true" />
-						</Button>
-					{/snippet}
-				</Sheet.Trigger>
-				<Sheet.Content side="left" class="w-[70%] overflow-y-auto">
-					<Sheet.Header>
-						<Sheet.Title>{config.siteName}</Sheet.Title>
-					</Sheet.Header>
-					<nav aria-label="移动端导航" class="flex flex-col px-2 pb-6">
-						{#each drawerLinks as link (link.to)}
-							<a
-								href={link.to}
-								class="rounded-md px-3 py-3 text-[15px] text-foreground no-underline hover:bg-muted"
-								onclick={() => (drawerOpen = false)}
-							>
-								{link.label}
-							</a>
-						{/each}
-						{#if !isDocRoute}
-							<a
-								href="/doc"
-								class="rounded-md px-3 py-3 text-[15px] text-foreground no-underline hover:bg-muted"
-								onclick={() => (drawerOpen = false)}
-							>
-								文档
-							</a>
-						{:else}
-							<div class="mt-2 border-t border-border pt-2">
-								<DocMenu expandAll onSelect={() => (drawerOpen = false)} />
-							</div>
-						{/if}
-					</nav>
-				</Sheet.Content>
-			</Sheet.Root>
+									</DropdownMenu.Group>
+								{/if}
+							{/each}
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				</li>
+			{/if}
 		{/if}
 
-		<div class="ml-auto flex shrink-0 items-center">
-			<Button
-				variant="ghost"
-				size="icon"
+		<!-- 明暗切换：窄屏也保留（旧站 index 10 那一项没被窄屏规则隐藏，靠 logo 的
+		     margin-right:auto 顶到最右侧） -->
+		<li>
+			<button
+				class="ak-menu-icon"
 				aria-label="切换深色/浅色模式"
 				onclick={() => {
 					toggleTheme();
@@ -213,11 +185,11 @@
 				}}
 			>
 				{#if theme === 'dark'}
-					<Moon class="size-5" aria-hidden="true" />
+					<Moon />
 				{:else}
-					<Sun class="size-5" aria-hidden="true" />
+					<Sunny />
 				{/if}
-			</Button>
-		</div>
-	</div>
+			</button>
+		</li>
+	</ul>
 </header>

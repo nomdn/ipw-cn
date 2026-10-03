@@ -6,12 +6,16 @@
 	 * - 窄屏：页面那边把侧边栏整个隐藏，改由顶栏抽屉挂同一份本组件，
 	 *   这样手机上不需要两个菜单，也不至于没入口进文档。
 	 *
-	 * 旧站用 element-plus 的 el-menu/el-sub-menu 实现；这里换成一个数据树 + 原生 ul 与 a 标签：
+	 * 旧站用 element-plus 的 el-menu/el-sub-menu 实现，观感（56px 行高、左右 20px、
+	 * 14px 字、#303133、选中转品牌绿、hover 底色 light-9、分组展开是高度过渡）全部落在
+	 * site.css 的 `.ak-doc-*` 里，数值与 element-plus 源码逐条对应，别在这里用 Tailwind 拼。
+	 *
 	 * 展开态自己管（Svelte 5 的 $state），不再受 EP 的 default-openeds 影响
 	 * （旧站还得靠 `:key` 强制重挂才能让抽屉里的分组重新初始化）。
 	 */
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
+	import ArrowRight from '#lib/components/icons/ArrowRight.svelte';
 	import { cn } from '#lib/utils.js';
 
 	interface DocGroup {
@@ -104,57 +108,87 @@
 
 	const currentPath = $derived(page.url.pathname);
 
-	function itemClass(to: string) {
-		return cn(
-			'block rounded-md px-3 py-2 text-sm leading-snug no-underline hover:bg-muted',
-			currentPath === to ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'
-		);
+	function isActive(to: string) {
+		return currentPath === to;
 	}
 </script>
 
-<nav aria-label="文档导航" class={cn('flex flex-col gap-0.5 text-sm', className)}>
-	{#each navTree as node (('to' in node ? node.to : node.title))}
-		{#if 'to' in node}
-			<a href={node.to} class={itemClass(node.to)} onclick={onSelect}>{node.label}</a>
-		{:else}
-			{@const group = node as DocGroup}
-			<button
-				type="button"
-				class="flex items-center justify-between rounded-md px-3 py-2 text-left text-sm font-medium hover:bg-muted"
-				aria-expanded={opened.includes(group.title)}
-				onclick={() => toggle(group.title)}
-			>
-				<span>{group.title}</span>
-				<span aria-hidden="true" class="text-muted-foreground">{opened.includes(group.title) ? '−' : '+'}</span>
-			</button>
-			<!-- 收起用 hidden 属性控制，而不是 {#if} 把整块从 DOM 里摘掉：
-			     链接必须留在 SSR 产物里。旧站的 el-menu 是 display 级折叠，36 条链接
-			     本来就都在 HTML 中；换成 {#if} 后爬虫和不执行 JS 的场景就只剩 4 个
-			     折叠按钮，等于把整棵文档目录藏起来了。hidden 同样是 display:none，
-			     可见性与无障碍树（screen reader）表现和 {#if} 完全一致。 -->
-			<ul hidden={!opened.includes(group.title)} class="mb-1 flex flex-col gap-0.5 border-l border-border pl-2">
-				{#each group.items ?? [] as item (item.to)}
-					<li><a href={item.to} class={itemClass(item.to)} onclick={onSelect}>{item.label}</a></li>
-				{/each}
-				{#each group.groups ?? [] as sub (sub.title)}
-					<li>
-						<button
-							type="button"
-							class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-muted"
-							aria-expanded={opened.includes(sub.title)}
-							onclick={() => toggle(sub.title)}
-						>
-							<span>{sub.title}</span>
-							<span aria-hidden="true" class="text-muted-foreground">{opened.includes(sub.title) ? '−' : '+'}</span>
-						</button>
-						<ul hidden={!opened.includes(sub.title)} class="flex flex-col gap-0.5 border-l border-border pl-2">
-							{#each sub.items ?? [] as item (item.to)}
-								<li><a href={item.to} class={itemClass(item.to)} onclick={onSelect}>{item.label}</a></li>
+<!--
+  收起的分组**必须留在 DOM 里**：/doc/** 走 SSG，预渲染的爬虫靠 HTML 里的 <a> 才能把
+  32 篇文档全部枚举出来（旧站 el-menu 是 display 级折叠，链接本来就在 HTML 中）。
+  所以这里不用 {#if}，而是切 .ak-collapse 的 grid-template-rows（0fr → 1fr）做高度过渡，
+  效果等价于 EP 的折叠动画；收起时额外把它置为 visibility:hidden，
+  免得高度为 0 的链接还能被 Tab 焦点进去。
+-->
+<nav aria-label="文档导航" class={cn('ak-doc-menu', className)}>
+	<ul class="ak-doc-list">
+		{#each navTree as node (('to' in node ? node.to : node.title))}
+			{#if 'to' in node}
+				<li>
+					<a
+						href={node.to}
+						class="ak-doc-item"
+						class:is-active={isActive(node.to)}
+						onclick={onSelect}>{node.label}</a
+					>
+				</li>
+			{:else}
+				{@const group = node as DocGroup}
+				{@const isOpen = opened.includes(group.title)}
+				<li>
+					<button
+						type="button"
+						class="ak-doc-item"
+						aria-expanded={isOpen}
+						onclick={() => toggle(group.title)}
+					>
+						<span>{group.title}</span>
+						<ArrowRight class={cn('ak-doc-arrow', isOpen && 'is-open')} />
+					</button>
+					<div class="ak-collapse" class:is-open={isOpen}>
+						<ul class="ak-doc-list">
+							{#each group.items ?? [] as item (item.to)}
+								<li>
+									<a
+										href={item.to}
+										class="ak-doc-item"
+										class:is-active={isActive(item.to)}
+										onclick={onSelect}>{item.label}</a
+									>
+								</li>
+							{/each}
+							{#each group.groups ?? [] as sub (sub.title)}
+								{@const subOpen = opened.includes(sub.title)}
+								<li>
+									<button
+										type="button"
+										class="ak-doc-item"
+										aria-expanded={subOpen}
+										onclick={() => toggle(sub.title)}
+									>
+										<span>{sub.title}</span>
+										<ArrowRight class={cn('ak-doc-arrow', subOpen && 'is-open')} />
+									</button>
+									<div class="ak-collapse" class:is-open={subOpen}>
+										<ul class="ak-doc-list">
+											{#each sub.items ?? [] as item (item.to)}
+												<li>
+													<a
+														href={item.to}
+														class="ak-doc-item"
+														class:is-active={isActive(item.to)}
+														onclick={onSelect}>{item.label}</a
+													>
+												</li>
+											{/each}
+										</ul>
+									</div>
+								</li>
 							{/each}
 						</ul>
-					</li>
-				{/each}
-			</ul>
-		{/if}
-	{/each}
+					</div>
+				</li>
+			{/if}
+		{/each}
+	</ul>
 </nav>

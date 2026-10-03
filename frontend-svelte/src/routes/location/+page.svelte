@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import CircleCheck from '@lucide/svelte/icons/circle-check';
-	import CircleX from '@lucide/svelte/icons/circle-x';
+	import CircleCheckFilled from '#lib/components/icons/CircleCheckFilled.svelte';
+	import CircleCloseFilled from '#lib/components/icons/CircleCloseFilled.svelte';
 	import { config } from '#lib/config/index.ts';
 	import { queryNodePool } from '#lib/node-pool.ts';
 	import { visitorIP, visitorIsIPv6 } from '#lib/visitor-ip.svelte.ts';
@@ -200,12 +200,12 @@
 	<div style="font-size: 1.5em;">
 		{#if visitorIsIPv6()}
 			<h3>
-				<CircleCheck class="inline-block size-[1em] align-[-0.12em] fill-current text-[lightgreen]" />
+				<CircleCheckFilled class="ak-inline-icon text-[lightgreen]" />
 				您的网络IPv6优先
 			</h3>
 		{:else if visitorIP()}
 			<h3>
-				<CircleX class="inline-block size-[1em] align-[-0.12em] text-red-600" />
+				<CircleCloseFilled class="ak-inline-icon text-[red]" />
 				您的网络IPv4优先
 			</h3>
 		{/if}

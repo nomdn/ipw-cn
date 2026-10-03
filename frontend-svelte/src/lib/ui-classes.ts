@@ -1,26 +1,18 @@
 /**
- * 工具页里输入框 / 按钮 / 下拉框的统一尺寸。
+ * 工具页里输入框 / 按钮 / 下拉框的统一类名。
  *
- * 旧站是靠 `assets/css/tool-common.css` 里的 `.el-input / .el-button / .el-select`
- * 硬覆盖 element-plus 的组件尺寸（50px 高、420px 宽、1.3em 字），窄屏再整体改成
- * 100% 宽 / 40px 高 / 0.9em 字。EP 换成 shadcn-svelte 之后，同样的效果落在
- * Tailwind 类上 —— 但它散在 13 个页面里各写一遍，漏一个就会和别的页面对不齐，
- * 所以集中在这里，页面只 import 常量。
+ * 旧站靠 `assets/css/tool-common.css` 直接覆盖 element-plus 的 `.el-input /
+ * .el-button / .el-select`（50px 高、420px 宽、1.3em 字，窄屏整体 100% 宽 / 40px 高）。
+ * EP 换成 shadcn-svelte 之后，尺寸与配色落在 `src/lib/styles/site.css` 的
+ * `.ak-input / .ak-button / .ak-select` 上（那里是**无层**样式，优先级高于组件库
+ * 自带的 h-8 / rounded-lg / text-sm），这里只做常量导出，避免在 13 个页面里各写一遍。
  *
- * 为什么不用 `@apply` 写进 site.css：`max-md:` 这类带断点的变体只能用 Tailwind 语法，
- * 而 shadcn 组件的 `class` 是通过 `cn()`（= clsx + tailwind-merge）合并的，
- * 只有以字符串形式传进去的类才会参与冲突消解（后写的覆盖组件自带的 h-9 / text-sm）。
+ * 为什么不把尺寸写成 Tailwind 类：
+ *   ① 无层样式优先级高于 @layer utilities，写了 `h-[50px]` 也会被 `.ak-input` 盖掉；
+ *   ② 窄屏那套「100% 宽 / 40px 高」写进 CSS 的 @media 更省事，也不用担心
+ *      shadcn 组件的 class 被 `cn()`（tailwind-merge）消解掉。
  */
-const FIELD_BASE = 'h-[50px] text-[1.3em] max-md:h-10 max-md:text-[0.9em]';
-
-/** 主输入框：420px 宽，与旧站 .el-input 一致 */
-export const INPUT_CLASS = `${FIELD_BASE} w-[420px] max-w-full mr-2.5 max-md:mr-0 max-md:mb-2.5 max-md:w-full`;
-
-/** 次要输入框（如端口号）：200px 宽 */
-export const INPUT_NARROW_CLASS = `${FIELD_BASE} w-[200px] max-w-full mr-2.5 max-md:mr-0 max-md:mb-2.5 max-md:w-full`;
-
-/** 主按钮：165px 宽 */
-export const BUTTON_CLASS = `${FIELD_BASE} w-[165px] shrink-0 max-md:w-full`;
-
-/** 下拉框（DNS 记录类型）：150px 宽 */
-export const SELECT_CLASS = `h-[50px] w-[150px] max-md:h-10 max-md:w-full max-md:mb-2.5 mr-2.5 max-md:mr-0`;
+export const INPUT_CLASS = 'ak-input';
+export const INPUT_NARROW_CLASS = 'ak-input ak-input--narrow';
+export const BUTTON_CLASS = 'ak-button';
+export const SELECT_CLASS = 'ak-select';

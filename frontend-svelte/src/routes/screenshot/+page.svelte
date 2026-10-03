@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import Loading from '#lib/components/icons/Loading.svelte';
 	import { config } from '#lib/config/index.ts';
 	import { visitorIP, visitorIsIPv6 } from '#lib/visitor-ip.svelte.ts';
 	import { INPUT_CLASS, BUTTON_CLASS } from '#lib/ui-classes.ts';
@@ -174,7 +174,7 @@
 			<div class="screenshot-container">
 				{#if loading && !imgLoaded}
 					<div class="loading-overlay">
-						<LoaderCircle class="size-10 animate-spin" aria-hidden="true" />
+						<Loading class="size-10 animate-spin" aria-hidden="true" />
 						<p>正在截图中...</p>
 					</div>
 				{/if}

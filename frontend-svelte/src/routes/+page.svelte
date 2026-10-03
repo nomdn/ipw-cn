@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { isIPv6 } from 'is-ip';
-	import CircleCheck from '@lucide/svelte/icons/circle-check';
-	import CircleX from '@lucide/svelte/icons/circle-x';
+	import CircleCheckFilled from '#lib/components/icons/CircleCheckFilled.svelte';
+	import CircleCloseFilled from '#lib/components/icons/CircleCloseFilled.svelte';
 	import { config } from '#lib/config/index.ts';
 	import { isIPv4 } from '#lib/tools.ts';
 
@@ -122,20 +122,19 @@
 	<div class="ip-priority">
 		{#if ipAddress && isIPv6(ipAddress)}
 			<h2>
-				<CircleCheck
-					class="inline-block size-[1em] align-[-0.12em] text-[lightgreen]"
-					aria-hidden="true"
-				/>
+				<!-- 图标换回 element-plus 的 CircleCheckFilled（几何数据同源），
+				     尺寸与颜色照旧站写法：图标 1em、lightgreen / red -->
+				<CircleCheckFilled class="inline-flex size-[1em]" style="color: lightgreen" />
 				您的网络IPv6优先
 			</h2>
 		{:else if ipAddress && isIPv4(ipAddress)}
 			<h2>
-				<CircleX class="inline-block size-[1em] align-[-0.12em] text-red-600" aria-hidden="true" />
+				<CircleCloseFilled class="inline-flex size-[1em]" style="color: red" />
 				您的网络IPv4优先
 			</h2>
 		{:else}
 			<h2>
-				<CircleX class="inline-block size-[1em] align-[-0.12em]" aria-hidden="true" />
+				<CircleCloseFilled class="inline-flex size-[1em]" />
 				查询中，请稍后
 			</h2>
 		{/if}
