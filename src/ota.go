@@ -51,22 +51,12 @@ const (
 // otaAssetBaseDefault 按版本下发且未指定 assetBase 时的默认发布地址
 const otaAssetBaseDefault = "https://github.com/nomdn/ipw-cn/releases/download"
 
-// parseOTASwitch 解析 OTA 开关的字面值——启动加载（ENV / setting.json）、远端下发、运行时 PATCH
-// 三处共用，保证什么算关闭的口径只有一份。
+// OTA 开关（node-ota）的字面值解析已并入 main.go 的 parseBoolSwitch —— 原先这里有一份
+// 独立的 parseOTASwitch（唯一认 yes/no 的），与 ipdb / block-private-ips / access-log
+// 各写一套，同一个字面值在四个开关上判定不一致。现在四条路径共用一张表。
 //
-// 语义是缺省允许、显式关闭（见本文件头）：true/1/yes/on 与空值都算开启，
-// false/0/no/off 算关闭。known=false 表示写法认不出来——运行时 PATCH 据此回
-// unknown 且不覆盖原值，启动期与远端下发则按缺省（允许）处理，不因一个手滑的
-// 字面值把节点锁死。
-func parseOTASwitch(raw string) (enabled, known bool) {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", "true", "1", "yes", "on":
-		return true, true
-	case "false", "0", "no", "off":
-		return false, true
-	}
-	return true, false
-}
+// 语义不变：缺省允许、显式关闭。启动时写法认不出来按缺省（允许）处理并告警，
+// 运行时 PATCH 则回 unknown 且不覆盖原值。
 
 // otaMu 单飞：同一时刻只允许一个 OTA 任务（重复下发直接拒绝）
 var otaMu sync.Mutex

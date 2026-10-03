@@ -4,20 +4,10 @@
     "single-stack": "",
     "dns-server": "",
     "dnssec-server": "",
-    "block-private-ips": true,
-    "ipdb": "false",
+    "ipdb": false,
     "cors": "",
-    "trusted-proxies": "",
-    "remote-config-url": "",
-    "remote-ignore-config": [],
     "access-token": "",
     "ws-url": "",
     "node-id": "",
-    "node-key": "",
-    "node-ota": "true",
-    "report-url": "",
-    "report-token": "",
-    "report-interval-seconds": 15,
-    "max-response-body": "32MB",
-    "memory-limit": ""
+    "node-key": ""
 }

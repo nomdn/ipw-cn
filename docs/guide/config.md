@@ -22,20 +22,40 @@
 - `dnssec-server`：**DNSSEC 专用** DNS 服务器（同样支持主从逗号分隔）；留空则沿用 `dns-server`；`dns-server` 与 `dnssec-server` **都留空时自动探测系统 DNS** 兜底
 - `block-private-ips`：SSRF 防护开关（拒绝出站连接内网/私有地址；探测目标命中私有网段时直接返回伪造结果，禁止跨跳重定向）
 - `single-stack`：单栈模式，`ipv4` / `ipv6` / 留空（双栈）。声明单栈的节点跳过另一栈的探测（直接返回 `Skipped due to SINGLE_STACK=...`），EdgeOne / Vercel 等 IPv4-only 环境建议设为 `ipv4`
-- `ipdb`：IP 数据库开关。**不配置时默认启用**（首次启动自动下载约 450MB，之后每 24h 更新）；仓库的 `setting.json.example` 里显式写为 `"false"`，即**示例配置是关闭状态**——关闭后不加载任何数据库，`/v1/location`、`/v1/asn` 路由不注册，适合只做网络拨测的轻量节点
+- `ipdb`：IP 数据库开关。**不配置时默认启用**（首次启动自动下载约 450MB，之后每 24h 更新）；仓库的 `setting.json.example` 里显式写为 `false`，即**示例配置是关闭状态**——关闭后不加载任何数据库，`/v1/location`、`/v1/asn` 路由不注册，适合只做网络拨测的轻量节点
 - `cors`：允许的请求来源（逗号分隔）
 - `trusted-proxies`：可信代理 IP/CIDR（逗号分隔，如 `"10.0.0.0/8,173.245.48.0/20"`）。配置后 `ClientIP` 与 `/v1/location` 归属地接口只信任这些代理转发的 `X-Forwarded-For`，直连公网的节点可防止访客伪造 XFF；**留空保持默认行为（信任所有代理，XFF 可被伪造）**
 - `access-token`：API 访问令牌，留空则不启用鉴权。**它同时是 HTTP 管理面的开关**：留空时 `/v1/config`、`/v1/ota` 整组返回 `403`，只能走 WS 通道管理
 - `gh-proxy`：GitHub 下载代理前缀（如 `"https://ghproxy.com/"`），用于 IP 数据库拉取与 OTA 下载加速；留空直连
 - `node-ota`：OTA 开关，缺省 `true`（允许收集中心下发）。设为 `false` 时节点拒绝一切 OTA 指令并回传原因，适合只读文件系统 / 编排托管（升级走各自部署渠道）的部署。**支持运行时热改**（`PATCH /v1/config` 或 WS `config` 下发即时生效，改后按新值判定后续 OTA 指令）
+- `access-log`：访问日志开关，缺省 `true`（每个请求输出一条 `http` 记录：method / path / status / latency_ms / ip）。设为 `false` 后不再输出访问日志，**适合高吞吐节点**——访问日志是每请求一次同步写，压测中即便业务逻辑极轻（`/` 健康检查）吞吐也会被它压住。关闭后 panic 兜底与其余日志不受影响，仍会记录 500 与堆栈。**支持运行时热改**（`PATCH /v1/config` 或 WS `config` 下发即时生效，无需重启）
 - `ws-url`：WS 通道地址——接入独立中间件的 WebSocket 地址（如 `"wss://middleware-1.api-ipw.wsmdn.top/ws"`，须含 `wss://` 前缀与 `/ws` 路径）；支持**逗号分隔多个中间件，同时连接全部（多活）**，任一断开只重连自己，不影响其他连接；留空 = 不启用 WS 客户端，走原 HTTP 接口
 - `node-id`：WS 节点 id（与中间件 `api-keys`/`ws-keys` 键、前端配置的节点 `id` 一致；建议用 UUID 唯一标识）
 - `node-key`：WS 注册 key（与中间件 `ws-keys[节点id]` 一致；**必填**——节点未配置该 key 时中间件拒绝注册并返回 401）
 - `report-url`：**数据上报收集中心** HTTP 基址（如 `"https://collector.example.com"`，即 ipw-boce 中间件）。节点把自身观测的统计/拨测按 `report-interval-seconds` 周期上报；`ws-url` 已启用时优先走 WS `report` 消息（所有已连接中间件广播），WS 未启用或全部掉线时 HTTP POST 到 `<report-url>/report` 兜底；远端配置可覆盖（在 `remote-ignore-config` 里加上 `report-url` 可禁止覆盖）
 - `report-token`：收集中心 `/report` 鉴权 token（与中间件 `report-token` 配置一致）；属凭据类键，GET 快照里遮蔽为 `***`；**不随远端配置覆盖**（硬编码保护，清单见本页末的「远端配置」一节）
 - `report-interval-seconds`：上报周期秒，缺省 15
+- `max-response-body`：单次拨测可读的响应体上限，**按解压后大小**算，缺省 `32MB`（33554432 字节）；支持裸数字与 `K`/`M`/`G` 后缀（`32MB` / `8M` / `1g` / `8MiB` 均可，大小写不敏感）。`detail` / `speed` / `ssl` 只需要一个字节数，正常网页远小于默认值；超过上限**直接返回错误，而不是截断上报**——报一个"截断后的大小/速度"比报错更误导人。**支持运行时热改**（`PATCH /v1/config` 下发即应用到出站客户端）
+- `memory-limit`：Go 运行时的**软**内存上限（等价 `GOMEMLIMIT`），字节数，写法同上；**留空（=0）表示自动取容器内存限额的 90%**，探测不到容器限额就不设置、保持 Go 默认 GC 行为。不设时 Go 只按 `GOGC` 比例回收，够不到突增，小内存机器上堆会一路涨到被内核 OOM kill，中间没有减速带。**软上限不是硬闸**：必要时运行时仍会越过它，只是付出更多 GC 代价。**支持运行时热改**
 
-以上字段均可用环境变量覆盖（`PORTS` / `SINGLE_STACK` / `DNS_SERVER` / `DNSSEC_DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `IPDB` / `CORS` / `TRUSTED_PROXIES` / `GH_PROXY` / `ACCESS_TOKEN` / `WS_URL` / `NODE_ID` / `NODE_KEY` / `NODE_OTA` / `REPORT_URL` / `REPORT_TOKEN` / `REPORT_INTERVAL_SECONDS`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）；`remote-ignore-config` 对应的环境变量为 `REMOTE_IGNORE_CONFIG`（JSON 数组字符串）。
+以上字段均可用环境变量覆盖（`PORTS` / `SINGLE_STACK` / `DNS_SERVER` / `DNSSEC_DNS_SERVER` / `BLOCK_PRIVATE_IPS` / `ACCESS_LOG` / `IPDB` / `CORS` / `TRUSTED_PROXIES` / `GH_PROXY` / `ACCESS_TOKEN` / `WS_URL` / `NODE_ID` / `NODE_KEY` / `NODE_OTA` / `REPORT_URL` / `REPORT_TOKEN` / `REPORT_INTERVAL_SECONDS` / `MAX_RESPONSE_BODY` / `MEMORY_LIMIT`）。需要从远端拉取配置时，设置 `remote-config-url` 或环境变量 `REMOTE_CONFIG_URL`（优先级：远端 > 环境变量 > setting.json）；`remote-ignore-config` 对应的环境变量为 `REMOTE_IGNORE_CONFIG`（JSON 数组字符串）。
+
+> [!TIP]
+> 后端字段共 22 个，`src/setting.json.example` 只列**最小可用集**（11 个：端口 / 代理 / 单栈 / DNS / IP 库 / CORS / 令牌 / WS 身份）——其余按需加，完整定义以本页为准。
+
+<a id="bool-switches"></a>
+
+> [!NOTE]
+> **四个开关（`ipdb` / `block-private-ips` / `node-ota` / `access-log`）共用一套字面值口径**（忽略大小写与首尾空白）：
+>
+> - 开：`true` / `1` / `yes` / `on` / `enable` / `enabled`
+> - 关：`false` / `0` / `no` / `off` / `disable` / `disabled`
+>
+> 不配置（空值）时各用各的默认值（`block-private-ips` / `node-ota` / `access-log` / `ipdb` 都缺省**开**）。JSON 里写布尔 `true` 或字符串 `"true"` 均可，两者解析结果一致。
+>
+> **认不出来的值不再静默当成"开"**：启动阶段告警并按默认值处理；`PATCH /v1/config` 与远端下发会把它计入应答的 `unknown` 并保留原值，便于发现拼错的键值。
+>
+> 历史差异（升级时注意）：旧版本里只有 `node-ota` 认 `yes`/`no`/`off`，在 `ipdb` / `block-private-ips` / `access-log` 上写 `no` / `off` 会被当成**开**，`ipdb` 还大小写敏感（`"False"` 也是开）。现在四个开关统一按上表判定。
 
 ### 运行时配置管理
 
@@ -51,7 +71,7 @@
 
 - **凭据类键不回显明文**：`access-token` / `node-key` / `report-token` 在快照里是 `***`。下发时必须剔除这些键，否则会把真值覆盖成三个星号（收集中心控制台已自动剔除）。
 - **凭据类键中 `access-token` / `report-token` 不受远端配置影响**：它们被硬编码进节点侧的保护名单（`configRemoteProtectedKeys`），远端配置里写了也会被跳过，并在应答 `protectedIgnored` 与日志中如实回报；本地 PATCH 不受此限。原因见本页末的「远端配置」一节。
-- **节点不自行重启**：`port` / `cors` / `ipdb` / `report-interval-seconds` / `trusted-proxies` / `node-id` / `node-key` / `access-token` 是启动期固定的，改动后在应答 `restartRequired` 里如实列出，但**不会自动重启**；只有"值真的变了"才报，避免每次全量下发都误报。**`ws-url` 是例外，热生效**（控制器按新地址多退少补）；`dns-server` / `dnssec-server` / `block-private-ips` / `single-stack` / `node-ota` 每次消费重读，同样即时生效。
+- **节点不自行重启**：`port` / `cors` / `ipdb` / `report-interval-seconds` / `trusted-proxies` / `node-id` / `node-key` / `access-token` 是启动期固定的，改动后在应答 `restartRequired` 里如实列出，但**不会自动重启**；只有"值真的变了"才报，避免每次全量下发都误报。**`ws-url` 是例外，热生效**（控制器按新地址多退少补）；`dns-server` / `dnssec-server` / `block-private-ips` / `single-stack` / `node-ota` / `access-log` / `max-response-body` / `memory-limit` 每次消费重读，同样即时生效。
 - **内存改动会被重启顶掉**：节点侧优先级为 远端 > 环境变量 > `setting.json`。只 PATCH 内存（或 `persist` 写本地文件）时，重启后仍可能被 ENV 顶掉；要长期生效应 **`refresh`**（改远端配置）或把改动合并进托管配置。
 
 > [!NOTE]

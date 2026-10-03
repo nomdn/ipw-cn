@@ -113,7 +113,8 @@ func protectedKeysIn(cfg map[string]any) []string {
 // （ws.go 的 reconcileWSClient）按新地址多退少补，连接集合随配置变化，无需重启。
 //
 // 不在其中的键即为热生效：`dns-server` / `dnssec-server` / `block-private-ips` /
-// `single-stack` / `node-ota` 每次消费时重新读变量。
+// `single-stack` / `node-ota` / `access-log` 每次消费时重新读变量
+// （`access-log` 的中间件虽在启动时挂载，但开关判定在请求路径上，因此同样热生效）。
 //
 // 判定口径：只有**值真的变了**才算需重启（见 applyConfigMap）——远端/托管配置每次都带全部键，
 // 若按"键出现过"判定，每次 refresh 都会把节点误报成"需重启"。
@@ -184,13 +185,23 @@ func applyConfigMap(cfg map[string]any, ignore []string) (applied, unknown, rest
 			webtest.SetDNSSecServer(v)
 		case "ipdb":
 			// 仅改变量不够：ipdb.Init 与 location/asn 路由注册都在启动时按该值判定，运行中不重建
-			IPDB = v
+			enabled, known := parseBoolSwitch(v)
+			if !known {
+				unknown = append(unknown, key)
+				continue
+			}
+			IPDB_ENABLED = enabled
 		case "cors":
 			CORS = v
 			ACCEPT_DOMAINS = splitAndTrim(CORS, ",")
 		case "block-private-ips":
-			// 与启动口径共用 configDisabled（main.go），避免"启动认 false、热更新认 FALSE"这类漂移
-			ssrf.SetEnabled(!configDisabled(v))
+			// 与启动口径共用 parseBoolSwitch（main.go），避免"启动认 false、热更新认 FALSE"这类漂移
+			enabled, known := parseBoolSwitch(v)
+			if !known {
+				unknown = append(unknown, key) // 值非法：不覆盖原值，明确报给调用方
+				continue
+			}
+			ssrf.SetEnabled(enabled)
 		case "trusted-proxies":
 			TRUSTED_PROXIES = v
 		case "remote-config-url":
@@ -231,12 +242,21 @@ func applyConfigMap(cfg map[string]any, ignore []string) (applied, unknown, rest
 			REPORT_INTERVAL = n
 		case "node-ota":
 			// 热生效：下发 OTA 指令时才读 NODE_OTA（见 ota.go），故不在 configRestartKeys
-			enabled, known := parseOTASwitch(v)
+			enabled, known := parseBoolSwitch(v)
 			if !known {
 				unknown = append(unknown, key) // 值非法：不覆盖原值，明确报给调用方
 				continue
 			}
 			NODE_OTA = enabled
+		case "access-log":
+			// 热生效：中间件在请求路径上实时读 ACCESS_LOG（见 accessLogMiddleware），
+			// 中间件本身在启动时就已挂好，所以这里改完即生效、无需重启。
+			enabled, known := parseBoolSwitch(v)
+			if !known {
+				unknown = append(unknown, key) // 值非法：不覆盖原值，明确报给调用方
+				continue
+			}
+			ACCESS_LOG = enabled
 		case "max-response-body":
 			// 热生效：改完即应用到出站客户端（applyResponseBodyLimit 内部有锁）
 			n, ok := parseByteSize(v)
@@ -296,7 +316,7 @@ func restartKeyValue(key string) string {
 	case "cors":
 		return CORS
 	case "ipdb":
-		return IPDB
+		return strconv.FormatBool(IPDB_ENABLED)
 	case "trusted-proxies":
 		return TRUSTED_PROXIES
 	case "ws-url":
@@ -321,7 +341,7 @@ func configSnapshot() map[string]any {
 		"single-stack":            SINGLE_STACK,
 		"dns-server":              DNS_SERVER,
 		"dnssec-server":           DNSSEC_DNS_SERVER,
-		"ipdb":                    IPDB,
+		"ipdb":                    IPDB_ENABLED,
 		"cors":                    CORS,
 		"block-private-ips":       ssrf.Enabled(),
 		"trusted-proxies":         TRUSTED_PROXIES,
@@ -330,6 +350,7 @@ func configSnapshot() map[string]any {
 		"ws-url":                  WS_URL,
 		"node-id":                 WS_NODE_ID,
 		"node-ota":                NODE_OTA,
+		"access-log":              ACCESS_LOG,
 		"max-response-body":       MAX_RESPONSE_BODY,
 		"memory-limit":            MEMORY_LIMIT,
 		"report-url":              REPORT_URL,

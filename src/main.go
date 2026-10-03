@@ -251,7 +251,7 @@ var (
 	sfGroup              singleflight.Group
 	V6Client             *resty.Client
 	V4Client             *resty.Client
-	IPDB                 string
+	IPDB_ENABLED         bool // IP 数据库开关（ipdb / IPDB）：缺省开；关闭则不加载数据库、不注册 /v1/location 与 /v1/asn
 	CORS                 string
 	ACCEPT_DOMAINS       []string
 	ACCESS_TOKEN         string
@@ -267,6 +267,7 @@ var (
 	NODE_OTA             bool       // OTA 升级开关（node-ota / NODE_OTA）：缺省允许收集中心下发；只读容器等不可自更新部署显式设 false，节点拒绝指令并回传原因
 	MAX_RESPONSE_BODY    int64      // 单次拨测可读的响应体上限（字节，解压后；max-response-body / MAX_RESPONSE_BODY），<=0 不限制，详见 resources.go
 	MEMORY_LIMIT         int64      // Go 运行时软内存上限（字节；memory-limit / MEMORY_LIMIT），<=0 表示自动探测 cgroup，详见 resources.go
+	ACCESS_LOG           bool       // 访问日志开关（access-log / ACCESS_LOG）：缺省开；显式 false 后每个请求不再写一条 slog（panic 兜底与其余日志不受影响），可热更新
 	fiberApp             *fiber.App // 显式持有的 Fiber 应用（收到退出信号时优雅停机需要先 Shutdown）
 	VERSION              string
 	COMMIT               string
@@ -1055,8 +1056,16 @@ func nodeReportMiddleware() fiber.Handler {
 // 对应 gin.Default() 里那个 Logger。这里用 fiber 官方的 logger 中间件承接，但把输出改投 slog：
 // 节点其余日志都走 slog（默认落 stderr），访问日志并进同一路输出，journalctl / 日志采集侧才是统一的；
 // fiber 内置格式还会按终端能力加 ANSI 颜色，重定向到文件时是转义乱码。
+//
+// 开关（access-log / ACCESS_LOG，缺省开）：**在请求路径上实时判定**，而不是在启动时决定挂不挂，
+// 于是 PATCH /v1/config 或远端下发改完即生效、无需重启。关掉后连 logger 的计时与字段拼接都不做
+// （直接 c.Next() 放行）——访问日志是每请求一次同步写，正是压测里把节点卡住的头号嫌疑，
+// 关掉才能拿到真实的业务吞吐。
+//
+// 注意：它只管访问日志。panic 兜底（recoverMiddleware）与业务/启动日志都不受影响，
+// 关掉访问日志不会让节点变成"出事无迹可查"。
 func accessLogMiddleware() fiber.Handler {
-	return logger.New(logger.Config{
+	logHandler := logger.New(logger.Config{
 		// 保留默认模板：它同时决定中间件是否开启 ${latency} 计时（fiber logger.New 里按模板里
 		// 有没有 ${latency} 判断）。真正的输出由下面的 LoggerFunc 接管，不走模板渲染。
 		Format: logger.DefaultFormat,
@@ -1081,6 +1090,14 @@ func accessLogMiddleware() fiber.Handler {
 			return nil
 		},
 	})
+
+	// 关掉时整条中间件短路，不进 logger（见上方注释）。
+	return func(c fiber.Ctx) error {
+		if !ACCESS_LOG {
+			return c.Next()
+		}
+		return logHandler(c)
+	}
 }
 
 // recoverMiddleware 兜住 handler 里的 panic：记一条带栈的日志，把响应收敛成 500，而不是让整个进程死掉。
@@ -1262,17 +1279,49 @@ func configStringSlice(envKey, cfgKey string) []string {
 	return list
 }
 
-// configDisabled 判断开关类配置是否被显式关闭：仅 "false" / "0"（大小写不敏感）。
-// 其余值（含空串、拼错的值）一律视为开启 —— 与组件历史口径一致：安全开关默认开，
-// 只有"确实写对了关闭值"才关。
+// parseBoolSwitch 开关类字面值的**唯一**解析表：四个开关（ipdb / block-private-ips /
+// node-ota / access-log）在启动读取、远端下发、运行时 PATCH 三条路径上都走这里。
 //
-// 用到的地方：block-private-ips（启动在这里、热更新在 applyConfigMap）、node-ota。
-func configDisabled(v string) bool {
-	switch strings.ToLower(strings.TrimSpace(v)) {
-	case "false", "0":
-		return true
+// 统一之前的四种口径（同一个 "no" 在 node-ota 上是关、在另外三个上静默当开，运维侧推不出来）：
+//
+//	ipdb              IPDB != "false"        —— 大小写敏感，连 "False" 都算开
+//	block-private-ips 仅 "false"/"0" 算关     —— "no"/"off" 静默当开
+//	access-log        仅 "false"/"0" 算关     —— 同上
+//	node-ota          true/1/yes/on + false/0/no/off —— 唯一认 yes/no 的
+//
+// 现在四条共用一张表（忽略大小写与首尾空白）：
+//
+//	真：true / 1 / yes / on / enable / enabled
+//	假：false / 0 / no / off / disable / disabled
+//
+// 空串（未配置）与不认识的串一律返回 known=false —— 本函数只做"字面值 → 布尔"的翻译，
+// 不替调用方决定默认值。由调用方处置：启动阶段告警并落默认值，PATCH / 远端下发计入 unknown
+// 并保留原值 —— 关键点是**绝不静默把拼错的值当成"开"**，那正是旧口径最难查的地方。
+func parseBoolSwitch(raw string) (val, known bool) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "true", "1", "yes", "on", "enable", "enabled":
+		return true, true
+	case "false", "0", "no", "off", "disable", "disabled":
+		return false, true
 	}
-	return false
+	return false, false
+}
+
+// configBool 读取开关类配置（取值口径 env > setting.json > def），字面值交 parseBoolSwitch。
+// 值不认识的告警并落 def —— 启动阶段没有"回报给请求方"的通道，只能告警。
+// 运行中的 PATCH 不走这里，走 applyConfigMap 里的 parseBoolSwitch 以便计入 unknown。
+func configBool(envKey, cfgKey string, def bool) bool {
+	raw := configString(envKey, cfgKey, "")
+	if strings.TrimSpace(raw) == "" {
+		return def
+	}
+	val, known := parseBoolSwitch(raw)
+	if !known {
+		slog.Warn("Invalid boolean config, falling back to default",
+			"key", cfgKey, "value", raw, "default", def)
+		return def
+	}
+	return val
 }
 
 // readConfig 启动配置的唯一读取入口（取值口径与职责边界见上方注释块）。
@@ -1288,7 +1337,10 @@ func readConfig() {
 	PORTS = configString("PORTS", "port", "8080")
 	GH_PROXY = configString("GH_PROXY", "gh-proxy", "")
 	CORS = configString("CORS", "cors", "")
-	IPDB = configString("IPDB", "ipdb", "")
+	// IP 数据库开关：缺省开启（首次启动自动下载约 450MB）。
+	// 与另外三个开关同一口径（configBool），不再用 `IPDB != "false"` 那种大小写敏感的字符串比较
+	// —— 旧写法下 `ipdb: "False"` / `"no"` 都会被当成"开"，同一个值跟 node-ota 的判定还相反。
+	IPDB_ENABLED = configBool("IPDB", "ipdb", true)
 	TRUSTED_PROXIES = configString("TRUSTED_PROXIES", "trusted-proxies", "")
 	ACCESS_TOKEN = configString("ACCESS_TOKEN", "access-token", "")
 
@@ -1303,9 +1355,13 @@ func readConfig() {
 	// SSRF 防护开关：缺省开启（见 ssrf 包）。
 	// 注意必须在 viper.ReadInConfig 之后读：早期版本只读 ENV，setting.json 里的同名键在启动阶段
 	// 被静默忽略（只有运行中 patch / 远端配置才生效），与其余键的"env > setting.json"口径不一致。
-	ssrf.SetEnabled(!configDisabled(configString("BLOCK_PRIVATE_IPS", "block-private-ips", "true")))
-	// OTA 升级开关：仅显式关闭才禁用（缺省允许收集中心下发 OTA，见 ota.go）
-	NODE_OTA, _ = parseOTASwitch(configString("NODE_OTA", "node-ota", "true"))
+	ssrf.SetEnabled(configBool("BLOCK_PRIVATE_IPS", "block-private-ips", true))
+	// OTA 升级开关：缺省允许收集中心下发 OTA（见 ota.go）
+	NODE_OTA = configBool("NODE_OTA", "node-ota", true)
+
+	// 访问日志开关：缺省开启（见 accessLogMiddleware）。
+	// 判定在请求路径上做，故运行中热改即时生效。
+	ACCESS_LOG = configBool("ACCESS_LOG", "access-log", true)
 
 	// —— 远端配置源 ——
 	REMOTE_CONFIG_URL = configString("REMOTE_CONFIG_URL", "remote-config-url", "")
@@ -1500,7 +1556,7 @@ func newFiberApp() *fiber.App {
 		bizGet(v1, "/whois/:domain", whoisHandler)
 		bizGet(v1, "/speed/:version/*", websiteSpeedTestHandler)
 
-		if IPDB != "false" {
+		if IPDB_ENABLED {
 			bizGet(v1, "/location/:ip", locateIP)
 			bizGet(v1, "/location", locateUserIP)
 			bizGet(v1, "/asn/:ip", asnLookupHandler)
@@ -1558,7 +1614,7 @@ func main() {
 	initHTTPClients()
 	// 注入出站 HTTP 客户端到 webtest（探针函数内部按版本取用）
 	webtest.SetHTTPClient(V4Client, V6Client)
-	if IPDB != "false" {
+	if IPDB_ENABLED {
 		ipdb.Init(GH_PROXY)
 	}
 
