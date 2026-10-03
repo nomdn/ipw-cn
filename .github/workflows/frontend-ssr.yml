@@ -1,11 +1,15 @@
-name: Build and Deploy to Cloudflare Workers
+name: (已停用自动部署) frontend-ssr → Cloudflare Workers
 
+# 前端已迁移到 frontend-svelte（SvelteKit + shadcn-svelte，包管理器 bun），
+# 自动部署改由 .github/workflows/frontend-svelte.yml 负责。
+#
+# 这里**刻意去掉 push 触发**：两个 workflow 都部署同名 Worker（wrangler.jsonc 里的 "ipw-cn"），
+# 若继续按 push 触发，改 frontend-ssr 会把新前端的线上版本覆盖掉。
+# 保留 workflow_dispatch 只是为了万一还需要临时用旧站顶一下（手动触发）。
+# 新前端确认稳定后，这个文件可以直接删除。
 on:
-  push:
-    branches: ['main']
-    paths:
-      - 'frontend-ssr/**'
   workflow_dispatch:
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

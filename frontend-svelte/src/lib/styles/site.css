@@ -1,0 +1,536 @@
+/* ------------------------------------------------------------------
+   site.css —— 站点自有样式（从 frontend-ssr/app/style.css +
+   assets/css/tool-common.css 平移）
+
+   与 app.css 的分工：
+     app.css   = Tailwind v4 + shadcn-svelte 设计令牌（组件库的地基）
+     site.css  = 站点自身的排版 / 结果表格 / 代码块 / 页脚（旧站观感原样保留）
+   两者都在 +layout.svelte 里引入，site.css 在后，因此它能覆盖基础层。
+
+   迁移时做的三件改动：
+   1. 删掉所有 `:deep(...)` 包装（那是 Vue scoped CSS 的语法，Svelte 用不上，
+      这里的选择器本来就是全局的）；
+   2. 去掉 element-plus 的 `.el-input / .el-button / .el-select` 定尺寸规则 ——
+      这些控件换成 shadcn-svelte 后由各页面的 Tailwind 类控制（见 ToolPage 组件）；
+   3. 补上旧站写在 app.vue 里、实际作用于 <html> 的规则（`html.dark` 底色等），
+      在 Svelte 里直接写进本文件即可（不再有 scoped 改写的坑）。
+   ------------------------------------------------------------------ */
+
+/* 暗色根元素：旧站写在 app.vue 的非 scoped 块里，这里合并进来。
+   shadcn 的令牌已在 app.css 的 .dark 里定义，这里只补旧站特有的观感。 */
+html.dark {
+	color: rgba(255, 255, 255, 0.87);
+	background-color: #242424;
+}
+
+body {
+	display: flex;
+	flex-direction: column;
+	margin: 0 auto;
+}
+
+p {
+	margin-top: 0;
+	margin-bottom: 0;
+}
+
+.title {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+h1 {
+	font-size: 3em;
+	text-align: center;
+	unicode-bidi: isolate;
+}
+html.dark h1 {
+	color: #adbac7;
+}
+h2 {
+	font-size: 1.5em;
+	unicode-bidi: isolate;
+}
+h3 {
+	font-size: 1.3em;
+}
+
+.title p {
+	font-size: 25.6px;
+	/* 首页副标题。原来 #6A8BAD 在白底只有 3.55:1（axe color-contrast）；
+	   加深到 #4D7396 = 4.99:1，色相不变、只是明度降一档。 */
+	color: #4D7396;
+	margin-right: 20px;
+	margin-left: 20px;
+	text-align: center;
+}
+
+.content {
+	display: flex;
+	flex-direction: column;
+	align-items: right;
+	width: 60%;
+	min-width: 400px;
+	margin: 0 auto;
+	margin-top: 40px;
+}
+
+.one-line {
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-start;
+	align-items: center;
+	flex-wrap: wrap;
+	word-break: break-all;
+	hyphens: none;
+	margin-top: 1em;
+}
+
+.ip-info {
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-start;
+	align-items: center;
+	flex-wrap: nowrap;
+}
+.one-line p {
+	font-size: 1.3em;
+}
+.ip-info p {
+	font-size: 1.3em;
+}
+
+b {
+	color: #2c3e50;
+	font-size: 1.3em;
+}
+html.dark b {
+	color: #adbac7;
+}
+
+blockquote p {
+	color: #999999;
+}
+blockquote {
+	background: #f9f9f9;
+	border-left: 10px solid #ccc;
+	margin: 1.5em 10px;
+	padding: 0.5em 10px;
+	quotes: '\201C' '\201D' '\2018' '\2019';
+	letter-spacing: 0.5px;
+	line-height: 2;
+	word-spacing: 1px;
+}
+blockquote p {
+	display: inline;
+	margin: 0.5em;
+}
+blockquote a {
+	color: #3eaf7c;
+	font-size: 1em;
+	/* 正文里的链接仅靠颜色区分不够（绿 #3EAF7C 与周围正文的对比度远低于 3:1），
+	   补下划线提供「非颜色」的视觉区分（link-in-text-block） */
+	text-decoration: underline;
+}
+
+a {
+	color: #3eaf7c;
+	font-size: 1.3em;
+	text-decoration: none;
+}
+a:hover {
+	color: none;
+}
+
+footer {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	margin-top: 60px;
+}
+footer .one-line {
+	font-size: 1em;
+	text-align: center;
+	color: #757575;
+}
+footer .one-line a {
+	font-size: 1em;
+	text-align: center;
+	color: #3eaf7c;
+	text-decoration: none;
+}
+
+/* ---------------- 结果区域 / 表格 ---------------- */
+.result-section {
+	margin-top: 30px;
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.result-table {
+	width: 100%;
+	border-collapse: collapse;
+	background: #fff;
+	border: 1px solid #dcdfe6;
+}
+html.dark .result-table {
+	background: #2e2d2d;
+	border: 1px solid #2e2e2e;
+}
+
+.result-table thead tr {
+	background-color: #c0c4cc;
+}
+html.dark .result-table thead tr {
+	background: #2e2d2d;
+}
+
+.result-table .table-header {
+	padding: 12px 15px;
+	font-weight: 600;
+	color: #303133;
+	text-align: left;
+	border: 1px solid #dcdfe6;
+}
+html.dark .result-table .table-header {
+	color: #cfcfcf;
+	border: 1px solid #1a1919;
+}
+
+.result-table tbody tr {
+	border-bottom: 1px solid #dcdfe6;
+}
+html.dark .result-table tbody tr {
+	border-bottom: 1px solid #1a1919;
+}
+.result-table tbody tr:last-child {
+	border-bottom: none;
+}
+.result-table tbody tr:hover {
+	background-color: #f5f7fa;
+}
+html.dark .result-table tbody tr:hover {
+	background-color: #393a3a;
+}
+
+.result-table .table-label {
+	padding: 12px 15px;
+	font-weight: 600;
+	color: #606266;
+	width: 150px;
+	text-align: left;
+	border: 1px solid #dcdfe6;
+}
+html.dark .result-table .table-label {
+	color: #c0c4cc;
+	border: 1px solid #1a1919;
+}
+
+.result-table .table-value {
+	padding: 12px 15px;
+	color: #303133;
+	border: 1px solid #dcdfe6;
+}
+html.dark .result-table .table-value {
+	color: #cfcfcf;
+	border: 1px solid #1a1919;
+}
+
+/* ---------------- 状态色 ---------------- */
+.status-code {
+	font-weight: 600;
+	padding: 4px 12px;
+	border-radius: 4px;
+}
+.status-success {
+	color: #67c23a;
+	background: #f0f9eb;
+}
+.status-warning {
+	color: #e6a23c;
+	background: #fdf6ec;
+}
+.status-error {
+	color: #f56c6c;
+	background: #fef0f0;
+}
+.valid {
+	color: #67c23a;
+	font-weight: 600;
+}
+.expired {
+	color: #f56c6c;
+	font-weight: 600;
+}
+.loss-ok {
+	color: #67c23a;
+	font-weight: 600;
+}
+.loss-warning {
+	color: #f56c6c;
+	font-weight: 600;
+}
+
+.error-message {
+	margin-top: 20px;
+	padding: 15px;
+	background: #fef0f0;
+	color: #f56c6c;
+	border-radius: 6px;
+	text-align: center;
+	font-size: 1.1em;
+}
+
+/* ---------------- 代码块 ---------------- */
+pre {
+	background: #f8f9fa;
+	padding: 15px;
+	border-radius: 6px;
+	overflow-x: auto;
+	white-space: pre;
+	max-width: 100%;
+}
+pre code {
+	font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+	font-size: 0.9em;
+	color: #303133;
+}
+html.dark pre {
+	background: #303133;
+}
+html.dark pre code {
+	color: #f8f9fa;
+}
+
+.shiki span {
+	font-family:
+		'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+.shiki {
+	padding: 1rem;
+	border-radius: 10px;
+	overflow: auto;
+	max-width: 100%;
+}
+
+/* ---------------- 徽章区域 ---------------- */
+.badge-section {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	margin-top: 20px;
+}
+.badge-item {
+	background: #fff;
+	padding: 20px;
+	border-radius: 8px;
+	border: 1px solid #e4e7ed;
+}
+.badge-item h4 {
+	margin: 0 0 15px 0;
+	color: #3eaf7c;
+	font-size: 1.2em;
+}
+.badge-item img {
+	display: block;
+	margin-bottom: 15px;
+	max-width: 200px;
+}
+
+/* ---------------- 其它零散样式（原样平移） ---------------- */
+
+/* 页面里内嵌的 markdown 说明块（dns / whois / screenshot 三页用同一个 /api/markdown 结果）。
+   旧站写在各页 <style scoped> 里的 `:deep(.markdown a)`，本来就是全局作用，
+   这里收到站点样式里只写一份。 */
+.markdown a {
+	color: #3eaf7c !important;
+	font-size: 1.3em;
+	text-decoration: none;
+}
+
+/* 失败态的单元格文字（tcping / dnssec 等多节点表格用） */
+.error-text {
+	color: #f56c6c;
+}
+
+html.dark blockquote {
+	color: rgba(255, 255, 255, 0.87);
+	background-color: #1a1919;
+	border-left: 10px solid #111111;
+}
+
+.spoiler {
+	position: relative;
+	background-color: rgba(200, 200, 200, 0.3);
+	color: rgba(0, 0, 0, 0.5);
+	user-select: none;
+	overflow: hidden;
+	cursor: pointer;
+	filter: blur(3px);
+	padding: 5px;
+	transition: filter 0.3s ease;
+}
+.spoiler:hover {
+	background-color: inherit;
+	color: inherit;
+	filter: blur(0);
+}
+
+.quate {
+	background-color: #f3f4f5;
+	color: #4e6e8e;
+	border-radius: 5px;
+	padding: 3px;
+}
+html.dark .quate {
+	background-color: #2b313a;
+	color: #8e9eb0;
+}
+
+.header-anchor {
+	margin-right: 0.4rem;
+	text-decoration: none;
+	transition: opacity 0.2s;
+}
+h1 > .header-anchor,
+h2 > .header-anchor,
+h3 > .header-anchor,
+h4 > .header-anchor,
+h5 > .header-anchor,
+h6 > .header-anchor {
+	opacity: 1;
+	color: #3eaf7c;
+}
+h1:hover > .header-anchor,
+h2:hover > .header-anchor,
+h3:hover > .header-anchor,
+h4:hover > .header-anchor,
+h5:hover > .header-anchor,
+h6:hover > .header-anchor {
+	opacity: 1;
+}
+.header-anchor::before {
+	content: '#';
+	color: #3eaf7c;
+}
+
+/* 代码块（首页 / location 页的 curl 示例）：SSR 期已由 shiki 高亮，这里只管排版 */
+.code-block {
+	border-radius: 10px;
+	overflow: auto;
+	max-width: 100%;
+}
+
+/* ---------------- 窄屏 ---------------- */
+@media (max-width: 768px) {
+	.content {
+		width: 95%;
+		min-width: unset;
+		max-width: 95%;
+		margin-top: 30px;
+	}
+
+	h1 {
+		font-size: 1.9em;
+	}
+	h3 {
+		font-size: 1.1em;
+	}
+
+	.title p {
+		font-size: 0.9em;
+		margin-right: 10px;
+		margin-left: 10px;
+	}
+
+	footer {
+		margin-top: 30px;
+	}
+	footer .one-line {
+		font-size: 0.75em;
+		flex-wrap: wrap;
+		justify-content: center;
+		text-align: center;
+	}
+	footer .one-line img {
+		height: 1.2em;
+		width: auto;
+		vertical-align: middle;
+	}
+	footer .one-line a {
+		font-size: 0.9em;
+	}
+
+	.one-line {
+		margin-top: 0.5em;
+		margin-bottom: 0.5em;
+	}
+	.one-line p {
+		font-size: 1.1em;
+	}
+	.one-line b {
+		font-size: 1.1em;
+	}
+	.one-line a {
+		font-size: 1.1em;
+	}
+
+	blockquote {
+		font-size: 0.9em;
+	}
+	blockquote p {
+		font-size: 0.5em;
+		display: inline;
+		margin: 0.5em;
+	}
+	blockquote a {
+		color: #3eaf7c;
+		font-size: 1em;
+		text-decoration: underline;
+	}
+
+	.result-section {
+		margin-top: 20px;
+	}
+	.result-table {
+		font-size: 0.85em;
+	}
+	.result-table .table-label {
+		width: 80px;
+		padding: 6px 8px;
+	}
+	.result-table .table-value {
+		padding: 6px 8px;
+	}
+	.result-table .table-header {
+		padding: 8px 10px;
+		font-size: 0.9em;
+	}
+
+	pre {
+		padding: 10px;
+		font-size: 0.8em;
+	}
+	.code-block {
+		padding: 0.75rem;
+		font-size: 0.8em;
+	}
+	.error-message {
+		font-size: 0.9em;
+		padding: 10px;
+	}
+	.markdown a {
+		font-size: 1.1em;
+	}
+	.markdown img {
+		height: auto;
+		max-width: 100%;
+	}
+	.badge-item {
+		padding: 15px;
+	}
+	.badge-item h4 {
+		font-size: 1em;
+	}
+}

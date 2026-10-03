@@ -1,0 +1,78 @@
+/* 当 html 有 .dark 类名时，切换为暗色主题 */
+html.dark {
+  /* 强制覆盖所有颜色变量 */
+  color-scheme: dark;
+}
+
+/* 暗色模式下的背景色和文字颜色 */
+html.dark .markdown-body {
+  /* GitHub 暗色主题的核心颜色 */
+  --color-fg-default: #e6edf3;
+  --color-fg-muted: #8b949e;
+  --color-fg-accent: #3EAF7C;
+  --color-bg-default: #242424;
+  --color-bg-muted: #080707;
+  --color-bg-accent: #3EAF7C;
+  --color-border-default: #242424;
+  --color-border-muted: #242424;
+  
+  background-color: var(--color-bg-default);
+  color: var(--color-fg-default);
+}
+
+/* 暗色模式下的标题颜色 */
+html.dark .markdown-body h1,
+html.dark .markdown-body h2,
+html.dark .markdown-body h3,
+html.dark .markdown-body h4,
+html.dark .markdown-body h5,
+html.dark .markdown-body h6 {
+  color: var(--color-fg-default);
+}
+
+/* 暗色模式下的链接颜色 */
+html.dark .markdown-body a {
+  color: var(--color-fg-accent);
+}
+
+/* 暗色模式下的代码块 */
+html.dark .markdown-body pre {
+  background-color: var(--color-bg-muted);
+  border: 1px solid var(--color-border-default);
+}
+
+html.dark .markdown-body code {
+  background-color: var(--color-bg-muted);
+  color: var(--color-fg-default);
+}
+
+html.dark .markdown-body pre.shiki,
+html.dark .markdown-body pre.shiki code {
+  background-color: transparent;
+}
+
+/* 暗色模式下的引用块 */
+html.dark .markdown-body blockquote {
+  border-left-color: var(--color-border-muted);
+  color: var(--color-fg-muted);
+}
+
+/* 暗色模式下的表格 */
+html.dark .markdown-body table tr {
+  background-color: var(--color-bg-default);
+  border-top-color: var(--color-border-muted);
+}
+
+html.dark .markdown-body table th,
+html.dark .markdown-body table td {
+  border-color: var(--color-border-muted);
+}
+
+html.dark .markdown-body table tr:nth-child(2n) {
+  background-color: var(--color-bg-muted);
+}
+
+/* 暗色模式下的分割线 */
+html.dark .markdown-body hr {
+  border-color: var(--color-border-muted);
+}

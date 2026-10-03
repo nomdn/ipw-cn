@@ -1,0 +1,14 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "ipw-cn",
+	"compatibility_date": "2026-07-08",
+	"observability": {
+		"enabled": true
+	},
+	"main": ".svelte-kit/cloudflare/_worker.js",
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".svelte-kit/cloudflare"
+	},
+	"compatibility_flags": ["nodejs_compat"]
+}

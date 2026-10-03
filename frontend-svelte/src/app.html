@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- 站点内容为简体中文。不写 lang 时屏幕阅读器会按系统语言瞎猜发音，
+     Lighthouse 的 html-has-lang 也会失败。（旧站是运行时写 htmlAttrs，这里直接写死。） -->
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="text-scale" content="scale" />
+		<!-- 首屏防闪：必须在样式表之前同步执行，把 dark 类先加上。
+		     键名沿用旧站的 'vueuse-color-scheme'（light / dark；缺省跟随系统），
+		     于是迁移前用户选过的主题不会丢。
+		     刻意不加 async/defer —— 异步执行等于把它挪到首帧之后，反而会闪一下。 -->
+		<script>
+			(function () {
+				try {
+					var stored = localStorage.getItem('vueuse-color-scheme');
+					var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+					if (stored === 'dark' || (!stored && prefersDark)) {
+						document.documentElement.classList.add('dark');
+					}
+				} catch (e) {
+					/* localStorage 不可用（隐私模式 / 禁用 cookie）时按浅色处理 */
+				}
+			})();
+		</script>
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>

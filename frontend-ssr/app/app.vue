@@ -356,20 +356,6 @@ html.dark {
   background-color: #242424;
   --el-color-primary: #3EAF7C;
 }
-/* 文字链接按模式拆色：亮色下 #3EAF7C 在白底只有 2.75:1、在引用块底 #f9f9f9 上 2.61:1
-   （axe 的 color-contrast，权重 7，是移动端 a11y 唯一的扣分项）；换成同色系加深的
-   #2F7D5A 后分别是 5.00:1 / 4.75:1。暗色底上 #3EAF7C 本来就有 5.64:1 ⇒ 保留品牌色。
-   必须写在这个【非 scoped】块里：style.css 是被 <style scoped> @import 进来的，
-   根元素选择器会被加上 scope 属性而永不匹配（同上面底色那两条的原因）。
-   另外这三条要逐一列出而不是只写 `html.dark a`：footer .one-line a 的特异性是 (0,1,2)，
-   比 `html.dark a` 的 (0,1,1) 高，不显式覆盖的话页脚链接在暗色下会留在深绿。 */
-html.dark a,
-html.dark blockquote a,
-html.dark footer .one-line a,
-html.dark .header-anchor {
-  color: #3EAF7C;
-}
-
 /* Drawer 内部链接占满一行。
    注意用直接子选择器（> a）：文档菜单（DocMenu）里的 <a> 嵌在 el-menu-item 里，
    不能被这套「整行大按钮」规则吃掉，否则菜单项会变成上下带 1em 内边距的块。

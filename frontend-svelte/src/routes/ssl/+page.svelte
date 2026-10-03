@@ -1,0 +1,392 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import { page } from '$app/state';
+	import CircleCheck from '@lucide/svelte/icons/circle-check';
+	import CircleX from '@lucide/svelte/icons/circle-x';
+	import Info from '@lucide/svelte/icons/info';
+	import { config } from '#lib/config/index.ts';
+	import { queryNodePool } from '#lib/node-pool.ts';
+	import { extractHost, getStatusCodeClass, formatTime, formatSpeed } from '#lib/tools.ts';
+	import { INPUT_CLASS, BUTTON_CLASS } from '#lib/ui-classes.ts';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import PageTitle from '#lib/components/PageTitle.svelte';
+
+	interface SSLCheckItem {
+		cert_validity_days: number;
+		cert_start_time: string;
+		cert_end_time: string;
+		http_version: string;
+		host_record: string;
+		https_status_code: number;
+		total_time: number;
+		download_speed: number;
+		domain: string;
+		issuer_organization: string[] | null;
+		issuer_common_name: string;
+		subject_common_name: string;
+		is_expired: boolean;
+		is_reachable: boolean;
+	}
+	interface SSLCheckResponse {
+		ipv4: SSLCheckItem;
+		ipv6: SSLCheckItem;
+	}
+
+	const apiList = config.APIBaseURL.DualStack;
+	// 旧站是 `config.siteUrl.replace(/\/$/, '') + '/'` —— 保证结尾正好一个斜杠
+	const siteUrlWithSlash = config.siteUrl.replace(/\/$/, '') + '/';
+	const canonicalUrl = siteUrlWithSlash + 'ssl';
+
+	let tmpDomain = $state('https://www.zakoflare.com');
+	let testDomain = $state('');
+	let loading = $state(false);
+	let error = $state('');
+	let result = $state<SSLCheckResponse | null>(null);
+
+	/** 徽标代码样例（旧站把这段 HTML 在模板里内联了 12 遍，这里由函数生成一份） */
+	function badgeCode(file: string): string {
+		const host = extractHost(testDomain);
+		return `<a href="${siteUrlWithSlash}ssl/?site=${host}" title="本站支持 SSL 安全访问" target='_blank'><img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="${siteUrlWithSlash}${file}"></a>`;
+	}
+
+	const SSL_BADGES = ['ssl-s1.svg', 'ssl-s2.svg', 'ssl-s3.svg', 'ssl-s4.svg', 'ssl-s5.svg', 'ssl-s6.svg'];
+
+	function formatDate(dateString: string): string {
+		const date = new Date(dateString);
+		return date.toLocaleString('zh-CN', {
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
+	}
+
+	async function checkSSL() {
+		testDomain = extractHost(tmpDomain);
+		error = '';
+		result = null;
+		loading = true;
+
+		const outcome = await queryNodePool<SSLCheckResponse>(
+			apiList,
+			(id) => `/middleware/${id}/ssl/${encodeURIComponent(testDomain)}`,
+			{ onRetry: (msg) => (error = msg) }
+		);
+		loading = false;
+
+		if (outcome.ok) {
+			result = outcome.data;
+			error = '';
+		} else {
+			error = '请求失败，请检查域名或网络';
+		}
+	}
+
+	onMount(() => {
+		const site = page.url.searchParams.get('site');
+		if (site) {
+			tmpDomain = site;
+			checkSSL();
+		}
+	});
+</script>
+
+<svelte:head>
+	<title>SSL证书检测工具 | IPv4/IPv6证书检查 | {config.siteName}</title>
+	<link rel="canonical" href={canonicalUrl} />
+	<meta
+		name="description"
+		content="专业的SSL证书检测工具,全面检查网站的IPv4和IPv6 SSL证书状态、有效期、签发机构、HTTP版本等信息,支持HTTPS状态码检测、下载速度测试,帮助网站管理员及时发现证书问题,确保网站安全访问"
+	/>
+	<meta
+		name="keywords"
+		content="ssl证书检测,ssl检查,https证书,ipv6 ssl,ipv4 ssl,证书有效期,ssl状态,https检测,网站安全,证书签发机构"
+	/>
+	<meta property="og:title" content="SSL证书检测 - IPv4/IPv6双栈证书状态检查工具" />
+	<meta
+		property="og:description"
+		content="全面检测网站SSL证书状态,支持IPv4和IPv6双栈检测,提供证书有效期、签发机构等详细信息"
+	/>
+	<meta property="og:image" content={`${siteUrlWithSlash}favicon.svg`} />
+	<meta property="og:type" content="website" />
+	{@html `<script type="application/ld+json">${JSON.stringify({
+		'@context': 'https://schema.org',
+		'@type': 'WebApplication',
+		name: 'SSL证书检测工具',
+		description:
+			'专业的SSL证书检测工具，支持IPv4和IPv6 SSL证书状态、有效期、签发机构、HTTP版本等检测，提供HTTPS状态码检测、下载速度测试。',
+		url: canonicalUrl,
+		applicationCategory: 'DeveloperApplication',
+		operatingSystem: 'Web',
+		offers: { '@type': 'Offer', price: '0', priceCurrency: 'CNY' },
+		provider: { '@type': 'Organization', name: config.siteName }
+	})}</script>`}
+</svelte:head>
+
+<!-- 徽标展示块：A / B 两个结论分支各用一次，所以收成 snippet 只写一份 -->
+{#snippet badges(files: string[])}
+	{#each files as file (file)}
+		<img src={`/${file}`} alt="" />
+		<pre><code>{badgeCode(file)}</code></pre>
+	{/each}
+{/snippet}
+
+<PageTitle h1="SSL证书检查" sub="检查网站是否开启 IPv4 和 IPv6 SSL 证书" />
+
+<div class="content">
+	<div class="one-line">
+		<Input
+			class={INPUT_CLASS}
+			bind:value={tmpDomain}
+			placeholder="请输入域名（如：https://zakoflare.com）"
+			onkeydown={(e) => e.key === 'Enter' && checkSSL()}
+		/>
+		<Button class={BUTTON_CLASS} disabled={loading} onclick={checkSSL}>
+			{loading ? '检查中…' : 'SSL 证书检查'}
+		</Button>
+	</div>
+
+	{#if error}
+		<div class="error-message">{error}</div>
+	{/if}
+
+	{#if result && result.ipv4}
+		<div class="result-section">
+			<table class="result-table">
+				<thead>
+					<tr>
+						<th class="table-header">检测项目</th>
+						<th class="table-header">IPv4</th>
+						<th class="table-header">IPv6</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td class="table-label">证书状态</td>
+						<td class="table-value">
+							{#if result.ipv4.is_reachable}
+								<span class={result.ipv4.is_expired ? 'expired' : 'valid'}>
+									{result.ipv4.is_expired ? '已过期' : '有效'}
+								</span>
+							{:else}
+								<span>-</span>
+							{/if}
+						</td>
+						<td class="table-value">
+							{#if result.ipv6 && result.ipv6.is_reachable}
+								<span class={result.ipv6.is_expired ? 'expired' : 'valid'}>
+									{result.ipv6.is_expired ? '已过期' : '有效'}
+								</span>
+							{:else}
+								<span>-</span>
+							{/if}
+						</td>
+					</tr>
+					<tr>
+						<td class="table-label">常用名称</td>
+						<td class="table-value">
+							{#if result.ipv4.is_reachable}{result.ipv4.subject_common_name || '-'}{:else}<span>-</span>{/if}
+						</td>
+						<td class="table-value">
+							{#if result.ipv6 && result.ipv6.is_reachable}{result.ipv6.subject_common_name || '-'}{:else}<span
+									>-</span
+								>{/if}
+						</td>
+					</tr>
+					<tr>
+						<td class="table-label">签发者</td>
+						<td class="table-value">
+							{#if result.ipv4.is_reachable}{result.ipv4.issuer_organization?.join(', ') || '-'}{:else}<span
+									>-</span
+								>{/if}
+						</td>
+						<td class="table-value">
+							{#if result.ipv6 && result.ipv6.is_reachable}{result.ipv6.issuer_organization?.join(', ') ||
+									'-'}{:else}<span>-</span>{/if}
+						</td>
+					</tr>
+					{#if result.ipv6 && result.ipv6.is_reachable && result.ipv4.is_reachable && result.ipv6.cert_validity_days > 0 && result.ipv4.cert_validity_days > 0}
+						<tr>
+							<td class="table-label">证书有效期 (天)</td>
+							<td class="table-value">{result.ipv4.cert_validity_days || '-'} 天</td>
+							<td class="table-value">{result.ipv6?.cert_validity_days || '-'} 天</td>
+						</tr>
+					{:else if result.ipv6 && result.ipv6.is_reachable && result.ipv4.is_reachable && result.ipv6.cert_validity_days <= 0 && result.ipv4.cert_validity_days <= 0}
+						<tr>
+							<td class="table-label">证书已过期（天）</td>
+							<td class="table-value">{Math.abs(result.ipv4.cert_validity_days) || '-'}</td>
+							<td class="table-value">{Math.abs(result.ipv6.cert_validity_days) || '-'}</td>
+						</tr>
+					{:else if result.ipv4.is_reachable && result.ipv4.cert_validity_days > 0 && (!result.ipv6 || !result.ipv6.is_reachable)}
+						<tr>
+							<td class="table-label">证书有效期 (天)</td>
+							<td class="table-value">{result.ipv4.cert_validity_days} 天</td>
+							<td class="table-value">-</td>
+						</tr>
+					{:else if result.ipv4.is_reachable && result.ipv4.cert_validity_days <= 0 && (!result.ipv6 || !result.ipv6.is_reachable)}
+						<tr>
+							<td class="table-label">证书已过期（天）</td>
+							<td class="table-value">{Math.abs(result.ipv4.cert_validity_days) || '-'}</td>
+							<td class="table-value">-</td>
+						</tr>
+					{/if}
+
+					<tr>
+						<td class="table-label">证书开始时间</td>
+						<td class="table-value">
+							{#if result.ipv4.is_reachable && result.ipv4.cert_start_time}{formatDate(
+									result.ipv4.cert_start_time
+								)}{:else}<span>-</span>{/if}
+						</td>
+						<td class="table-value">
+							{#if result.ipv6 && result.ipv6.is_reachable && result.ipv6.cert_start_time}{formatDate(
+									result.ipv6.cert_start_time
+								)}{:else}<span>-</span>{/if}
+						</td>
+					</tr>
+					<tr>
+						<td class="table-label">证书结束时间</td>
+						<td class="table-value">
+							{#if result.ipv4.is_reachable && result.ipv4.cert_end_time}{formatDate(
+									result.ipv4.cert_end_time
+								)}{:else}<span>-</span>{/if}
+						</td>
+						<td class="table-value">
+							{#if result.ipv6 && result.ipv6.is_reachable && result.ipv6.cert_end_time}{formatDate(
+									result.ipv6.cert_end_time
+								)}{:else}<span>-</span>{/if}
+						</td>
+					</tr>
+					<tr>
+						<td class="table-label">HTTP 版本</td>
+						<td class="table-value">
+							{#if result.ipv4.is_reachable}{result.ipv4.http_version || '-'}{:else}<span>-</span>{/if}
+						</td>
+						<td class="table-value">
+							{#if result.ipv6 && result.ipv6.is_reachable}{result.ipv6.http_version || '-'}{:else}<span
+									>-</span
+								>{/if}
+						</td>
+					</tr>
+					<tr>
+						<td class="table-label">主机记录</td>
+						<td class="table-value">
+							{#if result.ipv4.is_reachable}{result.ipv4.host_record || '-'}{:else}<span>-</span>{/if}
+						</td>
+						<td class="table-value">
+							{#if result.ipv6 && result.ipv6.is_reachable}{result.ipv6.host_record || '-'}{:else}<span
+									>-</span
+								>{/if}
+						</td>
+					</tr>
+					<tr>
+						<td class="table-label">HTTPS 访问返回码</td>
+						<td class="table-value">
+							{#if result.ipv4.is_reachable}
+								<span class="status-code {getStatusCodeClass(result.ipv4.https_status_code)}">
+									{result.ipv4.https_status_code}
+								</span>
+							{:else}
+								<span>-</span>
+							{/if}
+						</td>
+						<td class="table-value">
+							{#if result.ipv6 && result.ipv6.is_reachable}
+								<span class="status-code {getStatusCodeClass(result.ipv6.https_status_code)}">
+									{result.ipv6.https_status_code}
+								</span>
+							{:else}
+								<span>-</span>
+							{/if}
+						</td>
+					</tr>
+					<tr>
+						<td class="table-label">总耗时</td>
+						<td class="table-value">
+							{#if result.ipv4.is_reachable}{formatTime(result.ipv4.total_time)}{:else}<span>-</span>{/if}
+						</td>
+						<td class="table-value">
+							{#if result.ipv6 && result.ipv6.is_reachable}{formatTime(result.ipv6.total_time)}{:else}<span
+									>-</span
+								>{/if}
+						</td>
+					</tr>
+					<tr>
+						<td class="table-label">下载速度</td>
+						<td class="table-value">
+							{#if result.ipv4.is_reachable}{formatSpeed(result.ipv4.download_speed)}{:else}<span>-</span>{/if}
+						</td>
+						<td class="table-value">
+							{#if result.ipv6 && result.ipv6.is_reachable}{formatSpeed(result.ipv6.download_speed)}{:else}<span
+									>-</span
+								>{/if}
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+	{/if}
+
+	{#if result && result.ipv4 && result.ipv4.is_reachable && !result.ipv4.is_expired && (!result.ipv6 || (!result.ipv6.is_expired && result.ipv6.is_reachable))}
+		<div>
+			<h3>
+				结论：<CircleCheck class="inline-block size-[1em] align-[-0.12em] fill-current text-[lightgreen]" />
+				网站{extractHost(testDomain)} 证书有效
+			</h3>
+			<p>
+				<Info class="inline-block size-[1em] align-[-0.12em] fill-current text-[lightgreen]" />
+				请把下方代码贴到网站底部，把这个好消息告诉你的用户，以便用户核验。
+			</p>
+			{@render badges(SSL_BADGES)}
+		</div>
+	{/if}
+
+	{#if result && result.ipv4 && result.ipv4.is_reachable && !result.ipv4.is_expired && result.ipv6 && result.ipv6.is_reachable && result.ipv6.is_expired}
+		<div>
+			<h3>
+				结论：<CircleCheck class="inline-block size-[1em] align-[-0.12em] fill-current text-[lightgreen]" />
+				网站{extractHost(testDomain)} 证书有效,但不支持IPv6访问
+			</h3>
+			<p>
+				<Info class="inline-block size-[1em] align-[-0.12em] fill-current text-[lightgreen]" />
+				请把下方代码贴到网站底部，把这个好消息告诉你的用户，以便用户核验。
+			</p>
+			{@render badges(SSL_BADGES)}
+		</div>
+	{:else if result && result.ipv4 && result.ipv4.is_reachable && result.ipv4.is_expired}
+		<div>
+			<h3>
+				结论：<CircleX class="inline-block size-[1em] align-[-0.12em] text-red-600" />
+				网站{testDomain} 证书无效
+			</h3>
+			<h2>都没有证书了这网站还活啥</h2>
+			<img src="/jingya.jpg" alt="证书无效示意" width="480" height="270" />
+		</div>
+	{:else if result && result.ipv4 && !result.ipv4.is_reachable && result.ipv6 && !result.ipv6.is_reachable}
+		<div>
+			<h3>
+				结论：<CircleX class="inline-block size-[1em] align-[-0.12em] text-red-600" />
+				网站{testDomain} 不可达
+			</h3>
+			<h2>...</h2>
+			<img src="/jingya.jpg" alt="网站不可达示意" width="480" height="270" />
+		</div>
+	{/if}
+
+	<blockquote>
+		网站不支持 IPv6 SSL 可能原因：<br />
+		<br />
+		1. 网站所在服务器未开启 IPv6，请参考 <a href="/doc/server/website_enable_ipv6" target="_blank"
+			>网站开启 IPv6 的三种方式</a><br />
+		2. 网站所在服务器已开启 IPv6，但防火墙未对源地址是 IPv6 地址(::/0)的 443（HTTPS）<a
+			href="/doc/server/website_enable_ipv6"
+			target="_blank">端口开放访问</a
+		><br />
+		3. 网站所在服务器已开启 IPv6，但未开启SSL证书，请参考 <a href="/doc/server/nginx_ipv6" target="_blank"
+			>Nginx 开启 IPv6 SSL</a
+		><br />
+	</blockquote>
+</div>
