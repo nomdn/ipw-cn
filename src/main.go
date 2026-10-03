@@ -1164,23 +1164,41 @@ func fetchRemoteConfig(url string) (map[string]any, error) {
 	return CONFIG, nil
 }
 
-// configValue 返回配置 map 中指定 key 的非空字符串值；
-// key 不存在或值为空时返回 ""（表示不覆盖本地配置）。
-func configValue(CONFIG map[string]any, key string) string {
-	v, ok := CONFIG[key]
-	if !ok || v == nil {
-		return ""
-	}
+// literalString 把配置源里的**任意字面量**归一成字符串 —— 两条读取路径唯一的转换表：
+//
+//	启动：setting.json（经 viper）/ 环境变量   → configString / configBool / configInt / configBytes
+//	运行：远端下发 / PATCH 的 map[string]any  → configValue → applyConfigMap
+//
+// 两条路径共用本函数，所以同一个值无论写成 JSON 布尔 `false`、数字 `0` 还是字符串 `"false"`，
+// 读出来**完全一致**。旧实现里启动路径靠 viper 的隐式 cast、运行路径靠自己的 type switch，
+// 两套规则只是"碰巧"一致 —— 只要有一边不认布尔，`ipdb: false` 就会被静默当成"开"。
+//
+//	nil      → ""（键不存在或显式 null，一律视为"未配置"）
+//	string   → 去首尾空白
+//	bool     → "true" / "false"
+//	float64  → 十进制整数形式（JSON 数字统一解析成 float64，443.0 要还原成 "443"）
+//	其它      → fmt.Sprint 兜底（数组 / 对象只可能出现在非字符串类键上）
+func literalString(v any) string {
 	switch s := v.(type) {
+	case nil:
+		return ""
 	case string:
 		return strings.TrimSpace(s)
-	case float64:
-		return fmt.Sprintf("%.0f", s)
 	case bool:
 		return strconv.FormatBool(s)
+	case float64:
+		return fmt.Sprintf("%.0f", s)
+	case int:
+		return strconv.Itoa(s)
 	default:
 		return strings.TrimSpace(fmt.Sprintf("%v", v))
 	}
+}
+
+// configValue 返回配置 map 中指定 key 的非空字符串值；
+// key 不存在或值为空时返回 ""（表示不覆盖本地配置）。
+func configValue(CONFIG map[string]any, key string) string {
+	return literalString(CONFIG[key])
 }
 
 // applyRemoteConfig 从远端配置 URL（REMOTE_CONFIG_URL，可由环境变量或 setting.json
@@ -1223,11 +1241,13 @@ func applyRemoteConfig() {
 //     它不是读配置文件；需重启键、热生效键都在那边定义（见 configRestartKeys）。
 
 // configString 读取字符串配置：环境变量 > setting.json > def。返回值两侧空白已去除。
+// setting.json 一侧经 literalString 归一，因此布尔 / 数字字面量（`false` / `0` / `443`）
+// 与字符串写法完全等价（见 literalString）。
 func configString(envKey, cfgKey, def string) string {
 	if v := strings.TrimSpace(os.Getenv(envKey)); v != "" {
 		return v
 	}
-	if v := strings.TrimSpace(viper.GetString(cfgKey)); v != "" {
+	if v := literalString(viper.Get(cfgKey)); v != "" {
 		return v
 	}
 	return def
@@ -1294,6 +1314,10 @@ func configStringSlice(envKey, cfgKey string) []string {
 //	真：true / 1 / yes / on / enable / enabled
 //	假：false / 0 / no / off / disable / disabled
 //
+// 入参是**已归一的字符串**：启动路径由 configString 给出、运行路径由 configValue 给出，
+// 两者都先过 literalString —— 所以 setting.json 里写布尔 `false` 到这里就是 "false"，
+// 与手写字符串 "false" 走完全相同的判定，不需要本函数再判类型。
+//
 // 空串（未配置）与不认识的串一律返回 known=false —— 本函数只做"字面值 → 布尔"的翻译，
 // 不替调用方决定默认值。由调用方处置：启动阶段告警并落默认值，PATCH / 远端下发计入 unknown
 // 并保留原值 —— 关键点是**绝不静默把拼错的值当成"开"**，那正是旧口径最难查的地方。
@@ -1307,7 +1331,8 @@ func parseBoolSwitch(raw string) (val, known bool) {
 	return false, false
 }
 
-// configBool 读取开关类配置（取值口径 env > setting.json > def），字面值交 parseBoolSwitch。
+// configBool 读取开关类配置（取值口径 env > setting.json > def），raw 经 configString 归一
+// （因此 JSON 布尔 / 数字字面量同样识别），字面值交 parseBoolSwitch。
 // 值不认识的告警并落 def —— 启动阶段没有"回报给请求方"的通道，只能告警。
 // 运行中的 PATCH 不走这里，走 applyConfigMap 里的 parseBoolSwitch 以便计入 unknown。
 func configBool(envKey, cfgKey string, def bool) bool {

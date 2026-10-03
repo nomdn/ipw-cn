@@ -51,7 +51,7 @@
 > - 开：`true` / `1` / `yes` / `on` / `enable` / `enabled`
 > - 关：`false` / `0` / `no` / `off` / `disable` / `disabled`
 >
-> 不配置（空值）时各用各的默认值（`block-private-ips` / `node-ota` / `access-log` / `ipdb` 都缺省**开**）。JSON 里写布尔 `true` 或字符串 `"true"` 均可，两者解析结果一致。
+> 不配置（空值）时各用各的默认值（`block-private-ips` / `node-ota` / `access-log` / `ipdb` 都缺省**开**）。JSON 里写布尔 `true` 或字符串 `"true"` 均可，数字 `1` / `0` 也可以 —— 四条来源（`setting.json` / 环境变量 / `PATCH /v1/config` / 远端下发）会先归一成同一张字面量表再判定，所以布尔与字符串的结果必然一致。
 >
 > **认不出来的值不再静默当成"开"**：启动阶段告警并按默认值处理；`PATCH /v1/config` 与远端下发会把它计入应答的 `unknown` 并保留原值，便于发现拼错的键值。
 >
