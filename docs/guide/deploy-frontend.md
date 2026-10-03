@@ -103,6 +103,10 @@ node .output/server/index.mjs   # 默认监听 3000 端口
 - **所需 Secrets**：`CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`
 - **注意**：工作流设置了 `NITRO_PRESET: cloudflare_module`
 
+## 缓存
+
+缓存头不在应用侧设置，全部交由前置 CDN（EdgeOne）控制。
+
 ## 常见问题
 
 - **部署后接口 403 / 跨域**：检查后端 `cors` 配置（独立中间件见 `middleware-go/setting.json` 的 `cors` 字段，逗号分隔允许域名）；服务端转发请求不带 `Origin`，浏览器直接调用才受 CORS 限制。

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import { Moon, Sunny, Expand } from '@element-plus/icons-vue';
 import { config } from '../config/index';
@@ -90,9 +90,24 @@ const hidden = computed<Array<NavItem | NavGroup>>(
     entry.kind !== 'divider' && viewportWidth.value < entry.minWidth),
 )
 
+// EP 的 Menu.init() 会在挂载时（以及菜单项集合变化时）遍历顶栏 <ul> 的**每个直接子元素**、
+// 统一写 tabindex="0" —— 连纯装饰的分隔条也不放过。调用栈实测：
+//   Menu.init → Array.forEach → new MenuItem(el).init → setAttribute('tabindex','0')
+// 分隔条是 aria-hidden 的装饰元素，留着 tabindex="0" 会被 axe 判为 aria-hidden-focus
+// （"Focusable content should have tabindex=-1 or be removed from the DOM"）——
+// 这一条比它替换掉的 aria-required-attr 更靠后，所以必须显式改回去。
+// 改的时机：子组件 mounted 早于父组件，onMounted 里 EP 已经 init 完；
+// 但要等 DOM 更新落定 —— updateViewport() 会改 visible、让 el-menu 重渲染并再 init 一遍。
+function fixDividerTabindex() {
+  document.querySelectorAll('.menu-divider').forEach((el) => {
+    el.setAttribute('tabindex', '-1')
+  })
+}
+
 // 实时同步视口宽度（resize 触发，驱动折叠）
 function updateViewport() {
   viewportWidth.value = window.innerWidth
+  nextTick(fixDividerTabindex)
 }
 let umamiScript: HTMLScriptElement | null = null
 useHead({
@@ -177,12 +192,25 @@ onMounted(() => {
       :ellipsis="false"
       
     >
-    <el-menu-item index="0" aria-label="返回首页">
+    <!-- 宽屏不给 aria-label：这个 <li> 里有可见文本（右侧的 h2 站名），而 axe 的
+         label-content-name-mismatch 要求 aria-label 必须把可见文本包含进去 ——
+         写死「返回首页」只会被判不匹配（Lighthouse 桌面独有项，权重 0 不扣分，但语义是错的）。
+         窄屏 h2 被 v-if 隐藏、img 的 alt 留空、el-icon 也没有文本 ⇒ 那时才需要
+         aria-label 兜底，否则承载 role="menuitem" 的 <li> 就没有可访问名（aria-command-name）。
+         里面那个 <router-link> 同理（它自己也是一个可访问名有冲突的目标），
+         宽屏靠 h2 的「柠檬味ipw.cn」当名字，窄屏才补「返回首页」。 -->
+    <el-menu-item index="0" :aria-label="isNarrow ? '返回首页' : undefined">
       <el-icon v-if="isNarrow" @click="drawer = !drawer"><Expand /></el-icon>
-      <router-link to="/" aria-label="返回首页">
+      <router-link to="/" :aria-label="isNarrow ? '返回首页' : undefined">
         <!-- alt 留空是有意的：logo 属装饰图，可访问名由外层链接提供。
-             若把 alt 写成站名，宽屏下会与旁边的 h2 一起被读两遍。 -->
-        <el-image src="/favicon.svg" alt="" style="margin-top: 20px;" /> 
+             若把 alt 写成站名，宽屏下会与旁边的 h2 一起被读两遍。
+             这里用原生 <img> 而不是 el-image：el-image 默认 lazy，SSR 只输出一个
+             `.el-image__placeholder` 空壳，真正的 <img> 要等客户端水合后由
+             IntersectionObserver 插进去 ⇒ logo 在首屏 HTML 里不存在（无 JS 时永不显示，
+             有 JS 时也要闪一下）。原生 <img> 直接进 HTML，还顺带省掉 el-image
+             及其 image-viewer 的样式。宽高属性声明固有比例，显示宽度由下文
+             :deep(.el-menu-item a img) 定为 50px。 -->
+        <img src="/favicon.svg" alt="" width="50" height="50" style="margin-top: 20px;" />
         <h2 style="display: inline-block; margin-left: 10px" v-if="!isNarrow">{{ config.siteName }}</h2>
       </router-link>
     </el-menu-item>
@@ -199,7 +227,13 @@ onMounted(() => {
           <router-link :to="child.to"><p class="menu-item-text">{{ child.label }}</p></router-link>
         </el-menu-item>
       </el-sub-menu>
-      <el-divider v-else style="margin-top: 20px;height: 1.2em;" direction="vertical"/>
+      <!-- 分组之间的竖分隔条。原来是 <el-divider direction="vertical">，但它在客户端水合后
+           会被 EP 补上 tabindex="0"（SSR HTML 里干净、没有这个属性），于是 axe 把
+           role="separator" 当成「可聚焦控件」并要求它带 aria-valuenow —— 这就是桌面端
+           aria-required-attr 那一条（Lighthouse 权重 10，是桌面 a11y 掉 12 分里的最大单项）。
+           换成 aria-hidden 的原生 <span>：装饰元素不参与焦点，也不会被 EP 改写属性。
+           视觉与 .el-divider--vertical 等价，数值见下方 .menu-divider 的注释。 -->
+      <span v-else class="menu-divider" aria-hidden="true"></span>
     </template>
     <!-- 折叠项：统一收进「更多」子菜单（分组用 el-menu-item-group 保留组名） -->
     <el-sub-menu v-if="hidden.length" index="more">
@@ -236,12 +270,19 @@ onMounted(() => {
        且窄屏下与侧栏抽屉的可滚动区域互相挤压。 -->
   <footer v-if="!isDocRoute">
     <div class="one-line">
-      Copyright © nomdn & IP 查询 2026  | <img src="/ipv6-s1.svg" alt="IPv6 相关标识"/> | <img src="/ssl-s1.svg" alt="SSL 相关标识"/> | All right reserved
+      <!-- 这两张 svg 补上 width/height 属性（= 各自的固有尺寸 190×36 / 85×36）：
+           浏览器要在图下载完之前就知道占位比例，否则会先把整行按 0 高度排一遍、
+           图到了再重排（Lighthouse 的 unsized-images 就是这条）。
+           属性只声明固有比例，不改变显示尺寸：桌面端本来就是按固有尺寸渲染，
+           窄屏由 style.css 的 `footer .one-line img { height:1.2em; width:auto }` 接管。 -->
+      Copyright © nomdn & IP 查询 2026  | <img src="/ipv6-s1.svg" alt="IPv6 相关标识" width="190" height="36"/> | <img src="/ssl-s1.svg" alt="SSL 相关标识" width="85" height="36"/> | All right reserved
     </div>
     <div class="one-line">
       <a v-if="config.ICP" href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer" >{{ config.ICP }}</a>
       <span v-if="config.ICP">&nbsp;|&nbsp;</span>
-      <el-image v-if="config.GongAn" style="height: 1em; width: 1em;" src="/备案图标.png" />
+      <!-- 同上：原生 <img> 而非 el-image（1em 见方的小图标，用不着 lazy/预览器）。
+           显示尺寸由行内 style 定死；width/height 属性只声明固有比例（36×40），防抖动。 -->
+      <img v-if="config.GongAn" src="/备案图标.png" alt="" width="36" height="40" style="height: 1em; width: 1em;" />
       <a v-if="config.GongAn" :href="'https://beian.mps.gov.cn/#/query/webSearch?code=' + cleanChineseCharacters(config.GongAn)" target="_blank" rel="noreferrer" >{{ config.GongAn }}</a>
       <span v-if="config.GongAn">&nbsp;|&nbsp;</span>
       <a href="https://www.china-ipv6.cn/" target="_blank" rel="noreferrer" >国家IPv6发展监测平台</a>
@@ -288,6 +329,19 @@ onMounted(() => {
   margin-bottom: 20px;
   
 }
+/* 顶栏分组之间的竖分隔条（template 里那个 aria-hidden 的 span）。
+   数值抄自 element-plus 的 .el-divider--vertical：1px 左边框、1.2em 高、
+   margin 左右各 8px、vertical-align: middle；再加上原来行内 style 的 margin-top: 20px
+   与 height: 1.2em，保证与替换前的排布一致。 */
+.menu-divider {
+  display: inline-block;
+  position: relative;
+  width: 1px;
+  height: 1.2em;
+  margin: 20px 8px 0;
+  vertical-align: middle;
+  border-left: 1px solid var(--el-border-color);
+}
 </style>
 <style>
 :root {
@@ -301,6 +355,19 @@ html.dark {
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
   --el-color-primary: #3EAF7C;
+}
+/* 文字链接按模式拆色：亮色下 #3EAF7C 在白底只有 2.75:1、在引用块底 #f9f9f9 上 2.61:1
+   （axe 的 color-contrast，权重 7，是移动端 a11y 唯一的扣分项）；换成同色系加深的
+   #2F7D5A 后分别是 5.00:1 / 4.75:1。暗色底上 #3EAF7C 本来就有 5.64:1 ⇒ 保留品牌色。
+   必须写在这个【非 scoped】块里：style.css 是被 <style scoped> @import 进来的，
+   根元素选择器会被加上 scope 属性而永不匹配（同上面底色那两条的原因）。
+   另外这三条要逐一列出而不是只写 `html.dark a`：footer .one-line a 的特异性是 (0,1,2)，
+   比 `html.dark a` 的 (0,1,1) 高，不显式覆盖的话页脚链接在暗色下会留在深绿。 */
+html.dark a,
+html.dark blockquote a,
+html.dark footer .one-line a,
+html.dark .header-anchor {
+  color: #3EAF7C;
 }
 
 /* Drawer 内部链接占满一行。
@@ -370,7 +437,7 @@ html.dark {
 /* 窄屏（≤768px，与 script 中 isNarrow 的 matchMedia 断点一致）：
    在水合前由 CSS 兜底隐藏宽屏菜单项，避免窄屏设备闪现宽屏布局 */
 @media (max-width: 768px) {
-  .el-menu--horizontal > .el-divider {
+  .el-menu--horizontal > .menu-divider {
     display: none !important;
   }
   .el-menu--horizontal > .el-menu-item[index="1"],
@@ -390,6 +457,39 @@ html.dark {
   --el-menu-hover-bg-color: transparent !important;
   --el-menu-active-color: var(--el-text-color-primary) !important;
   --el-menu-bg-color: transparent !important;
+}
+
+/* 顶栏菜单项的点击目标：让内层 <a> 撑满整个 <li>。
+   axe 的 target-size（WCAG 2.2 的 2.5.8，24×24 最小目标）会把 <li role="menuitem">
+   减掉内层 <a> 之后剩下的「侧翼」算成被遮挡的空间：EP 默认给 li 左右各 20px 内边距，
+   而 <a> 只占中间 97px 宽，于是报
+   "partially obscured (smallest space is 20px by 59px)" —— 桌面 7 条、权重 7。
+   有两条路：① 把 --el-menu-base-level-padding 提到 >24px —— 顶栏整体就变宽，
+   1350px 下直接横向溢出 45px（各档折叠阈值还得跟着重算）；② 让 <a> 撑满 li —— 本条。
+   选②：li 宽度、文字位置、分隔条位置与改动前【逐像素一致】（CDP 量 rect 比对过），
+   可点区域却从 97×59 变成整项 137×59，远超 24×24。
+   - flex + align-items:center 是为了复现原来 inline 盒子靠 line-height 得到的垂直居中
+     （logo 的 img 顶边仍在 li 顶 +4.5px 处，改完不位移）；
+   - 负 margin 抵消 li 的左右内边距，与 padding 取同一个变量，改内边距时不会脱节；
+   - height:100% 成立是因为 EP 给 .el-menu-item 写了确定的 height(--el-menu-item-height)。
+   必须写在这个【非 scoped】块里：el-menu 是 fragment 根，scope 属性在它自己身上而不是
+   祖先，<style scoped> 里的 :deep(.el-menu--horizontal) 选不到它。
+   只作用于顶栏这条 ul —— sub-menu 的弹层被 teleport 到 body，跑不到这个选择器下。 */
+.el-menu--horizontal > .el-menu-item > a {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 100%;
+  margin: 0 calc(-1 * var(--el-menu-base-level-padding));
+  padding: 0 var(--el-menu-base-level-padding);
+}
+
+/* logo 那个 <a> 单独放开 overflow（选择器多一层 :nth-child(1)，免得靠书写顺序
+   去压 scoped 块里 :deep(.el-menu-item a) 的 overflow:hidden）。
+   它的 img 带 20px 上下外边距、总高 90px 塞在 59px 的 li 里：原来 <a> 是 inline
+   元素、overflow 本来就不生效才没被裁；上面改成 flex 后若不显式放开，logo 会被切掉。 */
+.el-menu--horizontal > .el-menu-item:nth-child(1) > a {
+  overflow: visible;
 }
 
 .el-menu--horizontal > .el-menu-item:nth-child(1) {

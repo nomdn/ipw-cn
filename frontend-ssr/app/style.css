@@ -31,7 +31,10 @@ h3{
 }
 .title p{
     font-size: 25.6px;
-    color: #6A8BAD;
+    /* 首页副标题。原来 #6A8BAD 在白底只有 3.55:1（axe color-contrast，
+       是移动端 12 条里唯一不是链接/代码的那条）；加深到 #4D7396 = 4.99:1，
+       色相不变、只是明度降一档。 */
+    color: #4D7396;
     margin-right: 20px;
     margin-left: 20px;
     text-align: center;
@@ -106,14 +109,14 @@ blockquote p {
     margin: 0.5em;
 }
 blockquote a{
-    color: #3EAF7C;
+    color: #2F7D5A;
     font-size: 1em;
-    /* 正文里的链接仅靠颜色区分不够（绿 #3EAF7C 与周围正文的对比度远低于 3:1），
+    /* 正文里的链接仅靠颜色区分不够（绿 #2F7D5A 与周围正文的对比度远低于 3:1），
        补下划线提供「非颜色」的视觉区分（link-in-text-block） */
     text-decoration: underline
 }
 a {
-    color: #3EAF7C;
+    color: #2F7D5A;
     font-size: 1.3em;
     text-decoration: none
     
@@ -129,7 +132,7 @@ footer .one-line {
 footer .one-line a {
     font-size: 1em;
     text-align: center;
-    color: #3EAF7C;
+    color: #2F7D5A;
     text-decoration: none
 }
 footer {
@@ -204,7 +207,7 @@ footer {
     }
     blockquote a{
       
-        color: #3EAF7C;
+        color: #2F7D5A;
         font-size: 1em;
         /* 与上面的非窄屏规则保持一致：窄屏同样靠下划线做非颜色区分。
            此处若仍写 none，因其位置在后、特异性相同，会把桌面的 underline 盖掉。 */
@@ -269,7 +272,7 @@ h4>.header-anchor,
 h5>.header-anchor,
 h6>.header-anchor {
     opacity: 1;
-    color: #3EAF7C;
+    color: #2F7D5A;
 }
 
 h1:hover>.header-anchor,
@@ -282,5 +285,5 @@ h6:hover>.header-anchor {
 }
 .header-anchor::before {
     content: "#";
-    color: #3EAF7C;
+    color: #2F7D5A;
 }

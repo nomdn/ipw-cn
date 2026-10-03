@@ -67,7 +67,22 @@ curl ${config.v6OnlyAPI}
 # (访问 IPv4/IPv6 双栈站点，如果返回 IPv6 地址，则 IPv6 访问优先)
 curl ${config.DualStackAPI}
 `.trim();
-const html = ref('');
+
+// 代码高亮放 SSR 期算（与首页同款做法）：HTML 里直接是带 <span> 的高亮结果，
+// 客户端不必再下载/执行 shiki（引擎 + 语言 + 主题 ≈ 164KB），也不会出现
+// "先渲染纯文本、稍后换成高亮"的块高变化。代码是构建期常量，结果可随 HTML 一起缓存。
+// import 写在 handler 内部（动态 import 单独成 chunk），首屏不会预载它。
+const { data: html } = await useAsyncData(
+  'location-curl-code',
+  async () => {
+    const { highlightCode } = await import('../../utils/shiki');
+    return await highlightCode(code, 'bash');
+  },
+  // 默认值给 code（不是空串）：这里模板只有单个 v-html，没有 fallback 分支，
+  // 高亮失败时正好退回原始代码文本，别让代码块空着。
+  // （首页那处模板有 v-else 分支，所以那边默认值必须留空，两处不可照抄。）
+  { default: () => code },
+);
 const apiList = config.IPLocationAPI
 const currentApiIndex = ref(0)
 const backendID = computed(() => apiList[currentApiIndex.value]?.id || '')
@@ -117,18 +132,7 @@ function locateIP(IP: string){
 }
 
 onMounted(async () => {
-  // 代码高亮与下面的「取本机 IP / 定位查询」互不依赖，别把它摆在流程最前面 await ——
-  // 否则后面那次 $fetch 要等 160KB 的 shiki 下载完才会发出。
-  // 动态 import 让 shiki（引擎 + 语言/主题注册表）单独成 chunk，首屏渲染不再等它。
-  void import('../../utils/shiki')
-    .then(({ highlightCode }) => highlightCode(code, 'bash'))
-    .then((h) => {
-      html.value = h
-    })
-    .catch(() => {
-      // 连 import 本身都失败时退回原始代码，别让代码块空着
-      html.value = code
-    })
+  // （代码高亮已移到 setup 顶部的 useAsyncData，随 SSR 一起产出，这里只剩定位查询。）
 
   const urlParam = route.query.ip;
   if (urlParam) {

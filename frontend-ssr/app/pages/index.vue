@@ -74,28 +74,35 @@ curl ${config.v6OnlyAPI}
 # (访问 IPv4/IPv6 双栈站点，如果返回 IPv6 地址，则 IPv6 访问优先)
 curl ${config.DualStackAPI}
 `.trim(); // 关键：去掉首尾多余的空行
-const highlightedCode = ref('');
+
+// 代码高亮放在 SSR 期算：HTML 下发时就已经是带 <span> 的高亮结果，
+// 于是 ①客户端不必再下载/执行 shiki（引擎 + 语言 + 主题 ≈ 164KB）；
+// ②不会再有"先出纯文本兜底、若干秒后才换成高亮"的那次块高变化（可见重排）。
+//
+// 这段代码是构建期常量（只依赖 config，不随请求变化），所以结果可以安全地随 HTML 一起缓存。
+//
+// import 仍然写在 handler 内部（而不是文件顶层）：动态 import 会把它切成独立 chunk，
+// 只在真正要高亮时加载，不会像顶层静态 import 那样被塞进首屏的 modulepreload 列表。
+// 首次进入是 SSR 执行的；客户端水合直接读 payload（Nuxt 会序列化 useAsyncData 的结果），
+// 只有客户端软导航到本页时才在浏览器里跑一次。
+const { data: highlightedCode } = await useAsyncData(
+  'home-curl-code',
+  async () => {
+    const { highlightCode } = await import('../../utils/shiki');
+    return await highlightCode(code, 'bash');
+  },
+  // 默认值必须留空：模板是 v-if="highlightedCode" / v-else 的双分支，
+  // 给成 code 会让 v-if 命中、把纯文本当 HTML 塞进 v-html（fallback 分支永远走不到）。
+  // 留空则失败时自然落到 v-else 的 code-block--fallback，与改动前 catch 里清空的行为一致。
+  { default: () => '' },
+);
 
 const ipAddress = ref('');
 const yourIPv4 = ref('');
 const yourIPv6 = ref('');
 
 onMounted(() => {
-  // 代码高亮与三个 IP 查询互不依赖，一起发出即可。
-  // 注意别写成"先 await 高亮再发请求"：shiki 首次要把语言包拉下来，会把三次查询整体推后数百毫秒。
-  //
-  // 用动态 import 而非顶层静态 import：shiki 的引擎核心 + 语言/主题注册表约 160KB，
-  // 首页只为这 4 行 curl 示例需要它。静态 import 会把它拽进首屏同步加载的关键路径
-  // （构建后体现为一个 164KB 的 chunk 出现在 modulepreload 列表）；动态 import 后
-  // 它单独成 chunk，首屏渲染不再等它。
-  void import('../../utils/shiki')
-    .then(({ highlightCode }) => highlightCode(code, 'bash'))
-    .then((html) => {
-      highlightedCode.value = html;
-    })
-    .catch(() => {
-      highlightedCode.value = '';
-    });
+  // （代码高亮已移到 setup 顶部的 useAsyncData，随 SSR 一起产出，这里只剩三个 IP 查询。）
 
   // 三个地址各自独立请求、各自渲染：谁先回来谁先上屏。
   // 不用 Promise.allSettled 包起来等齐——那样只要有一个慢（例如纯 IPv4 网络下 v6 接口要等超时），
