@@ -281,7 +281,7 @@ function getStatusClass(status: string): string {
 @import "../style.css";
 @import "../../assets/css/tool-common.css";
 .markdown :deep(a) {
-  color: #3EAF7C !important;
+  color: #299764 !important;
   font-size: 1.3em;
   text-decoration: none
 }
@@ -319,10 +319,10 @@ function getStatusClass(status: string): string {
 
 <style>
 :root {
-  --el-color-primary: #3EAF7C;
+  --el-color-primary: #299764;
 }
 html.dark {
-  --el-color-primary: #3EAF7C;
+  --el-color-primary: #299764;
 }
 .el-icon{
   font-size: 1.3em;

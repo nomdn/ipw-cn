@@ -261,7 +261,7 @@ onMounted(async () => {
 <style>
 @import "../style.css";
 :root {
-  --el-color-primary: #3EAF7C;
+  --el-color-primary: #299764;
 }
 .el-icon{
   font-size: 1.3em;
@@ -444,7 +444,7 @@ html.dark pre code {
 
 .badge-item h4 {
   margin: 0 0 15px 0;
-  color: #3EAF7C;
+  color: #299764;
   font-size: 1.2em;
 }
 

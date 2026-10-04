@@ -4,7 +4,21 @@ import { useDark, useToggle } from '@vueuse/core';
 import { Moon, Sunny, Expand } from '@element-plus/icons-vue';
 import { config } from '../config/index';
 
-const isNarrow = ref(false);
+// ==================== 窄屏判定（水合前就必须定下来） ====================
+// 为什么不能等到 onMounted 才算：SSR 不知道视口宽度，只能按宽屏输出 ——
+// 于是整条桌面版顶栏菜单（10 个条目 + 分隔线 + 3 个下拉）会被下发给手机；
+// 水合时 isNarrow 还是 false，手机就先把这一整套水合一遍
+// （实测 375×812：header-menu 区域 268 次 DOM 变更、70 次事件绑定），
+// 紧接着 onMounted 把它改成窄屏、再整棵销毁重建 —— 这一整轮纯属白干。
+// 所以改成「服务端按请求头判定、客户端直接沿用服务端序列化下来的结论」，
+// 两边输入一致 ⇒ 结论一致 ⇒ 水合期不产生任何分歧，桌面上仍是原来的形态。
+// 权威值依旧由 onMounted 的 matchMedia 覆盖，管「桌面窗口被拖窄」这类请求头判不出的情形。
+//
+// 注意：**不要**在客户端重新嗅探 navigator.userAgent。SSR 页两边大概率巧合一致，
+// 但预渲染页没有请求头（服务端恒判宽屏），客户端一嗅探就必然分叉 ——
+// 实测那会让整个 /doc/** 在真手机上水合失配、Nuxt 直接渲染 500 页。
+// 判定逻辑与文档见 app/composables/useShellNarrow.ts。
+const isNarrow = useShellNarrow()
 let mediaQueryList: MediaQueryList | null = null;
 const drawer = ref(false);
 
@@ -345,7 +359,7 @@ onMounted(() => {
 </style>
 <style>
 :root {
-  --el-color-primary: #3EAF7C;
+  --el-color-primary: #299764;
 }
 html.dark {
   /* 暗色模式下根元素的文字色与页面底色。
@@ -354,7 +368,7 @@ html.dark {
      `html.dark[data-v-xxxx]` —— 整条规则永不匹配，底色只能靠浏览器的 color-scheme 兜底。 */
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
-  --el-color-primary: #3EAF7C;
+  --el-color-primary: #299764;
 }
 /* Drawer 内部链接占满一行。
    注意用直接子选择器（> a）：文档菜单（DocMenu）里的 <a> 嵌在 el-menu-item 里，

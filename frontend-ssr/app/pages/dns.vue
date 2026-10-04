@@ -201,7 +201,8 @@ const doc = page.value;
         v-model="tmpDomain" 
         placeholder="请输入域名（如：example.com）" 
       />
-      <el-select v-model="recordType" style="width: 150px;" class="custom-height-select">
+      <!-- aria-label 落到 EP select 内部的原生 input 上，否则 Lighthouse 的 label 审计必挂 -->
+      <el-select v-model="recordType" style="width: 150px;" class="custom-height-select" aria-label="DNS 记录类型">
         <el-option 
           v-for="item in recordTypes" 
           :key="item.value" 
@@ -297,7 +298,7 @@ const doc = page.value;
 }
 
 .markdown :deep(a) {
-  color: #3EAF7C !important;
+  color: #299764 !important;
   font-size: 1.3em;
   text-decoration: none
 }
@@ -305,11 +306,11 @@ const doc = page.value;
 
 <style>
 :root {
-  --el-color-primary: #3EAF7C;
+  --el-color-primary: #299764;
 }
 
 html.dark {
-  --el-color-primary: #3EAF7C;
+  --el-color-primary: #299764;
 }
 
 .el-icon {

@@ -286,7 +286,7 @@ html.dark .loading-overlay p {
 }
 
 .markdown :deep(a) {
-  color: #3EAF7C !important;
+  color: #299764 !important;
   font-size: 1.3em;
   text-decoration: none
 }

@@ -209,6 +209,6 @@ onMounted(() => {
 </style>
 <style>
 :root {
-  --el-color-primary: #3EAF7C;
+  --el-color-primary: #299764;
 }
 </style>

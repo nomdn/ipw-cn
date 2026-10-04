@@ -1,5 +1,41 @@
 import {config} from "./config/index";
-import { docConfig } from "./config/doc";
+import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { join, relative } from "node:path";
+import { imageSize } from "image-size";
+
+// ==================== 内容图片尺寸清单（构建期生成） ====================
+// markdown 里的图片（如 /doc/xxx.jpg）需要真实 width/height 才能消除 CLS
+// 和 Lighthouse 的 unsized-images。生产跑在 CF Workers 上，**没有 fs**，
+// 运行时读不了 public/ —— 所以在 nuxt.config 求值时（每次 build/dev 启动
+// 都会执行）扫一遍 public/ 下的位图，把尺寸写成 JSON 清单，让
+// utils/markdown.ts 作为构建期常量 import 进去。新增图片后重新构建即生效。
+function buildImageDimManifest(): void {
+  const IMG_RE = /\.(jpe?g|png|webp|gif|avif)$/i;
+  const dims: Record<string, { width: number; height: number }> = {};
+  const walk = (dir: string) => {
+    if (!existsSync(dir)) return;
+    for (const name of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, name.name);
+      if (name.isDirectory()) {
+        walk(p);
+      } else if (IMG_RE.test(name.name)) {
+        try {
+          const r = imageSize(new Uint8Array(readFileSync(p)));
+          if (r.width && r.height) {
+            dims["/" + relative("public", p).replace(/\\/g, "/")] = {
+              width: r.width,
+              height: r.height,
+            };
+          }
+        } catch { /* 损坏文件跳过，渲染时不写宽高 */ }
+      }
+    }
+  };
+  walk("public");
+  writeFileSync("config/doc-image-dims.json", JSON.stringify(dims, null, 0));
+}
+buildImageDimManifest();
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 const extractDomains = (obj: any): string[] => {
   // 将对象转为 JSON 字符串，用正则匹配所有 https:// 开头的域名部分
@@ -27,6 +63,17 @@ const middlewareOrigin = config.Middleware?.[0]
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
+  experimental: {
+    defaults: {
+      nuxtLink: {
+        // NuxtLink 默认「链接进入视口就预取目标页 JS」——顶栏 15 个菜单项会让
+        // 首屏把其它工具页的 chunk（含 87KB 的校验库等重依赖）全拉下来，
+        // 白吃带宽还挤占首屏关键请求。改为「悬停/聚焦才预取」：真正要去
+        // 哪个页面时再拉那一页，首屏只加载当前页需要的代码。
+        prefetchOn: { interaction: true, visibility: false },
+      },
+    },
+  },
   modules: [
     "nitro-cloudflare-dev",
     '@element-plus/nuxt',
@@ -122,10 +169,13 @@ export default defineNuxtConfig({
   },
   routeRules: {
     // 缓存头一律不在这里设，交由 CDN（EdgeOne）侧控制。
-    // /doc 文档站改为 SSG：构建时预渲染为静态 HTML，由边缘静态资源直接响应
-    '/doc/**': { prerender: true },
+    // /doc/** 曾经是 SSG（prerender），已撤回改为 SSR，原因见下方 nitro.prerender 处的注释。
   },
   nitro: {
+    // 构建期给 public/ 静态资源生成 .gz/.br 预压缩副本，按 Accept-Encoding 直接回；
+    // SSR HTML 的压缩在 server/plugins/compress-html.ts。两者合起来让本地直连的
+    // 传输体积与线上（EdgeOne 会压）一致，Lighthouse 的 Lantern 模拟才不会虚高。
+    compressPublicAssets: true,
     publicAssets: [
       {
         dir: 'public',
@@ -137,17 +187,21 @@ export default defineNuxtConfig({
         target: 'es2022' // 明确告诉 Nitro 使用 es2022 进行打包
       }
     },
-    prerender: {
-      // 显式列出所有 doc 路由（来自 config/doc.ts 的 docConfig 键），
-      // 让动态 [...slug] 页面在构建时全部预渲染为静态 HTML
-      routes: ['/doc', ...Object.keys(docConfig).filter((p) => p !== '/doc')],
-    },
+    // 这里曾用 prerender.routes 把整份 docConfig 的文档页在构建期预渲染成静态 HTML。
+    // 已撤回，改回 SSR —— 因为预渲染与「按请求头决定渲染形态」根本冲突：
+    // 构建期没有请求头，窄屏判定恒为宽屏，于是预渲染产物里永远躺着
+    // 「15 条桌面顶栏菜单 + 被 CSS 隐藏的 40 项文档侧栏」；真手机打开时客户端判定为窄屏，
+    // 首帧 vdom 与 HTML 对不上，Vue 水合直接抛
+    // `Cannot read properties of null (reading 'nodeType')`，整页变成 500。
+    // 顺带收益：/doc 现在也走运行时安全头（预渲染页拿不到 CSP，见下方 security.ssg）。
+    // 代价只是源站多跑一层 SSR，前面有 EdgeOne 缓存兜着。
   },
   security: {
     ssg: {
-      // /doc 预渲染页的 CSP 会因 SRI modulepreload 哈希全量拼入而单行超 2000 字符，
-      // 触发 Cloudflare _headers 限制；关闭静态页安全头写入 _headers。
-      // SSR 页面仍由运行时中间件下发完整安全头，不受影响。
+      // 预渲染页的 CSP 会因 SRI modulepreload 哈希全量拼入而单行超 2000 字符，
+      // 触发 Cloudflare _headers 限制，故关掉静态页的安全头写入。
+      // 当前没有预渲染路由（/doc/** 已改回 SSR），这条是留给将来再开 prerender 时的开关：
+      // 一旦重新启用 prerender，那些页就会退回「无 CSP」状态。
       nitroHeaders: false,
     },
     headers: {

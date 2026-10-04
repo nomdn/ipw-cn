@@ -261,10 +261,10 @@ function getStatusClass(status: string): string {
 
 <style>
 :root {
-  --el-color-primary: #3EAF7C;
+  --el-color-primary: #299764;
 }
 html.dark {
-  --el-color-primary: #3EAF7C;
+  --el-color-primary: #299764;
 }
 .el-icon{
   font-size: 1.3em;

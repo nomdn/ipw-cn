@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { getDocMeta } from '../../../config/doc'
 
+// 窄屏下这条侧栏被 CSS 隐藏（导航在顶栏抽屉里），但照样要花钱水合 ——
+// 详见 app/pages/doc/index.vue 的同名注释。
+const isNarrow = useShellNarrow()
+
 const route = useRoute();
 
 const path = computed(() => route.path)
@@ -18,7 +22,7 @@ useHead({
     <div class="box">
         <!-- 文档导航只有一份实现（app/components/DocMenu.vue）。
              宽屏：就是这条左侧固定侧栏；窄屏：本侧栏隐藏，改由顶部抽屉菜单承载 -->
-        <DocMenu class="sidebar-menu" />
+        <DocMenu v-if="!isNarrow" class="sidebar-menu" />
         <div class="content">
             <div class="markdown-body" v-if="page">
                 <div v-html="page" />

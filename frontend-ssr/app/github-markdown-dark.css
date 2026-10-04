@@ -9,10 +9,10 @@ html.dark .markdown-body {
   /* GitHub 暗色主题的核心颜色 */
   --color-fg-default: #e6edf3;
   --color-fg-muted: #8b949e;
-  --color-fg-accent: #3EAF7C;
+  --color-fg-accent: #299764;
   --color-bg-default: #242424;
   --color-bg-muted: #080707;
-  --color-bg-accent: #3EAF7C;
+  --color-bg-accent: #299764;
   --color-border-default: #242424;
   --color-border-muted: #242424;
   

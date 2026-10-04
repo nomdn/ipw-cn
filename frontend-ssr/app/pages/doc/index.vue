@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { getDocMeta } from '../../../config/doc'
 
+// 窄屏（≤768px）下这条侧栏被 CSS 整个隐藏，导航改由顶栏抽屉承载。
+// 但「只是藏起来」不等于不花钱：Vue 依旧会把整棵 40 项的 el-menu 水合一遍
+// （实测手机端 doc-sidebar 区域 53 次事件绑定）。所以直接按判定结果不渲染。
+// 这里用的是全局共享的窄屏状态（服务端按请求头判定并随 payload 下发），
+// 与 app.vue 同一份 —— 首帧与服务端 HTML 一致，不会有水合分歧。
+const isNarrow = useShellNarrow()
+
 const { data: page } = await useAsyncData('doc-index', () =>
   $fetch('/api/markdown/doc/index')
 )
@@ -18,7 +25,7 @@ useHead({
     <div class="box">
         <!-- 文档导航只有一份实现（app/components/DocMenu.vue）。
              宽屏：就是这条左侧固定侧栏；窄屏：本侧栏隐藏，改由顶部抽屉菜单承载 -->
-        <DocMenu class="sidebar-menu" />
+        <DocMenu v-if="!isNarrow" class="sidebar-menu" />
         <div class="content">
             <div class="markdown-body" v-html="doc"></div>
         </div>
