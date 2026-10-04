@@ -109,14 +109,14 @@ blockquote p {
     margin: 0.5em;
 }
 blockquote a{
-    color: #299764;
+    color: var(--link-color);
     font-size: 1em;
     /* 正文里的链接仅靠颜色区分不够（绿 #299764 与周围正文的对比度远低于 3:1），
        补下划线提供「非颜色」的视觉区分（link-in-text-block） */
     text-decoration: underline
 }
 a {
-    color: #299764;
+    color: var(--link-color);
     font-size: 1.3em;
     text-decoration: none
     
@@ -132,7 +132,7 @@ footer .one-line {
 footer .one-line a {
     font-size: 1em;
     text-align: center;
-    color: #299764;
+    color: var(--link-color);
     text-decoration: none
 }
 footer {
@@ -207,7 +207,7 @@ footer {
     }
     blockquote a{
       
-        color: #299764;
+        color: var(--link-color);
         font-size: 1em;
         /* 与上面的非窄屏规则保持一致：窄屏同样靠下划线做非颜色区分。
            此处若仍写 none，因其位置在后、特异性相同，会把桌面的 underline 盖掉。 */
@@ -272,7 +272,7 @@ h4>.header-anchor,
 h5>.header-anchor,
 h6>.header-anchor {
     opacity: 1;
-    color: #299764;
+    color: var(--link-color);
 }
 
 h1:hover>.header-anchor,
@@ -285,5 +285,5 @@ h6:hover>.header-anchor {
 }
 .header-anchor::before {
     content: "#";
-    color: #299764;
+    color: var(--link-color);
 }

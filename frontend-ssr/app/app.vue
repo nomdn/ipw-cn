@@ -152,12 +152,21 @@ onMounted(() => {
     window.removeEventListener('resize', updateViewport);
   });
 
-  if (!umamiScript && config.umamiScriptUrl) {
+  // 统计脚本延迟到浏览器空闲再注入：umami 源响应慢（实测 ~1.6s），
+  // 挂在 onMounted 里会和首页首屏的拨测请求抢慢速网络的带宽，
+  // 拖累 Speed Index；统计本身不需要抢首屏前的任何窗口。
+  const loadUmami = () => {
+    if (umamiScript || !config.umamiScriptUrl) return
     umamiScript = document.createElement('script')
     umamiScript.src = config.umamiScriptUrl
     umamiScript.async = true
     umamiScript.setAttribute('data-website-id', config.umamiWebsiteId)
     document.head.appendChild(umamiScript)
+  }
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(loadUmami, { timeout: 4000 })
+  } else {
+    setTimeout(loadUmami, 2000)
   }
 })
 </script>
@@ -360,6 +369,10 @@ onMounted(() => {
 <style>
 :root {
   --el-color-primary: #299764;
+  /* 正文/页脚链接色：亮色白底需 ≥4.5:1（axe color-contrast 审计线）。
+     #299764 白底只有 3.68:1，加深到 #1d7a4a = 5.34:1，留足余量。
+     主题色（按钮/高亮等 --el-color-primary 消费方）保持 #299764 不动，只分流链接。 */
+  --link-color: #1d7a4a;
 }
 html.dark {
   /* 暗色模式下根元素的文字色与页面底色。
@@ -369,6 +382,8 @@ html.dark {
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
   --el-color-primary: #299764;
+  /* 暗底 #242424 上 #299764 对比 ~4.2:1，且再加深只会更差 —— 暗色链接保持原色 */
+  --link-color: #299764;
 }
 /* Drawer 内部链接占满一行。
    注意用直接子选择器（> a）：文档菜单（DocMenu）里的 <a> 嵌在 el-menu-item 里，

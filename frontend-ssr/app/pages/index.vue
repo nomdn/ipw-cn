@@ -25,6 +25,32 @@ useHead({
   ],
   script: [
     {
+      // —— IP 探测提前到 HTML 解析期（LCP 优化）——
+      // 原来三个探测请求在 onMounted（水合完成后）才发出，模拟链路是
+      // 「水合 → 发请求 → 等服务端 → 回填渲染」，IPv6 行作为 LCP 元素被整段串行拖住
+      // （mobile 模拟 LCP 2275ms，满分线约 1600ms）。
+      // 这里在 head 里用内联脚本立刻发起，与 render-blocking CSS 的下载、
+      // hydration 三路并行；结果挂 window.__ipProbe，完成时派发 ip-probe 事件，
+      // onMounted 只负责消费（见下方），不再等水合才起步。
+      // 用原生 fetch：此刻 ofetch 还没加载；不带 retry 的语义与旧版 retry:false 一致
+      // （底层 fetch 本来就不会重试）。
+      innerHTML: [
+        'window.__ipProbe = {};',
+        '(function () {',
+        `  function emit(key) {`,
+        `    return function (text) {`,
+        `      window.__ipProbe[key] = text;`,
+        `      document.dispatchEvent(new CustomEvent('ip-probe', { detail: key }));`,
+        `    };`,
+        `  }`,
+        // 与 onMounted 的语义一致：三接口各自独立、失败静默（保持「查询中」占位）
+        `  fetch(${JSON.stringify(config.v6OnlyAPI)}).then(function (r) { return r.text(); }).then(emit('v6')).catch(function () {});`,
+        `  fetch(${JSON.stringify(config.v4OnlyAPI)}).then(function (r) { return r.text(); }).then(emit('v4')).catch(function () {});`,
+        `  fetch(${JSON.stringify(config.DualStackAPI)}).then(function (r) { return r.text(); }).then(emit('dual')).catch(function () {});`,
+        '})();',
+      ].join('\n'),
+    },
+    {
       type: 'application/ld+json',
       innerHTML: JSON.stringify({
         '@context': 'https://schema.org',
@@ -102,35 +128,63 @@ const yourIPv4 = ref('');
 const yourIPv6 = ref('');
 
 onMounted(() => {
-  // （代码高亮已移到 setup 顶部的 useAsyncData，随 SSR 一起产出，这里只剩三个 IP 查询。）
+  // （代码高亮已移到 setup 顶部的 useAsyncData，随 SSR 一起产出。）
 
-  // 三个地址各自独立请求、各自渲染：谁先回来谁先上屏。
-  // 不用 Promise.allSettled 包起来等齐——那样只要有一个慢（例如纯 IPv4 网络下 v6 接口要等超时），
-  // 已经拿到的 IPv4 与双栈结果也得一起干等。
+  // —— 三个 IP 探测：请求已由 head 内联脚本提前发出（见 useHead），这里只消费 ——
+  // 内联脚本把结果挂 window.__ipProbe[key] 并派发 ip-probe 事件。三种时序都要覆盖：
+  //   ① 值已就位（事件在 onMounted 之前派发过）→ 同步读 store 直接上屏；
+  //   ② 值未到 → 挂监听等事件（收到匹配 key 才移除，不能 once——
+  //      三个 key 共用同一事件名，once 会把别人的事件当自己的吃掉）；
+  //   ③ window.__ipProbe 不存在（内联脚本被 CSP 拦掉/异常）→ 退回自己发请求，行为同旧版。
   //
   // retry: false —— ofetch 默认会对 GET 重发一次：网络层失败时它拿不到 response，就按 500 计
   // （500 在默认重试白名单里），且默认延迟为 0，立即重发。于是"这个节点连不上"会被原样重做一遍，
   // 用户白等一倍时间（实测 ofetch 1.5.1：裸调用触发 2 次真实 fetch，传 retry:false 后只剩 1 次；
-  // 浏览器自身不会重试，底层 fetch 对同一请求只被调用过一次）。
+  // 浏览器自身不会重试，底层 fetch 对同一请求只被调用过一次）。仅 ③ 的兜底路径会走到 $fetch。
   const ipFetchOptions = { retry: false } as const;
+  const probeStore = (window as any).__ipProbe as Record<string, string> | undefined;
 
-  $fetch<string>(config.DualStackAPI, ipFetchOptions)
-    .then((ip) => {
-      ipAddress.value = ip;
-    })
-    .catch(() => {
-      // 单个接口失败不影响其它两行展示，保持"查询中"占位
-    });
-  $fetch<string>(config.v4OnlyAPI, ipFetchOptions)
-    .then((ip) => {
-      yourIPv4.value = ip;
-    })
-    .catch(() => {});
-  $fetch<string>(config.v6OnlyAPI, ipFetchOptions)
-    .then((ip) => {
-      yourIPv6.value = ip;
-    })
-    .catch(() => {});
+  const consumeProbe = (key: string, apply: (ip: string) => void): boolean => {
+    if (!probeStore) return false; // ③ 内联脚本没跑起来
+    if (typeof probeStore[key] === 'string') {
+      apply(probeStore[key]); // ① 值已就位
+      return true;
+    }
+    const onProbe = (e: Event) => {
+      if ((e as CustomEvent).detail !== key) return;
+      document.removeEventListener('ip-probe', onProbe);
+      apply(probeStore[key]); // ② 事件到达
+    };
+    document.addEventListener('ip-probe', onProbe);
+    return true;
+  };
+
+  // 三个地址各自独立请求、各自渲染：谁先回来谁先上屏。
+  // 不用 Promise.allSettled 包起来等齐——那样只要有一个慢（例如纯 IPv4 网络下 v6 接口要等超时），
+  // 已经拿到的 IPv4 与双栈结果也得一起干等。
+  if (!consumeProbe('dual', (ip) => { ipAddress.value = ip; })) {
+    $fetch<string>(config.DualStackAPI, ipFetchOptions)
+      .then((ip) => {
+        ipAddress.value = ip;
+      })
+      .catch(() => {
+        // 单个接口失败不影响其它两行展示，保持"查询中"占位
+      });
+  }
+  if (!consumeProbe('v4', (ip) => { yourIPv4.value = ip; })) {
+    $fetch<string>(config.v4OnlyAPI, ipFetchOptions)
+      .then((ip) => {
+        yourIPv4.value = ip;
+      })
+      .catch(() => {});
+  }
+  if (!consumeProbe('v6', (ip) => { yourIPv6.value = ip; })) {
+    $fetch<string>(config.v6OnlyAPI, ipFetchOptions)
+      .then((ip) => {
+        yourIPv6.value = ip;
+      })
+      .catch(() => {});
+  }
 });
 </script>
 
@@ -143,10 +197,10 @@ onMounted(() => {
     </header>
   </div>
   <div class="content">
-    <div class="one-line">
+    <div class="one-line ip-row">
       <b>IPv4</b>&nbsp<p>{{ yourIPv4 }} </p>&nbsp<RouterLink :to="`/location?ip=${yourIPv4}`" target="_blank">查询归属地</RouterLink>
     </div>
-    <div class="one-line">
+    <div class="one-line ip-row">
       <b>IPv6</b>&nbsp<p v-if="yourIPv6">{{ yourIPv6 }}</p><RouterLink :to="`/location?ip=${yourIPv6}`" target="_blank" v-if="yourIPv6">&nbsp查询归属地</RouterLink><RouterLink v-else to="/doc/user/enable_ipv6" target="_blank">没有IPv6地址,查看如何开启IPv6</RouterLink>
     </div>
     <div class="ip-priority">
@@ -180,6 +234,20 @@ onMounted(() => {
   margin: 1em 0;
 }
 
+/* 两行 IP 记录预留确定高度，消除 CLS。
+   实测（CDP 逐帧采样 + CSS 变体对照，填值后量终态几何）：
+   这两个 div 的文本是 onMounted 之后才由 $fetch 填上的。IPv6 地址（39 字符）
+   在窄屏下把 .one-line 从 1 行撑到 3 行，下面 .ip-priority / 代码块 / blockquote /
+   footer 被整体顶下 50px —— Lighthouse 记的 `div.code-block` 那条 CLS 0.0359
+   （占全页 88%）就是这么来的，而满分门槛只有 0.0396，差 3% 就被扣分。
+   修法是让高度与「填完之后」一致。终态高度按视口分档（CDP 实测，不是估算）：
+     移动 412 宽 → ip2 终态 75px（3 行）；桌面 1350 宽 → 30px（1 行，.content 宽 60%）
+   所以必须分媒体查询给值：一刀切 75px 会让桌面凭空多出 45px 空白。
+   代价是接口 pending 时这里空着，但换来 CLS 归零。 */
+.ip-row {
+  min-height: 30px;
+}
+
 .code-block {
   margin-top: 1rem;
   padding: 1rem;
@@ -198,13 +266,18 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .ip-priority h2 {
-    font-size: 1.1em;
-  }
-  .code-block {
-    padding: 0.75rem;
-    font-size: 0.8em;
-  }
+    .ip-priority h2 {
+      font-size: 1.1em;
+    }
+    .code-block {
+      padding: 0.75rem;
+      font-size: 0.8em;
+    }
+    /* 窄屏下 IPv6 地址换 3 行（CDP 实测 412 宽终态 h=75px），见上面 .ip-row 的注释 */
+    .ip-row {
+      min-height: 75px;
+      align-content: flex-start;
+    }
 }
 </style>
 <style>

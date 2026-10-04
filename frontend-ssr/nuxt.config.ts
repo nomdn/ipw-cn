@@ -1,41 +1,4 @@
 import {config} from "./config/index";
-import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
-import { join, relative } from "node:path";
-import { imageSize } from "image-size";
-
-// ==================== 内容图片尺寸清单（构建期生成） ====================
-// markdown 里的图片（如 /doc/xxx.jpg）需要真实 width/height 才能消除 CLS
-// 和 Lighthouse 的 unsized-images。生产跑在 CF Workers 上，**没有 fs**，
-// 运行时读不了 public/ —— 所以在 nuxt.config 求值时（每次 build/dev 启动
-// 都会执行）扫一遍 public/ 下的位图，把尺寸写成 JSON 清单，让
-// utils/markdown.ts 作为构建期常量 import 进去。新增图片后重新构建即生效。
-function buildImageDimManifest(): void {
-  const IMG_RE = /\.(jpe?g|png|webp|gif|avif)$/i;
-  const dims: Record<string, { width: number; height: number }> = {};
-  const walk = (dir: string) => {
-    if (!existsSync(dir)) return;
-    for (const name of readdirSync(dir, { withFileTypes: true })) {
-      const p = join(dir, name.name);
-      if (name.isDirectory()) {
-        walk(p);
-      } else if (IMG_RE.test(name.name)) {
-        try {
-          const r = imageSize(new Uint8Array(readFileSync(p)));
-          if (r.width && r.height) {
-            dims["/" + relative("public", p).replace(/\\/g, "/")] = {
-              width: r.width,
-              height: r.height,
-            };
-          }
-        } catch { /* 损坏文件跳过，渲染时不写宽高 */ }
-      }
-    }
-  };
-  walk("public");
-  writeFileSync("config/doc-image-dims.json", JSON.stringify(dims, null, 0));
-}
-buildImageDimManifest();
-
 // https://nuxt.com/docs/api/configuration/nuxt-config
 const extractDomains = (obj: any): string[] => {
   // 将对象转为 JSON 字符串，用正则匹配所有 https:// 开头的域名部分
@@ -64,6 +27,14 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   experimental: {
+    // 关闭 app manifest 版本检查：水合后 Nuxt 会在 requestIdleCallback 里请求
+    // /_nuxt/builds/meta/<buildId>.json，buildId 对不上（本地「服务旧、磁盘新」、
+    // 或线上发版切换瞬间）就抛 NUXT_E5002 污染 console，还拖累 Best Practices 分。
+    // 本项目没依赖 appManifest 的客户端能力（无客户端 routeRules、无 prerender
+    // 判定），关掉少一个请求，console 永远干净。
+    appManifest: false,
+    // 注：inlineStyles: true 实测是负优化——它只内联 page 组件样式（+12KB HTML），
+    // entry/EP 等共享样式仍是 render-blocking 外链，关键请求一个没省。勿开。
     defaults: {
       nuxtLink: {
         // NuxtLink 默认「链接进入视口就预取目标页 JS」——顶栏 15 个菜单项会让
@@ -100,8 +71,12 @@ export default defineNuxtConfig({
     // SSR 期算完写进 HTML，客户端根本不会执行它，纯属白下。
     // 把 manifest 上的标记抹掉即可：动态 chunk 回到「真正 import 时才加载」。
     // 静态闭包走的是 preload 分支（modulepreload），不受影响。
+    // —— 2026-10-04 曾试把 preload 也置 false：FCP 确实 2333→1404（少了 22 个请求的
+    // 下载竞争），但 LCP 2387→2933、TBT 86→280（权重 25%/30% 远大于 FCP 的 10%），
+    // 总分 94→89 净亏。原因：这 22 个 modulepreload 是 entry 的静态依赖闭包，全掐掉后
+    // hydration 推迟、长任务落进 LCP/TBT 窗口。故只掐 prefetch，preload 必须留。
     'build:manifest': (manifest) => {
-      for (const chunk of Object.values(manifest) as Array<Record<string, unknown>>) {
+      for (const chunk of Object.values(manifest) as unknown as Array<Record<string, unknown>>) {
         if (chunk.prefetch) chunk.prefetch = false
       }
     },
@@ -148,9 +123,9 @@ export default defineNuxtConfig({
           rel: 'preconnect',
           href,
           crossorigin: 'anonymous',
-        })),
+        } as const)),
         ...(middlewareOrigin
-          ? [{ rel: 'dns-prefetch', href: middlewareOrigin }]
+          ? [{ rel: 'dns-prefetch', href: middlewareOrigin } as const]
           : []),
       ]
     }
