@@ -50,9 +50,6 @@ importers:
       github-slugger:
         specifier: ^2.0.0
         version: 2.0.0
-      image-size:
-        specifier: ^2.0.4
-        version: 2.0.4
       is-ip:
         specifier: ^5.0.1
         version: 5.0.1
@@ -2907,11 +2904,6 @@ packages:
 
   image-meta@0.2.2:
     resolution: {integrity: sha512-3MOLanc3sb3LNGWQl1RlQlNWURE5g32aUphrDyFeCsxBTk08iE3VNe4CwsUZ0Qs1X+EfX0+r29Sxdpza4B+yRA==}
-
-  image-size@2.0.4:
-    resolution: {integrity: sha512-QRUkFFsRV/6fuESxb9Vkq+a0LkSrgKXuc2NEqfikiXxxN/G3tjWt5EVUlMaImRBZRZK/jRBEbYvpPYZL8t08Zw==}
-    engines: {node: '>=18'}
-    hasBin: true
 
   immutable@5.1.9:
     resolution: {integrity: sha512-m8nVez3rwrgmWxtLMt1ZYXB2Lv7OKYn/disyxAlSDYAlKSlFoPPfIAmAM/M5xqL4m4C/wAPw7S2/CNaUii1Hxg==}
@@ -8236,8 +8228,6 @@ snapshots:
   ignore@7.0.6: {}
 
   image-meta@0.2.2: {}
-
-  image-size@2.0.4: {}
 
   immutable@5.1.9: {}
 
