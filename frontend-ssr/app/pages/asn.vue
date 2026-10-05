@@ -175,7 +175,7 @@ function getStatusClass(status: string): string {
           <tr v-if="result.geolite2_asn?.asn">
             <td class="table-label">Maxmind ASN</td>
             <td class="table-value">
-              AS{{ result.geolite2_asn.asn }}
+              {{ result.geolite2_asn.asn }}
               <span v-if="result.geolite2_asn.org" style="color: #999; font-size: 0.9em;">{{ result.geolite2_asn.org }}</span>
             </td>
           </tr>
@@ -189,7 +189,7 @@ function getStatusClass(status: string): string {
           <tr v-if="result.ip2location_asn?.asn">
             <td class="table-label">IP2Location ASN</td>
             <td class="table-value">
-              {{ result.ip2location_asn.asn }}
+              AS{{ result.ip2location_asn.asn }}
               <span v-if="result.ip2location_asn.as" style="color: #999; font-size: 0.9em;">{{ result.ip2location_asn.as }}</span>
             </td>
           </tr>
