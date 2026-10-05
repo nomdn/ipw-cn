@@ -614,63 +614,184 @@ type ASNWhoisResult struct {
 	Error       string `json:"error"`
 }
 
-// asnFieldPatterns 用于从原始 ASN WHOIS 文本中提取字段
-var asnFieldPatterns = map[string]*regexp.Regexp{
-	"asNumber":    regexp.MustCompile(`(?i)^\s*ASNumber\s*[:=]\s*(.+?)\s*$`),
-	"asName":      regexp.MustCompile(`(?i)^\s*ASName\s*[:=]\s*(.+?)\s*$`),
-	"asHandle":    regexp.MustCompile(`(?i)^\s*ASHandle\s*[:=]\s*(.+?)\s*$`),
-	"regDate":     regexp.MustCompile(`(?i)^\s*RegDate\s*[:=]\s*(.+?)\s*$`),
-	"updated":     regexp.MustCompile(`(?i)^\s*Updated\s*[:=]\s*(.+?)\s*$`),
-	"orgName":     regexp.MustCompile(`(?i)^\s*OrgName\s*[:=]\s*(.+?)\s*$`),
-	"orgId":       regexp.MustCompile(`(?i)^\s*OrgId\s*[:=]\s*(.+?)\s*$`),
-	"country":     regexp.MustCompile(`(?i)^\s*Country\s*[:=]\s*([A-Z]{2})\s*$`),
-	"abuseName":   regexp.MustCompile(`(?i)^\s*OrgAbuseName\s*[:=]\s*(.+?)\s*$`),
-	"abuseEmail":  regexp.MustCompile(`(?i)^\s*OrgAbuseEmail\s*[:=]\s*(.+?)\s*$`),
-	"abusePhone":  regexp.MustCompile(`(?i)^\s*OrgAbusePhone\s*[:=]\s*(.+?)\s*$`),
+// ==================== ASN WHOIS 多 RIR 解析 ====================
+//
+// QueryASNWhois 走 likexian/whois 的默认链路：先问 IANA（IANA 按 ASN 给出归属 RIR），
+// 再取该 RIR 的记录；若 ARIN 只回了「转介桩」，库会再跟一跳取到真实记录。
+// 因此 raw 里可能同时存在两段内容，且字段名随 RIR 而异：
+//
+//	ARIN   : ASNumber / ASName / OrgName / OrgId / Country / RegDate / Updated / OrgAbuse*
+//	APNIC  : aut-num / as-name / descr / country / org / last-modified（无 org-name 时组织名在 descr）
+//	RIPE   : aut-num / as-name / org / org-name / country / created / last-modified
+//	LACNIC : aut-num / owner / ownerid / country / created / changed
+//
+// 改造前只认 ARIN 字段 ⇒ 除 ARIN 注册的 ASN（Cloudflare AS13335、Google AS15169 等）外，
+// 其余 RIR 的 ASN 全部解析为空（如中国电信 AS4134 只拿到 ARIN 转介桩的 "APNIC-4134"）。
+//
+// 现在的规则：raw 里**存在 RIR 原生 aut-num 记录时一律以它为准，并整体忽略 ARIN 段**
+// （ARIN 对非 ARIN 的 ASN 只回桩，其 ASName/OrgName/OrgAbuseEmail 都是误导信息）；
+// 没有原生记录时才按 ARIN 格式解析。
+var (
+	// 原生（APNIC/RIPE/LACNIC/AFRINIC）字段
+	reASNAutNum    = regexp.MustCompile(`(?im)^\s*aut-num:\s*AS?(\d+)\s*$`)
+	reASNAsName    = regexp.MustCompile(`(?im)^\s*as-name:\s*(.+?)\s*$`)
+	reASNOrgName   = regexp.MustCompile(`(?im)^\s*org-name:\s*(.+?)\s*$`)
+	reASNOwner     = regexp.MustCompile(`(?im)^\s*owner:\s*(.+?)\s*$`)
+	reASNOwnerID   = regexp.MustCompile(`(?im)^\s*ownerid:\s*(.+?)\s*$`)
+	reASNOrgRef    = regexp.MustCompile(`(?im)^\s*org:\s*(.+?)\s*$`)
+	reASNDescr     = regexp.MustCompile(`(?im)^\s*descr:\s*(.+?)\s*$`)
+	reASNCreated   = regexp.MustCompile(`(?im)^\s*created:\s*(.+?)\s*$`)
+	reASNRegistered = regexp.MustCompile(`(?im)^\s*registered:\s*(.+?)\s*$`)
+	reASNLastMod   = regexp.MustCompile(`(?im)^\s*last-modified:\s*(.+?)\s*$`)
+	reASNChanged   = regexp.MustCompile(`(?im)^\s*changed:\s*(.+?)\s*$`)
+	reASNMailbox   = regexp.MustCompile(`(?im)^\s*abuse-mailbox:\s*(\S+@\S+)\s*$`)
+	// APNIC/RIPE 会在响应顶部给一行注释：% Abuse contact for 'AS37963' is 'xxx@yyy'
+	reASNCommentAbuse = regexp.MustCompile(`(?i)%\s*Abuse contact for '?\s*AS\d+\s*'?\s*is\s*'?([^'\s]+)'?`)
+
+	// ARIN 字段（保持改造前语义；注意：这些正则在「多行整段」文本上用，必须带 m 标志）
+	reASNNumberArin  = regexp.MustCompile(`(?im)^\s*ASNumber\s*[:=]\s*(.+?)\s*$`)
+	reASNNameArin    = regexp.MustCompile(`(?im)^\s*ASName\s*[:=]\s*(.+?)\s*$`)
+	reASNHandleArin  = regexp.MustCompile(`(?im)^\s*ASHandle\s*[:=]\s*(.+?)\s*$`)
+	reASNRegDateArin = regexp.MustCompile(`(?im)^\s*RegDate\s*[:=]\s*(.+?)\s*$`)
+	reASNUpdatedArin = regexp.MustCompile(`(?im)^\s*Updated\s*[:=]\s*(.+?)\s*$`)
+	reASNOrgNameArin = regexp.MustCompile(`(?im)^\s*OrgName\s*[:=]\s*(.+?)\s*$`)
+	reASNOrgIDArin   = regexp.MustCompile(`(?im)^\s*OrgId\s*[:=]\s*(.+?)\s*$`)
+	reASNCountryArin = regexp.MustCompile(`(?im)^\s*Country\s*[:=]\s*([A-Z]{2})\s*$`)
+	reASNAbuseName   = regexp.MustCompile(`(?im)^\s*OrgAbuseName\s*[:=]\s*(.+?)\s*$`)
+	reASNAbuseEmail  = regexp.MustCompile(`(?im)^\s*OrgAbuseEmail\s*[:=]\s*(.+?)\s*$`)
+	reASNAbusePhone  = regexp.MustCompile(`(?im)^\s*OrgAbusePhone\s*[:=]\s*(.+?)\s*$`)
+
+	// RIR 通用的「非 ASN 记录块」噪音（as-block 对象的 descr，如 "APNIC ASN block"）
+	reASNBlockNoise = regexp.MustCompile(`(?i)(^|\s)ASN? block\s*$`)
+	// 滥用联系人的对象名：RIPE 用 irt:，APNIC 的 abuse-c 对象用 role:
+	reASNRoleName = regexp.MustCompile(`(?im)^\s*(?:irt|role):\s*(.+?)\s*$`)
+	reASNPhone    = regexp.MustCompile(`(?im)^\s*phone:\s*(.+?)\s*$`)
+)
+
+// splitWhoisBlocks 按空行把响应切成记录块（每个 RIR 对象一段）
+func splitWhoisBlocks(raw string) []string {
+	raw = strings.ReplaceAll(raw, "\r\n", "\n")
+	return strings.Split(raw, "\n\n")
 }
 
-// parseASNWhoisRaw 从原始 ASN WHOIS 响应中解析结构化数据
-func parseASNWhoisRaw(raw string) *ASNWhoisResult {
-	result := &ASNWhoisResult{Raw: raw}
-	lines := strings.Split(raw, "\n")
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "%") || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		for field, pattern := range asnFieldPatterns {
-			if matches := pattern.FindStringSubmatch(line); len(matches) == 2 {
-				switch field {
-				case "asNumber":
-					result.ASNumber = matches[1]
-				case "asName":
-					result.ASName = matches[1]
-				case "asHandle":
-					if result.ASNumber == "" {
-						result.ASNumber = strings.TrimPrefix(matches[1], "AS")
-					}
-				case "regDate":
-					result.RegDate = matches[1]
-				case "updated":
-					result.Updated = matches[1]
-				case "orgName":
-					result.OrgName = matches[1]
-				case "orgId":
-					result.OrgID = matches[1]
-				case "country":
-					result.Country = matches[1]
-				case "abuseName":
-					result.AbuseName = matches[1]
-				case "abuseEmail":
-					result.AbuseEmail = matches[1]
-				case "abusePhone":
-					result.AbusePhone = matches[1]
-				}
+// pickField 按给定优先级在文本中取第一个命中的字段值；全不命中返回 ""
+func pickField(text string, patterns ...*regexp.Regexp) string {
+	for _, pattern := range patterns {
+		if m := pattern.FindStringSubmatch(text); len(m) == 2 {
+			if v := strings.TrimSpace(m[1]); v != "" {
+				return v
 			}
 		}
 	}
+	return ""
+}
+
+// findASNNativeBlock 找出含 aut-num 的原生记录块；没有返回 ""
+func findASNNativeBlock(raw string) string {
+	for _, block := range splitWhoisBlocks(raw) {
+		if reASNAutNum.MatchString(block) {
+			return block
+		}
+	}
+	return ""
+}
+
+// findASNOrgBlock 按原生块里的 org: 句柄定位对应的 organisation/owner 对象
+// （RIPE 的 org-name 与 country 不在 aut-num 对象里，而在 organisation 对象里）
+func findASNOrgBlock(raw, nativeBlock string) string {
+	handle := pickField(nativeBlock, reASNOrgRef)
+	if handle == "" {
+		return ""
+	}
+	for _, block := range splitWhoisBlocks(raw) {
+		if strings.Contains(block, handle) && (reASNOrgName.MatchString(block) || reASNOwner.MatchString(block)) {
+			return block
+		}
+	}
+	return ""
+}
+
+// findASNOrgName 取组织名：organisation 对象的 org-name/owner（RIPE/APNIC/JPNIC）
+// → 原生块首行 descr（APNIC 常见，如 "Hangzhou Alibaba Advertising Co.,Ltd."），并过滤 block 噪音
+func findASNOrgName(orgBlock, nativeBlock string) string {
+	if v := pickField(orgBlock, reASNOrgName, reASNOwner); v != "" {
+		return v
+	}
+	for _, m := range reASNDescr.FindAllStringSubmatch(nativeBlock, -1) {
+		v := strings.TrimSpace(m[1])
+		if v == "" || reASNBlockNoise.MatchString(v) {
+			continue
+		}
+		return v
+	}
+	return ""
+}
+
+// findASNCommentAbuseEmail 取响应顶部注释里的 Abuse 邮箱（APNIC/RIPE 提供）
+func findASNCommentAbuseEmail(raw string) string {
+	if m := reASNCommentAbuse.FindStringSubmatch(raw); len(m) == 2 {
+		return strings.TrimSpace(m[1])
+	}
+	return ""
+}
+
+// findASNMailboxAbuse 取含 abuse-mailbox 的记录块里的联系人名与电话（RIPE 的 irt:、APNIC 的 role:）
+func findASNMailboxAbuse(raw string) (name, email, phone string) {
+	for _, block := range splitWhoisBlocks(raw) {
+		mailbox := pickField(block, reASNMailbox)
+		if mailbox == "" {
+			continue
+		}
+		return pickField(block, reASNRoleName), mailbox, pickField(block, reASNPhone)
+	}
+	return "", "", ""
+}
+
+// parseASNWhoisRaw 从原始 ASN WHOIS 响应中解析结构化数据（多 RIR）
+func parseASNWhoisRaw(raw string) *ASNWhoisResult {
+	result := &ASNWhoisResult{Raw: raw}
+
+	// 情况一：有 RIR 原生记录（APNIC/RIPE/LACNIC/AFRINIC），只认它
+	if nativeBlock := findASNNativeBlock(raw); nativeBlock != "" {
+		orgBlock := findASNOrgBlock(raw, nativeBlock)
+		result.ASNumber = pickField(nativeBlock, reASNAutNum, reASNNumberArin)
+		result.ASName = pickField(nativeBlock, reASNAsName)
+		result.OrgName = findASNOrgName(orgBlock, nativeBlock)
+		result.OrgID = pickField(nativeBlock, reASNOrgRef, reASNOwnerID)
+		result.Country = pickField(nativeBlock, reASNCountryArin)
+		if result.Country == "" {
+			result.Country = pickField(orgBlock, reASNCountryArin)
+		}
+		result.RegDate = pickField(nativeBlock, reASNCreated, reASNRegistered, reASNRegDateArin)
+		result.Updated = pickField(nativeBlock, reASNLastMod, reASNUpdatedArin, reASNChanged)
+
+		// 滥用联系人：先用注释行（最权威），再用 abuse-mailbox 所在对象
+		result.AbuseEmail = findASNCommentAbuseEmail(raw)
+		name, email, phone := findASNMailboxAbuse(raw)
+		if result.AbuseName == "" {
+			result.AbuseName = name
+		}
+		if result.AbuseEmail == "" {
+			result.AbuseEmail = email
+		}
+		result.AbusePhone = phone
+		return result
+	}
+
+	// 情况二：ARIN 格式（ARIN 自有的 ASN），保持改造前行为
+	result.ASNumber = pickField(raw, reASNNumberArin)
+	if result.ASNumber == "" {
+		result.ASNumber = strings.TrimPrefix(pickField(raw, reASNHandleArin), "AS")
+	}
+	result.ASName = pickField(raw, reASNNameArin)
+	result.OrgName = pickField(raw, reASNOrgNameArin)
+	result.OrgID = pickField(raw, reASNOrgIDArin)
+	result.Country = pickField(raw, reASNCountryArin)
+	result.RegDate = pickField(raw, reASNRegDateArin)
+	result.Updated = pickField(raw, reASNUpdatedArin)
+	result.AbuseName = pickField(raw, reASNAbuseName)
+	result.AbuseEmail = pickField(raw, reASNAbuseEmail)
+	result.AbusePhone = pickField(raw, reASNAbusePhone)
 
 	return result
 }

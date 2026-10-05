@@ -234,9 +234,9 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 		} else if errStr, ok := result["dbip_asn"].(string); ok {
 			asnResult["dbip_asn"] = map[string]string{"error": errStr}
 		}
-		if maxmindASN, ok := result["maxmind_asn"].(*ipdb.MMDBASNResult); ok {
-			whoisData, err := webtest.QueryASNWhois(maxmindASN.ASN)
-			if err == nil {
+		// WHOIS 进一步解析（与 /v1/asn/:ip 走同一套兜底与缓存）
+		if asn := resolveASN(result); asn != "" {
+			if whoisData, ok := lookupASNWhois(asn); ok {
 				asnResult["whois"] = whoisData
 			}
 		}

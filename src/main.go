@@ -649,6 +649,78 @@ func locateUserIP(c fiber.Ctx) error {
 	return c.Status(http.StatusOK).JSON(ipdb.SearchIP(ip))
 }
 
+// normalizeASN 把各数据源的 ASN 字符串统一成 "AS"+数字。
+// 数据源格式不一：maxmind/dbip 的 MMDBASNResult.ASN 自带 "AS" 前缀（searchMMDBASN 拼的），
+// ip2location 的 asn 是裸数字。含非数字字符时返回空串（视为无效）。
+func normalizeASN(s string) string {
+	s = strings.TrimSpace(strings.ToUpper(s))
+	s = strings.TrimSpace(strings.TrimPrefix(s, "AS"))
+	if s == "" {
+		return ""
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return ""
+		}
+	}
+	return "AS" + s
+}
+
+// resolveASN 从 SearchIP 结果中按优先级提取可用 ASN（maxmind → dbip → ip2location），返回 "ASxxxx"。
+//
+// 之所以要兜底：此前 whois 段只认 maxmind_asn，某个 IP 一旦未命中该库，整段 ASN WHOIS 就凭空消失，
+// 哪怕 dbip_asn / ip2location_asn 明明有数据。
+func resolveASN(result map[string]interface{}) string {
+	for _, key := range []string{"maxmind_asn", "dbip_asn"} {
+		if r, ok := result[key].(*ipdb.MMDBASNResult); ok {
+			if asn := normalizeASN(r.ASN); asn != "" {
+				return asn
+			}
+		}
+	}
+	if m, ok := result["ip2location_asn"].(map[string]string); ok {
+		if asn := normalizeASN(m["asn"]); asn != "" {
+			return asn
+		}
+	}
+	return ""
+}
+
+// asnWhoisFailed 判定 ASN WHOIS 结果是否算失败，决定缓存 TTL（失败 30s / 成功 5min）。
+// 注意 likexian/whois 出错时也返回 (result, nil)，错误塞在 result.Error 里，不能只看 err 参数。
+func asnWhoisFailed(r *webtest.ASNWhoisResult) bool {
+	return r == nil || r.Error != "" || (r.ASName == "" && r.OrgName == "")
+}
+
+// lookupASNWhois 带缓存的 ASN WHOIS 查询，handler 与 ws 两条路径共用。
+// 缓存键取归一化后的 ASN（"AS13335"）：历史上是 "AS"+已带前缀的 ASN，实际拼成了 "ASAS13335"。
+func lookupASNWhois(asn string) (*webtest.ASNWhoisResult, bool) {
+	asn = normalizeASN(asn)
+	if asn == "" {
+		return nil, false
+	}
+
+	if cached, ok := asnWhoisCache.Load(asn); ok {
+		if entry, ok := cached.(asnWhoisCacheEntry); ok && entry.result != nil {
+			if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
+				return entry.result, true
+			}
+		}
+		asnWhoisCache.Delete(asn)
+	}
+
+	whoisData, err := webtest.QueryASNWhois(asn)
+	if err != nil {
+		return nil, false
+	}
+	asnWhoisCache.Store(asn, asnWhoisCacheEntry{
+		result:    whoisData,
+		timestamp: time.Now(),
+		failed:    asnWhoisFailed(whoisData),
+	})
+	return whoisData, true
+}
+
 func asnLookupHandler(c fiber.Ctx) error {
 	ip := c.Params("ip")
 	if ip == "" {
@@ -696,22 +768,10 @@ func asnLookupHandler(c fiber.Ctx) error {
 		}
 	}
 
-	// 使用 WHOIS 对 ASN 进行进一步解析
-	if maxmindASN, ok := result["maxmind_asn"].(*ipdb.MMDBASNResult); ok {
-		asnKey := "AS" + maxmindASN.ASN
-		if cached, ok := asnWhoisCache.Load(asnKey); ok {
-			entry := cached.(asnWhoisCacheEntry)
-			if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
-				asnResult["whois"] = entry.result
-			} else {
-				asnWhoisCache.Delete(asnKey)
-			}
-		} else {
-			whoisData, err := webtest.QueryASNWhois(maxmindASN.ASN)
-			if err == nil {
-				asnResult["whois"] = whoisData
-				asnWhoisCache.Store(asnKey, asnWhoisCacheEntry{result: whoisData, timestamp: time.Now()})
-			}
+	// 使用 WHOIS 对 ASN 进行进一步解析（maxmind 未命中时回落到 dbip / ip2location）
+	if asn := resolveASN(result); asn != "" {
+		if whoisData, ok := lookupASNWhois(asn); ok {
+			asnResult["whois"] = whoisData
 		}
 	}
 
