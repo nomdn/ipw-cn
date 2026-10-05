@@ -200,7 +200,7 @@ onMounted(() => {
     <div class="one-line ip-row">
       <b>IPv4</b>&nbsp<p>{{ yourIPv4 }} </p>&nbsp<RouterLink :to="`/location?ip=${yourIPv4}`" target="_blank">查询归属地</RouterLink>
     </div>
-    <div class="one-line ip-row">
+    <div class="one-line ip-row ip-row-v6">
       <b>IPv6</b>&nbsp<p v-if="yourIPv6">{{ yourIPv6 }}</p><RouterLink :to="`/location?ip=${yourIPv6}`" target="_blank" v-if="yourIPv6">&nbsp查询归属地</RouterLink><RouterLink v-else to="/doc/user/enable_ipv6" target="_blank">没有IPv6地址,查看如何开启IPv6</RouterLink>
     </div>
     <div class="ip-priority">
@@ -273,8 +273,16 @@ onMounted(() => {
       padding: 0.75rem;
       font-size: 0.8em;
     }
-    /* 窄屏下 IPv6 地址换 3 行（CDP 实测 412 宽终态 h=75px），见上面 .ip-row 的注释 */
+    /* 窄屏下 IPv6 地址换 3 行（CDP 实测 412 宽终态 h=75px），见上面 .ip-row 的注释。
+       75px 只给 IPv6 行：IPv4 地址窄屏仍是 1 行（~30px），一刀切 75px 会让
+       IPv4 行下部空出 ~45px，两块 IP 之间出现一大段空白。
+       IPv4 回填前后都是 1 行 30px，高度不变 → 不引入新的 CLS。 */
     .ip-row {
+      /* style.css 窄屏给 .one-line 加了 0.5em 上下 margin（两块之间叠 16px），
+         IP 行的间距由行高本身决定，这里归零。scoped 属性选择器特异性更高，稳赢。 */
+      margin: 0;
+    }
+    .ip-row-v6 {
       min-height: 75px;
       align-content: flex-start;
     }
