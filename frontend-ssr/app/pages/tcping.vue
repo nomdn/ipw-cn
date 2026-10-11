@@ -191,7 +191,8 @@ onMounted(() => {
       />
       <el-input 
         v-model="port" 
-        placeholder="端口号（默认 80）" 
+        placeholder="端口号（默认 80）"
+        clearable
         style="width: 200px;"
       />
       <el-button 
