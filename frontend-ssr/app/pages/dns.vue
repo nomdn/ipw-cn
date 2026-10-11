@@ -199,7 +199,8 @@ const doc = page.value;
     <div class="one-line">
       <el-input 
         v-model="tmpDomain" 
-        placeholder="请输入域名（如：example.com）" 
+        placeholder="请输入域名（如：example.com）"
+        clearable
       />
       <!-- aria-label 落到 EP select 内部的原生 input 上，否则 Lighthouse 的 label 审计必挂 -->
       <el-select v-model="recordType" style="width: 150px;" class="custom-height-select" aria-label="DNS 记录类型">
