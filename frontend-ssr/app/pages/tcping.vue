@@ -186,7 +186,8 @@ onMounted(() => {
     <div class="one-line">
       <el-input 
         v-model="tmpDomain" 
-        placeholder="请输入域名（如：example.com）" 
+        placeholder="请输入域名（如：example.com）"
+        clearable
       />
       <el-input 
         v-model="port" 

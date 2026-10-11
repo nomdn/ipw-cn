@@ -136,7 +136,8 @@ onMounted(() => {
     <div class="one-line">
       <el-input 
         v-model="tmpDomain" 
-        placeholder="请输入域名（如：https://zakoflare.com）" 
+        placeholder="请输入域名（如：https://zakoflare.com）"
+        clearable
       />
       <el-button 
         @click="checkWeb()" 

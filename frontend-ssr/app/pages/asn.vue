@@ -145,6 +145,7 @@ function getStatusClass(status: string): string {
       <el-input
         v-model="tmpIP"
         placeholder="请输入IP地址（如：1.1.1.1）"
+        clearable
       />
       <el-button
         @click="queryASN()"

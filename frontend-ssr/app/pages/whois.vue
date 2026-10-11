@@ -168,6 +168,7 @@ function getStatusClass(status: string): string {
       <el-input
         v-model="tmpdomain"
         placeholder="请输入域名（如：example.com）"
+        clearable
       />
       <el-button
         @click="queryWhois()"

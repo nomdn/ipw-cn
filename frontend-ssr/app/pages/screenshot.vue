@@ -180,6 +180,7 @@ const doc = page.value
       <el-input
         v-model="tmpDomain"
         placeholder="请输入网址（如：https://example.com）"
+        clearable
         @keyup.enter="takeScreenshot"
       />
       <el-button
