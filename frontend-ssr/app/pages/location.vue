@@ -165,7 +165,8 @@ onMounted(async () => {
     <div class="one-line">
       <el-input 
         v-model="ipAddress" 
-        placeholder="请输入IP地址" 
+        placeholder="请输入IP地址"
+        clearable
       />
       <el-button 
         @click="locateIP(ipAddress)" 

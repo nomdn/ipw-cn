@@ -184,6 +184,7 @@ async function getUserIP() {
       <el-input
         v-model="tmpDomain"
         placeholder="请输入域名（如：example.com）"
+        clearable
       />
       <el-button
         @click="checkDNSSEC()"
