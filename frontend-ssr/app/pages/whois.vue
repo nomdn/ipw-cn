@@ -2,7 +2,9 @@
 import { useMiddlewareFetch } from '../../utils/middleware';
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { config } from '../../config/index'
+import { config, devNodes } from '../../config/index'
+import { withQuery } from '../../utils/tools'
+import AdvancedOptions from '../components/AdvancedOptions.vue'
 import { isIPv6 } from 'is-ip'
 
 const route = useRoute()
@@ -64,10 +66,16 @@ const result = ref<any>(null)
 const error = ref('')
 const userIP = ref('')
 
-const apiList = config.APIBaseURL.DualStack
+// 调试节点放最前（仅 dev 注入，生产为空数组）
+const apiList = [
+  ...devNodes,
+  ...config.APIBaseURL.DualStack,
+]
 const currentApiIndex = ref(0)
 const backendID = computed(() => apiList[currentApiIndex.value]?.id || '')
-const whoisUrl = computed(() => '/middleware/' + backendID.value + '/whois/' + encodeURIComponent(domain.value))
+// 高级选项：whois 只取 DNS 服务器（dns4/dns6），不支持强制解析
+const adv = ref<InstanceType<typeof AdvancedOptions> | null>(null)
+const whoisUrl = computed(() => withQuery('/middleware/' + backendID.value + '/whois/' + encodeURIComponent(domain.value), adv.value?.query() ?? {}))
 
 const { data: whoisData, error: whoisError, execute: executeWhois } = useMiddlewareFetch<any>(whoisUrl, {
   immediate: false,
@@ -177,6 +185,8 @@ function getStatusClass(status: string): string {
         查询
       </el-button>
     </div>
+
+    <AdvancedOptions ref="adv" :show-resolve="false" />
 
     <div v-if="error" class="error-message">
       {{ error }}

@@ -9,8 +9,9 @@ import (
 )
 
 // CheckWebsite 网站检测（detail）。客户端由 main.go 经 SetHTTPClient 注入。
-func CheckWebsite(url string, version string) (*WebsiteCheckDetail, error) {
-	ctx := context.Background()
+// req 为请求级解析配置（dns/dns4/dns6），经 ctx 传到 DialContext。
+func CheckWebsite(url string, version string, req ReqResolve) (*WebsiteCheckDetail, error) {
+	ctx := WithReqResolve(context.Background(), req)
 	var err error
 	ctx, err = lemon_ssrf.ValidateOutboundTarget(ctx, url)
 	if err != nil {
@@ -50,7 +51,7 @@ func CheckWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 
 	dnsLookupTime := trace.DNSLookup.Seconds() * 1000
 	if dnsLookupTime == 0 {
-		dnsLookupTime = measureDNSTime(url, version)
+		dnsLookupTime = measureDNSTime(url, version, req)
 	}
 	tcpConnectTime := trace.TCPConnTime.Seconds() * 1000
 	httpConnectTime := trace.ConnTime.Seconds() * 1000

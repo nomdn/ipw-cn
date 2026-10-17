@@ -10,8 +10,9 @@ import (
 )
 
 // CheckSSL SSL 检查（ssl）。客户端由 main.go 经 SetHTTPClient 注入。
-func CheckSSL(url string, version string) (*SSLCheckDetail, error) {
-	ctx := context.Background()
+// req 为请求级解析配置（dns/dns4/dns6），经 ctx 传到 DialContext。
+func CheckSSL(url string, version string, req ReqResolve) (*SSLCheckDetail, error) {
+	ctx := WithReqResolve(context.Background(), req)
 	var err error
 	ctx, err = lemon_ssrf.ValidateOutboundTarget(ctx, url)
 	if err != nil {

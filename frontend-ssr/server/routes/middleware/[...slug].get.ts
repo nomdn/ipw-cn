@@ -133,7 +133,11 @@ export default defineEventHandler(async (event) => {
         if (apiBaseUrl.slice(-1) != '/') {
             apiBaseUrl = `${apiBaseUrl}/`
             }
-            data = await $fetch(`${apiBaseUrl}v1/${apiType}/${raw}`, {
+            const queryString = new URLSearchParams(
+                Object.entries(query).filter(([_, v]) => v !== undefined) as [string, string][]
+            ).toString()
+
+            data = await $fetch(`${apiBaseUrl}v1/${apiType}/${raw}${queryString ? '?' + queryString : ''}`, {
                 method: 'GET',
                 headers: authHeaders,
                 timeout: 15_000,

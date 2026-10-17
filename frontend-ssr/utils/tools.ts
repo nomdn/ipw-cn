@@ -40,3 +40,17 @@ export function isIPv4(ip: string): boolean {
   const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
   return ipRegex.test(ip);
 }
+
+/**
+ * 把参数对象拼到 URL 上（空值跳过，自动判断用 ? 还是 &）。
+ * 用于高级选项：dns4/dns6/resolve/resolve4/resolve6 这些都是「请求级解析参数」，
+ * 只有用户填了才下发，没填时 URL 与加参数之前逐字节一致（缓存键也不变）。
+ */
+export function withQuery(url: string, params: Record<string, string>): string {
+  const pairs: string[] = []
+  for (const [key, value] of Object.entries(params)) {
+    if (value) pairs.push(encodeURIComponent(key) + '=' + encodeURIComponent(value))
+  }
+  if (pairs.length === 0) return url
+  return url + (url.includes('?') ? '&' : '?') + pairs.join('&')
+}

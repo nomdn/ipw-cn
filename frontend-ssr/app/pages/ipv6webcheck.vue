@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { config } from '../../config/index';
+import { config, devNodes } from '../../config/index';
 import { useMiddlewareFetch } from '../../utils/middleware';
 import { CircleCheckFilled, CircleCloseFilled,InfoFilled,Position } from '@element-plus/icons-vue';
-import { extractHost, getStatusCodeClass, formatTime, formatSize, formatSpeed } from '../../utils/tools';
+import { extractHost, getStatusCodeClass, formatTime, formatSize, formatSpeed, withQuery } from '../../utils/tools';
+import AdvancedOptions from '../components/AdvancedOptions.vue';
 
 const route = useRoute()
 
@@ -63,7 +64,11 @@ interface PerformanceCheckItem {
   download_speed: number
   is_reachable: boolean
 }
-const apiList = config.APIBaseURL.DualStack
+// 调试节点放最前（仅 dev 注入，生产为空数组）
+const apiList = [
+  ...devNodes,
+  ...config.APIBaseURL.DualStack,
+]
 const currentApiIndex = ref(0)
 const backendID = computed(() => apiList[currentApiIndex.value]?.id || '')
 const tmpDomain = ref('https://www.zakoflare.com')
@@ -71,7 +76,9 @@ const testDomain = ref('')
 const loading = ref(false)
 const error = ref('')
 const result = ref<PerformanceCheckResponse | null>(null)
-const checkUrl = computed(() => "/middleware/" + backendID.value + "/detail/" + testDomain.value);
+// 高级选项（dns4/dns6 + resolve/resolve4/resolve6）：本页一次探测两栈
+const adv = ref<InstanceType<typeof AdvancedOptions> | null>(null)
+const checkUrl = computed(() => withQuery("/middleware/" + backendID.value + "/detail/" + testDomain.value, adv.value?.query() ?? {}));
 // testDomain 是完整 URL（含 https:// 与路径斜杠），服务端 [...slug].get.ts 依赖
 // 分段重组协议部分，这里刻意不做 encodeURIComponent
 
@@ -146,6 +153,8 @@ onMounted(() => {
         开始测试
       </el-button>
     </div>
+
+    <AdvancedOptions ref="adv" />
 
     <div v-if="error" class="error-message">
       {{ error }}

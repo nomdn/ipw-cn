@@ -3,7 +3,8 @@ import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
 import { useMiddlewareFetch } from '../../utils/middleware';
-import { extractHost, formatTime, formatSpeed, formatSize, getStatusCodeClass } from '../../utils/tools';
+import { extractHost, formatTime, formatSpeed, formatSize, getStatusCodeClass, withQuery } from '../../utils/tools';
+import AdvancedOptions from '../components/AdvancedOptions.vue';
 
 
 const route = useRoute()
@@ -48,6 +49,8 @@ const loading = ref(false)
 const result = ref<any[]>([])
 const error = ref('')
 const domain = ref('')
+// 高级选项（dns6 / resolve / resolve6）：用户填了才拼进请求
+const adv = ref<InstanceType<typeof AdvancedOptions> | null>(null)
 
 /** 服务器结果接口 */
 interface ServerResult {
@@ -72,7 +75,7 @@ const serverResults = ref<ServerResult[]>([])
 
 /** 双栈服务器：同时支持 IPv4/IPv6 的节点 */
 const dualStackFetches = config.APIBaseURL.DualStack.map((server) => {
-  const url = computed(() => "/middleware/" + server.id + "/speed/v6/" + encodeURIComponent(domain.value));
+  const url = computed(() => withQuery("/middleware/" + server.id + "/speed/v6/" + encodeURIComponent(domain.value), adv.value?.query() ?? {}));
   const { data, error: fetchError, execute } = useMiddlewareFetch(url, {
     immediate: false,
     watch: false,
@@ -82,7 +85,7 @@ const dualStackFetches = config.APIBaseURL.DualStack.map((server) => {
 
 /** IPv6 专用服务器：仅支持 IPv6 的节点 */
 const ipv6Fetches = config.APIBaseURL.IPv6.map((server) => {
-  const url = computed(() => "/middleware/" + server.id + "/speed/v6/" + encodeURIComponent(domain.value));
+  const url = computed(() => withQuery("/middleware/" + server.id + "/speed/v6/" + encodeURIComponent(domain.value), adv.value?.query() ?? {}));
   const { data, error: fetchError, execute } = useMiddlewareFetch(url, {
     immediate: false,
     watch: false,
@@ -190,6 +193,8 @@ onMounted(() => {
         开始测试
       </el-button>
     </div>
+
+    <AdvancedOptions ref="adv" stack="ipv6" />
 
     <div v-if="error" class="error-message">
       {{ error }}

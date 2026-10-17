@@ -2,7 +2,7 @@
 import { useMiddlewareFetch } from '../../utils/middleware';
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { config } from '../../config/index'
+import { config, devNodes } from '../../config/index'
 import { isIPv6 } from 'is-ip'
 
 
@@ -71,7 +71,9 @@ const userIP = ref('')
 // 查询序号：连续点击时旧查询的结果不允许写入新查询的结果表
 let queryId = 0
 
+// 调试节点放最前（仅 dev 注入，生产为空数组）
 const apiList = [
+  ...devNodes,
   ...config.APIBaseURL.DualStack,
   ...config.APIBaseURL.IPv4,
   ...config.APIBaseURL.IPv6

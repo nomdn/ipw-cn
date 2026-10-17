@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { config } from '../../config/index';
+import { config, devNodes } from '../../config/index';
 import { useMiddlewareFetch } from '../../utils/middleware';
-import { extractHost } from '../../utils/tools';
+import { extractHost, withQuery } from '../../utils/tools';
+import AdvancedOptions from '../components/AdvancedOptions.vue';
 
 const route = useRoute()
 
@@ -76,16 +77,20 @@ const tmpDomain = ref('www.zakoflare.com')
 const port = ref('80')
 const loading = ref(false)
 const serverResults = ref<ServerResult[]>([])
+// 高级选项（dns4 / resolve / resolve4）：用户填了才拼进请求
+const adv = ref<InstanceType<typeof AdvancedOptions> | null>(null)
 // 查询序号：连续点击时旧查询的结果不允许写入新查询的结果表
 let queryId = 0
 
 const allServers = [
+  // 调试节点放最前（仅 dev 注入，生产为空数组）；本页固定 version=ipv4，故按 IPv4 组对待
+  ...devNodes.map((s: ServerConfig) => ({ ...s, type: 'IPv4' })),
   ...config.APIBaseURL.DualStack.map((s: ServerConfig) => ({ ...s, type: 'DualStack' })),
   ...config.APIBaseURL.IPv4.map((s: ServerConfig) => ({ ...s, type: 'IPv4' }))
 ];
 
 const tcpingFetches = allServers.map((server) => {
-  const url = computed(() => "/middleware/" + server.id + "/tcping/" + encodeURIComponent(extractHost(tmpDomain.value)) + "?port=" + encodeURIComponent(port.value));
+  const url = computed(() => withQuery("/middleware/" + server.id + "/tcping/" + encodeURIComponent(extractHost(tmpDomain.value)) + "?port=" + encodeURIComponent(port.value) + "&version=ipv4", adv.value?.query() ?? {}));
   const { data, error: fetchError, execute } = useMiddlewareFetch<TCPingResponse>(url, {
     immediate: false,
     watch: false,
@@ -95,7 +100,16 @@ const tcpingFetches = allServers.map((server) => {
 
 function initServerResults() {
   const results: ServerResult[] = []
-  
+
+  // 与 allServers 顺序保持一致：调试节点 → DualStack → IPv4
+  devNodes.forEach((server) => {
+    results.push({
+      label: server.label,
+      loading: false,
+      error: ''
+    })
+  })
+
   config.APIBaseURL.DualStack.forEach((server: ServerConfig) => {
     results.push({
       label: server.label,
@@ -201,6 +215,8 @@ onMounted(() => {
         开始测试
       </el-button>
     </div>
+
+    <AdvancedOptions ref="adv" stack="ipv4" />
 
     <div class="result-section">
       <table class="result-table">

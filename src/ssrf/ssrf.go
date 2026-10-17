@@ -37,6 +37,23 @@ func Enabled() bool {
 	return blockPrivateIPs
 }
 
+// ResolveFunc 把主机名解析为 IP 列表。默认 net.LookupIP（系统解析器）。
+// 可由上层（webtest）通过 SetResolveFunc 注入，使出站校验与真正的拨号走同一个 DNS
+// ——包括请求级 DNS 服务器覆盖。否则预检（系统解析器）与拨号（自定义 DNS）会用两套解析器，
+// 既多一次查询，结果也可能不一致。
+type ResolveFunc func(ctx context.Context, host string) ([]net.IP, error)
+
+var resolveHostFn ResolveFunc = func(_ context.Context, host string) ([]net.IP, error) {
+	return net.LookupIP(host)
+}
+
+// SetResolveFunc 注入自定义解析器（传 nil 忽略，保持默认 net.LookupIP）。
+func SetResolveFunc(f ResolveFunc) {
+	if f != nil {
+		resolveHostFn = f
+	}
+}
+
 // SetEnabled enables or disables SSRF protection globally.
 // SetEnabled 全局启用或禁用 SSRF 防护。
 // Typically called during configuration loading (readConfig).
@@ -99,7 +116,7 @@ func IsPrivateIP(ip net.IP) bool {
 // Used in handlers to short-circuit requests to internal hosts before making outbound connections.
 // 用于在发起出站连接前，在处理器中短路对内部主机的请求。
 func HasLocalOrPrivateIP(host string) bool {
-	ips, err := net.LookupIP(host)
+	ips, err := resolveHostFn(context.Background(), host)
 	if err != nil {
 		return false
 	}
@@ -142,7 +159,7 @@ func ValidateOutboundTarget(ctx context.Context, targetURL string) (context.Cont
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return ctx, fmt.Errorf("invalid scheme: %s", parsed.Scheme)
 	}
-	ips, err := net.LookupIP(host)
+	ips, err := resolveHostFn(ctx, host)
 	if err != nil {
 		return ctx, err
 	}
@@ -179,7 +196,7 @@ func SecureCheckRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 {
 		return fmt.Errorf("stopped after 10 redirects")
 	}
-	ips, err := net.LookupIP(host)
+	ips, err := resolveHostFn(req.Context(), host)
 	if err != nil {
 		return err
 	}

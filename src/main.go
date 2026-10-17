@@ -38,26 +38,39 @@ func initHTTPClients() {
 		dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 		return &http.Transport{
 			DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
-				if ssrf.Enabled() {
-					host, port, err := net.SplitHostPort(addr)
+				// DNS 接管与 SSRF 解耦：域名一律先经 webtest 解析成 IP 再拨号。
+				// 服务器取请求级覆盖（dns=/dns4=/dns6=，经 ctx 传来），无覆盖则用配置 dns-server；
+				// 不这样时关掉 SSRF 会绕过配置/系统 DNS，detail/ssl/speed 与 tcping/dns/whois 各问各的。
+				// SSRF 只保留「私网校验」职责，不再是 DNS 接管的开关。
+				// 同源：SSRF 预检（ValidateOutboundTarget）经 ssrfresolver 读到的是同一份 ctx 配置。
+				req := webtest.ReqResolveFromContext(ctx)
+				host, port, err := net.SplitHostPort(addr)
+				if err != nil {
+					return nil, err
+				}
+				// 强制解析（resolve=/resolve4=/resolve6=）：命中就把目标填回 host。
+				// 目标是 IP → 走下面的字面 IP 分支（私网检测后直连，不再查 DNS）；
+				// 目标是域名 → 当作新 host 交给下面的解析分支。
+				if target := req.Override(host, network == "tcp6"); target != "" {
+					host = strings.Trim(target, "[]")
+					addr = net.JoinHostPort(host, port)
+				}
+				if ip := net.ParseIP(host); ip != nil {
+					if ssrf.Enabled() && ssrf.IsPrivateIP(ip) {
+						slog.Warn("Blocked connection to private IP", "host", host)
+						return nil, fmt.Errorf("request to private/internal address is not allowed")
+					}
+				} else {
+					var dnsResult webtest.DNSResult
+					if network == "tcp4" {
+						dnsResult, err = webtest.ResolveARecord(host, req.Servers("ipv4"))
+					} else {
+						dnsResult, err = webtest.ResolveAAAARecord(host, req.Servers("ipv6"))
+					}
 					if err != nil {
 						return nil, err
 					}
-					if ip := net.ParseIP(host); ip != nil {
-						if ssrf.IsPrivateIP(ip) {
-							slog.Warn("Blocked connection to private IP", "host", host)
-							return nil, fmt.Errorf("request to private/internal address is not allowed")
-						}
-					} else {
-						var dnsResult webtest.DNSResult
-						if network == "tcp4" {
-							dnsResult, err = webtest.ResolveARecord(host)
-						} else {
-							dnsResult, err = webtest.ResolveAAAARecord(host)
-						}
-						if err != nil {
-							return nil, err
-						}
+					if ssrf.Enabled() {
 						for _, ipStr := range dnsResult.Record {
 							ip := net.ParseIP(ipStr)
 							if ip != nil && ssrf.IsPrivateIP(ip) {
@@ -65,9 +78,9 @@ func initHTTPClients() {
 								return nil, fmt.Errorf("request to private/internal address is not allowed")
 							}
 						}
-						if len(dnsResult.Record) > 0 {
-							addr = net.JoinHostPort(dnsResult.Record[0], port)
-						}
+					}
+					if len(dnsResult.Record) > 0 {
+						addr = net.JoinHostPort(dnsResult.Record[0], port)
 					}
 				}
 				return dialer.DialContext(ctx, network, addr)
@@ -390,19 +403,27 @@ func checkWebsiteHandler(c fiber.Ctx) error {
 		})
 	}
 
-	if cached, ok := websiteCache.Load(testUrl); ok {
+	req, err := webtest.ParseReqResolve(func(k string) string { return c.Query(k) })
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	// 缓存键带上请求级 DNS 覆盖：结果取决于所用服务器，参数不同必须各占一条，
+	// 否则互相串味；无覆盖时 req.CacheKey() 为空串，键与旧版完全一致。
+	cacheKey := testUrl + req.CacheKey()
+
+	if cached, ok := websiteCache.Load(cacheKey); ok {
 		entry := cached.(websiteCacheEntry)
 		if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
 			return c.Status(200).JSON(entry.result)
 		}
-		websiteCache.Delete(testUrl)
+		websiteCache.Delete(cacheKey)
 	}
 
-	rawResult, _, _ := sfGroup.Do(testUrl, func() (interface{}, error) {
+	rawResult, _, _ := sfGroup.Do(cacheKey, func() (interface{}, error) {
 		result := &WebsiteCheckResult{}
 		switch SINGLE_STACK {
 		case "ipv4":
-			ipv4, errV4 := webtest.CheckWebsite(testUrl, "v4")
+			ipv4, errV4 := webtest.CheckWebsite(testUrl, "v4", req)
 			if errV4 != nil {
 				ipv4 = &webtest.WebsiteCheckDetail{
 					HostRecord:  "Error: " + errV4.Error(),
@@ -415,7 +436,7 @@ func checkWebsiteHandler(c fiber.Ctx) error {
 				IsReachable: false,
 			}
 		case "ipv6":
-			ipv6, errV6 := webtest.CheckWebsite(testUrl, "v6")
+			ipv6, errV6 := webtest.CheckWebsite(testUrl, "v6", req)
 			if errV6 != nil {
 				ipv6 = &webtest.WebsiteCheckDetail{
 					HostRecord:  "Error: " + errV6.Error(),
@@ -433,7 +454,7 @@ func checkWebsiteHandler(c fiber.Ctx) error {
 
 			go func() {
 				defer wg.Done()
-				ipv6, errV6 := webtest.CheckWebsite(testUrl, "v6")
+				ipv6, errV6 := webtest.CheckWebsite(testUrl, "v6", req)
 				if errV6 != nil {
 					ipv6 = &webtest.WebsiteCheckDetail{
 						HostRecord:  "Error: " + errV6.Error(),
@@ -445,7 +466,7 @@ func checkWebsiteHandler(c fiber.Ctx) error {
 
 			go func() {
 				defer wg.Done()
-				ipv4, errV4 := webtest.CheckWebsite(testUrl, "v4")
+				ipv4, errV4 := webtest.CheckWebsite(testUrl, "v4", req)
 				if errV4 != nil {
 					ipv4 = &webtest.WebsiteCheckDetail{
 						HostRecord:  "Error: " + errV4.Error(),
@@ -461,7 +482,7 @@ func checkWebsiteHandler(c fiber.Ctx) error {
 		failed := dualAnyFailed(result.IPv4, result.IPv6, func(d *webtest.WebsiteCheckDetail) bool {
 			return d != nil && !d.IsReachable
 		})
-		websiteCache.Store(testUrl, websiteCacheEntry{result: result, timestamp: time.Now(), failed: failed})
+		websiteCache.Store(cacheKey, websiteCacheEntry{result: result, timestamp: time.Now(), failed: failed})
 
 		return result, nil
 	})
@@ -477,6 +498,11 @@ func websiteSpeedTestHandler(c fiber.Ctx) error {
 		})
 	}
 	url := normalizeURL(testUrl)
+
+	req, err := webtest.ParseReqResolve(func(k string) string { return c.Query(k) })
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
 
 	// 检查请求版本是否与 SINGLE_STACK 配置匹配
 	switch SINGLE_STACK {
@@ -496,10 +522,9 @@ func websiteSpeedTestHandler(c fiber.Ctx) error {
 		}
 	}
 
-	// 缓存键：URL + 版本
-	cacheKey := fmt.Sprintf("%s:%s", url, version)
+	// 缓存键：URL + 版本 + 请求级 DNS 覆盖（结果取决于所用服务器，参数不同不能共用）
+	cacheKey := fmt.Sprintf("%s:%s%s", url, version, req.CacheKey())
 
-	// 检查缓存
 	if cached, ok := speedCache.Load(cacheKey); ok {
 		entry := cached.(speedCacheEntry)
 		if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
@@ -513,7 +538,7 @@ func websiteSpeedTestHandler(c fiber.Ctx) error {
 	switch version {
 	case "v6", "v4":
 		rawResult, _, _ := sfGroup.Do(cacheKey, func() (interface{}, error) {
-			r, e := webtest.SpeedTest(url, version)
+			r, e := webtest.SpeedTest(url, version, req)
 			if e != nil {
 				errorResult := &webtest.WebsiteSpeedTestResult{
 					HostRecord: "Error: " + e.Error(),
@@ -552,19 +577,26 @@ func sslCheckHandler(c fiber.Ctx) error {
 		})
 	}
 
-	if cached, ok := sslCache.Load(testUrl); ok {
+	req, err := webtest.ParseReqResolve(func(k string) string { return c.Query(k) })
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	// 缓存键带上请求级 DNS 覆盖（结果取决于所用服务器，参数不同不能共用）
+	cacheKey := testUrl + req.CacheKey()
+
+	if cached, ok := sslCache.Load(cacheKey); ok {
 		entry := cached.(sslCacheEntry)
 		if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
 			return c.Status(200).JSON(entry.result)
 		}
-		sslCache.Delete(testUrl)
+		sslCache.Delete(cacheKey)
 	}
 
-	rawResult, _, _ := sfGroup.Do(testUrl, func() (interface{}, error) {
+	rawResult, _, _ := sfGroup.Do(cacheKey, func() (interface{}, error) {
 		result := &SSLCheckResult{}
 		switch SINGLE_STACK {
 		case "ipv4":
-			ipv4, errV4 := webtest.CheckSSL(testUrl, "v4")
+			ipv4, errV4 := webtest.CheckSSL(testUrl, "v4", req)
 			if errV4 != nil {
 				ipv4 = &webtest.SSLCheckDetail{
 					HostRecord:  "Error: " + errV4.Error(),
@@ -579,7 +611,7 @@ func sslCheckHandler(c fiber.Ctx) error {
 				IsReachable: false,
 			}
 		case "ipv6":
-			ipv6, errV6 := webtest.CheckSSL(testUrl, "v6")
+			ipv6, errV6 := webtest.CheckSSL(testUrl, "v6", req)
 			if errV6 != nil {
 				ipv6 = &webtest.SSLCheckDetail{
 					HostRecord:  "Error: " + errV6.Error(),
@@ -599,7 +631,7 @@ func sslCheckHandler(c fiber.Ctx) error {
 
 			go func() {
 				defer wg.Done()
-				ipv6, errV6 := webtest.CheckSSL(testUrl, "v6")
+				ipv6, errV6 := webtest.CheckSSL(testUrl, "v6", req)
 				if errV6 != nil {
 					ipv6 = &webtest.SSLCheckDetail{
 						HostRecord:  "Error: " + errV6.Error(),
@@ -612,7 +644,7 @@ func sslCheckHandler(c fiber.Ctx) error {
 
 			go func() {
 				defer wg.Done()
-				ipv4, errV4 := webtest.CheckSSL(testUrl, "v4")
+				ipv4, errV4 := webtest.CheckSSL(testUrl, "v4", req)
 				if errV4 != nil {
 					ipv4 = &webtest.SSLCheckDetail{
 						HostRecord:  "Error: " + errV4.Error(),
@@ -629,7 +661,7 @@ func sslCheckHandler(c fiber.Ctx) error {
 		failed := dualAnyFailed(result.IPv4, result.IPv6, func(d *webtest.SSLCheckDetail) bool {
 			return d != nil && !d.IsReachable
 		})
-		sslCache.Store(testUrl, sslCacheEntry{result: result, timestamp: time.Now(), failed: failed})
+		sslCache.Store(cacheKey, sslCacheEntry{result: result, timestamp: time.Now(), failed: failed})
 
 		return result, nil
 	})
@@ -786,22 +818,29 @@ func whoisHandler(c fiber.Ctx) error {
 		})
 	}
 
-	if cached, ok := whoisCache.Load(domain); ok {
+	req, err := webtest.ParseReqResolve(func(k string) string { return c.Query(k) })
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	// 缓存键带上请求级 DNS 覆盖（结果取决于所用服务器，参数不同不能共用）
+	cacheKey := domain + req.CacheKey()
+
+	if cached, ok := whoisCache.Load(cacheKey); ok {
 		entry := cached.(whoisCacheEntry)
 		if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
 			return c.Status(200).JSON(entry.result)
 		}
-		whoisCache.Delete(domain)
+		whoisCache.Delete(cacheKey)
 	}
 
-	result, err := webtest.QueryWhois(domain)
+	result, err := webtest.QueryWhois(domain, req.Servers("ipv4"), req.Servers("ipv6"))
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	whoisCache.Store(domain, whoisCacheEntry{result: result, timestamp: time.Now()})
+	whoisCache.Store(cacheKey, whoisCacheEntry{result: result, timestamp: time.Now()})
 	return c.Status(http.StatusOK).JSON(result)
 }
 
@@ -835,84 +874,62 @@ func dnsQueryHandler(c fiber.Ctx) error {
 	domain = parsedURL.Host
 	recodeType := c.Params("type")
 	switch recodeType {
-	case "a":
-		result, err := webtest.ResolveARecord(domain)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
-		}
-		return c.Status(http.StatusOK).JSON(result)
-	case "aaaa":
-		result, err := webtest.ResolveAAAARecord(domain)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
-		}
-		return c.Status(http.StatusOK).JSON(result)
-	case "cname":
-		result, err := webtest.ResolveCNAMERecord(domain)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
-		}
-		return c.Status(http.StatusOK).JSON(result)
-	case "mx":
-		result, err := webtest.ResolveMXRecord(domain)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
-		}
-		return c.Status(http.StatusOK).JSON(result)
-	case "ns":
-		result, err := webtest.ResolveNSRecord(domain)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
-		}
-		return c.Status(http.StatusOK).JSON(result)
-	case "ptr":
-		result, err := webtest.ResolvePTRRecord(domain)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
-		}
-		return c.Status(http.StatusOK).JSON(result)
-	case "srv":
-		result, err := webtest.ResolveSRVRecord(domain)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
-		}
-		return c.Status(http.StatusOK).JSON(result)
-	case "txt":
-		result, err := webtest.ResolveTXTRecord(domain)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
-		}
-		return c.Status(http.StatusOK).JSON(result)
-	case "caa":
-		result, err := webtest.ResolveCAARecord(domain)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
-		}
-		return c.Status(http.StatusOK).JSON(result)
+	case "a", "aaaa", "cname", "mx", "ns", "ptr", "srv", "txt", "caa":
 	default:
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid record type",
 		})
 	}
+
+	req, err := webtest.ParseReqResolve(func(k string) string { return c.Query(k) })
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	// 按 qtype 选栈：a→dns4|dns，aaaa→dns6|dns，其余→dns
+	stack := ""
+	if recodeType == "a" {
+		stack = "ipv4"
+	} else if recodeType == "aaaa" {
+		stack = "ipv6"
+	}
+
+	result, err := webtest.ResolveByType(domain, recodeType, req.Servers(stack))
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+	return c.Status(http.StatusOK).JSON(result)
 }
+
+// normalizeStack 把请求里的栈标识归一化为 "ipv4" / "ipv6"。
+// 同时接受 v4/v6 与 ipv4/ipv6 两种写法；无法识别时返回空串。
+func normalizeStack(version string) string {
+	switch strings.ToLower(strings.TrimSpace(version)) {
+	case "v4", "ipv4":
+		return "ipv4"
+	case "v6", "ipv6":
+		return "ipv6"
+	}
+	return ""
+}
+
+// probeStackFor 计算一次拨测实际生效的单栈，并给出跳过文案的来源标签。
+//
+//	stack == ""              双栈并行
+//	stack == "ipv4"/"ipv6"   只跑该栈，另一栈标记跳过
+//
+// 规则：SINGLE_STACK（节点配置）优先于请求参数 version —— 节点本身是单栈机时，
+// 指定另一栈也跑不起来，统一按配置处理；只有配置为空（双栈机）时 version 才生效，
+// 此时跳过文案记为 version=xxx，与配置造成的跳过区分开。
+func probeStackFor(version string) (stack, skipLabel string) {
+	want := normalizeStack(version)
+	if want == "" || SINGLE_STACK != "" {
+		return SINGLE_STACK, "SINGLE_STACK"
+	}
+	return want, "version"
+}
+
 func pingHandler(c fiber.Ctx) error {
 	host := c.Params("ip")
 	port := c.Query("port")
@@ -944,7 +961,24 @@ func pingHandler(c fiber.Ctx) error {
 		count = n
 	}
 
-	cacheKey := fmt.Sprintf("%s:%s:%d", host, port, count)
+	// version=ipv4/ipv6：请求级指定单栈，行为等价于临时把 SINGLE_STACK 设成该值。
+	// 节点本身是单栈机（SINGLE_STACK 非空）时配置优先，请求不越权到另一栈。
+	version := c.Query("version")
+	if version != "" && normalizeStack(version) == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"error": "version must be ipv4 or ipv6",
+		})
+	}
+	stack, skipLabel := probeStackFor(version)
+
+	req, err := webtest.ParseReqResolve(func(k string) string { return c.Query(k) })
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	// 缓存键带上生效栈与请求级 DNS 覆盖：version=ipv6 与默认双栈、
+	// 以及不同 dns= 的结果都不能互相污染。
+	cacheKey := fmt.Sprintf("%s:%s:%d:%s%s", host, port, count, stack, req.CacheKey())
 	if cached, ok := pingCache.Load(cacheKey); ok {
 		entry := cached.(pingCacheEntry)
 		if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
@@ -956,9 +990,9 @@ func pingHandler(c fiber.Ctx) error {
 	rawResult, _, _ := sfGroup.Do(cacheKey, func() (interface{}, error) {
 		result := &TCPingResult{}
 
-		switch SINGLE_STACK {
+		switch stack {
 		case "ipv4":
-			ipv4, errV4 := webtest.TCPingRun(host, port, count, "v4", 10*time.Second, 100*time.Millisecond)
+			ipv4, errV4 := webtest.TCPingRunWith(host, port, count, "v4", 10*time.Second, 100*time.Millisecond, req)
 			if errV4 != nil {
 				ipv4 = &webtest.TCPingStats{
 					IP: "Error: " + errV4.Error(),
@@ -966,10 +1000,10 @@ func pingHandler(c fiber.Ctx) error {
 			}
 			result.IPv4 = ipv4
 			result.IPv6 = &webtest.TCPingStats{
-				IP: "Skipped due to SINGLE_STACK=ipv4",
+				IP: "Skipped due to " + skipLabel + "=ipv4",
 			}
 		case "ipv6":
-			ipv6, errV6 := webtest.TCPingRun(host, port, count, "v6", 10*time.Second, 100*time.Millisecond)
+			ipv6, errV6 := webtest.TCPingRunWith(host, port, count, "v6", 10*time.Second, 100*time.Millisecond, req)
 			if errV6 != nil {
 				ipv6 = &webtest.TCPingStats{
 					IP: "Error: " + errV6.Error(),
@@ -977,7 +1011,7 @@ func pingHandler(c fiber.Ctx) error {
 			}
 			result.IPv6 = ipv6
 			result.IPv4 = &webtest.TCPingStats{
-				IP: "Skipped due to SINGLE_STACK=ipv6",
+				IP: "Skipped due to " + skipLabel + "=ipv6",
 			}
 		default:
 			var wg sync.WaitGroup
@@ -985,7 +1019,7 @@ func pingHandler(c fiber.Ctx) error {
 
 			go func() {
 				defer wg.Done()
-				ipv6, errV6 := webtest.TCPingRun(host, port, count, "v6", 10*time.Second, 100*time.Millisecond)
+				ipv6, errV6 := webtest.TCPingRunWith(host, port, count, "v6", 10*time.Second, 100*time.Millisecond, req)
 				if errV6 != nil {
 					ipv6 = &webtest.TCPingStats{
 						IP: "Error: " + errV6.Error(),
@@ -996,7 +1030,7 @@ func pingHandler(c fiber.Ctx) error {
 
 			go func() {
 				defer wg.Done()
-				ipv4, errV4 := webtest.TCPingRun(host, port, count, "v4", 10*time.Second, 100*time.Millisecond)
+				ipv4, errV4 := webtest.TCPingRunWith(host, port, count, "v4", 10*time.Second, 100*time.Millisecond, req)
 				if errV4 != nil {
 					ipv4 = &webtest.TCPingStats{
 						IP: "Error: " + errV4.Error(),
@@ -1696,6 +1730,9 @@ func main() {
 	readConfig()
 	webtest.SetDNSServer(DNS_SERVER)
 	webtest.SetDNSSecServer(DNSSEC_DNS_SERVER)
+	// 让 ssrf 出站校验走 webtest 的自定义 DNS（含请求级 dns=/dns4=/dns6= 覆盖），
+	// 避免"预检用系统解析器、拨号用自定义 DNS"两套解析器。
+	webtest.InstallSSRFResolver()
 	initHTTPClients()
 	// 注入出站 HTTP 客户端到 webtest（探针函数内部按版本取用）
 	webtest.SetHTTPClient(V4Client, V6Client)

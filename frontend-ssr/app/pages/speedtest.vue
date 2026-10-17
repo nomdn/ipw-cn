@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { config } from '../../config/index';
+import { config, devNodes } from '../../config/index';
 import { useMiddlewareFetch } from '../../utils/middleware';
-import { extractHost, formatTime, formatSpeed, formatSize, getStatusCodeClass } from '../../utils/tools';
+import { extractHost, formatTime, formatSpeed, formatSize, getStatusCodeClass, withQuery } from '../../utils/tools';
+import AdvancedOptions from '../components/AdvancedOptions.vue';
 
 
 const route = useRoute()
@@ -48,6 +49,8 @@ const loading = ref(false)
 const result = ref<any[]>([])
 const error = ref('')
 const domain = ref('')
+// 高级选项（dns4 / resolve / resolve4）：用户填了才拼进请求
+const adv = ref<InstanceType<typeof AdvancedOptions> | null>(null)
 
 /** 服务器结果接口 */
 interface ServerResult {
@@ -70,9 +73,19 @@ const serverResults = ref<ServerResult[]>([])
 // 避免页面加载时自动发请求浪费资源。
 // =============================================
 
+/** 调试节点：仅 dev 注入，排最前（本页固定走 IPv4） */
+const devFetches = devNodes.map((server) => {
+  const url = computed(() => withQuery("/middleware/" + server.id + "/speed/v4/" + encodeURIComponent(domain.value), adv.value?.query() ?? {}));
+  const { data, error: fetchError, execute } = useMiddlewareFetch(url, {
+    immediate: false,
+    watch: false,
+  });
+  return { label: server.label, data, error: fetchError, execute };
+});
+
 /** 双栈服务器：同时支持 IPv4/IPv6 的节点 */
 const dualStackFetches = config.APIBaseURL.DualStack.map((server) => {
-  const url = computed(() => "/middleware/" + server.id + "/speed/v4/" + encodeURIComponent(domain.value));
+  const url = computed(() => withQuery("/middleware/" + server.id + "/speed/v4/" + encodeURIComponent(domain.value), adv.value?.query() ?? {}));
   const { data, error: fetchError, execute } = useMiddlewareFetch(url, {
     immediate: false,
     watch: false,
@@ -82,7 +95,7 @@ const dualStackFetches = config.APIBaseURL.DualStack.map((server) => {
 
 /** IPv4 专用服务器：仅支持 IPv4 的节点 */
 const ipv4Fetches = config.APIBaseURL.IPv4.map((server) => {
-  const url = computed(() => "/middleware/" + server.id + "/speed/v4/" + encodeURIComponent(domain.value));
+  const url = computed(() => withQuery("/middleware/" + server.id + "/speed/v4/" + encodeURIComponent(domain.value), adv.value?.query() ?? {}));
   const { data, error: fetchError, execute } = useMiddlewareFetch(url, {
     immediate: false,
     watch: false,
@@ -92,6 +105,7 @@ const ipv4Fetches = config.APIBaseURL.IPv4.map((server) => {
 
 /** 合并所有服务器 fetch 列表 */
 const allFetches = [
+  ...devFetches.map(fetch => ({ ...fetch, type: 'IPv4' })),
   ...dualStackFetches.map(fetch => ({ ...fetch, type: 'DualStack' })),
   ...ipv4Fetches.map(fetch => ({ ...fetch, type: 'IPv4' }))
 ];
@@ -190,6 +204,8 @@ onMounted(() => {
         开始测试
       </el-button>
     </div>
+
+    <AdvancedOptions ref="adv" stack="ipv4" />
 
     <div v-if="error" class="error-message">
       {{ error }}

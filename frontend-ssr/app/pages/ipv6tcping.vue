@@ -4,7 +4,8 @@ import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
 import { useMiddlewareFetch } from '../../utils/middleware';
 import { isIPv6 } from 'is-ip';
-import { extractHost } from '../../utils/tools';
+import { extractHost, withQuery } from '../../utils/tools';
+import AdvancedOptions from '../components/AdvancedOptions.vue';
 const route = useRoute()
 
 useHead({
@@ -77,6 +78,8 @@ const port = ref('80')
 const userIP = ref('')
 const loading = ref(false)
 const serverResults = ref<ServerResult[]>([])
+// 高级选项（dns6 / resolve / resolve6）：用户填了才拼进请求
+const adv = ref<InstanceType<typeof AdvancedOptions> | null>(null)
 // 查询序号：连续点击时旧查询的结果不允许写入新查询的结果表
 let queryId = 0
 
@@ -86,7 +89,7 @@ const allServers = [
 ];
 
 const tcpingFetches = allServers.map((server) => {
-  const url = computed(() => "/middleware/" + server.id + "/tcping/" + encodeURIComponent(extractHost(tmpDomain.value)) + "?port=" + encodeURIComponent(port.value));
+  const url = computed(() => withQuery("/middleware/" + server.id + "/tcping/" + encodeURIComponent(extractHost(tmpDomain.value)) + "?port=" + encodeURIComponent(port.value) + "&version=ipv6", adv.value?.query() ?? {}));
   const { data, error: fetchError, execute } = useMiddlewareFetch<TCPingResponse>(url, {
     immediate: false,
     watch: false,
@@ -210,6 +213,8 @@ onMounted(() => {
         开始测试
       </el-button>
     </div>
+
+    <AdvancedOptions ref="adv" stack="ipv6" />
 
     <div class="result-section">
       <table class="result-table">

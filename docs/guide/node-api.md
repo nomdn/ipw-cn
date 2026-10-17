@@ -42,7 +42,7 @@ GET /info  → {"version":"v1.2.3","capabilities":["probe","report","config","ot
 | GET | `/v1/detail/*url` | 目标 URL（路径传入，自动补全协议） | 网站探测明细：DNS/TCP/HTTP 各阶段耗时、状态码、页面体积、下载速度、可达性；双栈分别返回 |
 | GET | `/v1/ssl/*url` | 目标 URL | SSL 证书检查：剩余有效天数、颁发/主体、TLS 版本、是否过期；双栈分别返回 |
 | GET | `/v1/speed/:version/*url` | `version` = `v4` / `v6`，目标 URL | 下载测速 |
-| GET | `/v1/tcping/:ip` | `port`（默认 80）、`count`（默认 4，上限 20） | TCP 连通性与 RTT 统计 |
+| GET | `/v1/tcping/:ip` | `port`（默认 80）、`count`（默认 4，上限 20）、`version`（见下文「请求级参数」） | TCP 连通性与 RTT 统计 |
 | GET | `/v1/dns/:type/*domain` | `type` ∈ `a`/`aaaa`/`cname`/`mx`/`ns`/`ptr`/`srv`/`txt`/`caa` | DNS 记录查询（`dns-server` 支持主从 failover 与 DoH） |
 | GET | `/v1/dnssec/:domain` | 域名 | DNSSEC 链式验证（`dnssec-server`，留空沿用 `dns-server`） |
 | GET | `/v1/whois/:domain` | 域名 | Whois 注册信息 |
@@ -54,7 +54,36 @@ GET /info  → {"version":"v1.2.3","capabilities":["probe","report","config","ot
 
 **单栈模式**：`single-stack` 配为 `ipv4` / `ipv6` 时只跑对应栈，另一栈直接返回 `Skipped due to SINGLE_STACK=...`，不发起无意义的探测与超时。
 
-**SSRF 防护**：`block-private-ips` 开启时，`detail` / `ssl` 对解析到内网/私有地址的目标直接返回伪造结果，出站客户端同时拒绝连接私有 IP、禁止跨跳重定向。
+**SSRF 防护**：`block-private-ips` 开启时，`detail` / `ssl` 对解析到内网/私有地址的目标直接返回伪造结果，出站客户端同时拒绝连接私有 IP、禁止跨跳重定向。`tcping` 是裸 TCP、不经过出站客户端，故在 `webtest.ResolveHostWith` 内单独把关：**字面 IP**、**DNS 解析结果**、**`resolve*` 改写后的目标**三者只要落在私网/回环/链路本地/组播网段一律拒绝，该栈返回 `Error: connection to private/internal address <IP> is not allowed`（`sent` 仍为请求次数、`success=0`、`loss_rate=100`）；关闭开关时三者一并放行。
+
+### 请求级参数
+
+除路径参数与常规 query 外，`/v1/tcping/:ip` 与所有走 DNS 的探测接口还接受一组**请求级参数**，用于按次覆盖解析行为。参数统一由 `webtest.ParseReqResolve` 解析，HTTP 拨测经 context、`tcping` 经形参透传到解析层；HTTP 与 WS 两条通道语义一致。
+
+| 参数 | 取值 | 作用接口 | 说明 |
+|------|------|----------|------|
+| `dns` | 逗号分隔的 `ip:port` 或 `http(s)://` DoH URL | `detail` / `ssl` / `speed` / `tcping` / `whois` / `dns` | 本次探测改用指定 DNS 服务器，取代配置的 `dns-server` |
+| `dns4` | 同上 | 同上 | 只覆盖 IPv4 族解析，**优先于 `dns`** |
+| `dns6` | 同上 | 同上 | 只覆盖 IPv6 族解析，**优先于 `dns`** |
+| `resolve` | 逗号分隔的 `域名:目标`，目标为 IP 或域名 | `detail` / `ssl` / `speed` / `tcping` | 强制改写某域名的解析结果（两栈通用） |
+| `resolve4` | 同上 | 同上 | 只影响 IPv4 侧；非空时 IPv4 侧**只用这张表**（与 `dns4` 同口径） |
+| `resolve6` | 同上 | 同上 | 只影响 IPv6 侧；非空时 IPv6 侧**只用这张表** |
+| `version` | `ipv4` / `ipv6`（兼容 `v4` / `v6`，大小写与首尾空格不敏感） | `tcping` | 请求级指定单栈 |
+
+`dns*` 与 `resolve*` 是两类正交的覆盖：前者「换服务器去问」，后者「直接改答案」，可同时使用。
+
+**`resolve*` 的目标可以是 IP，也可以是域名**：
+
+- 目标是 **IP**（`resolve4=example.com:1.2.3.4`，IPv6 可写 `[::1]` 或裸地址）→ 拨号阶段不再查 DNS，直接对该 IP 做私网校验后连接；
+- 目标是 **域名**（`resolve=www.example.com:origin.internal`）→ 把它当作新的 host 继续走解析，解析服务器仍取 `dns*`/配置，且**不再查映射表**（因此不会绕成环）。
+
+行为要点：
+
+- **取值与配置侧同一套校验**（`NormalizeServers`）：合法项为 `ip:port`（UDP）或 DoH URL，非法项被丢弃；**参数存在但所有项都非法时返回 `400`**，不静默忽略——避免「看起来指定了、实际按默认跑」。`resolve*` 同理：每组必须形如 `域名:目标`，目标为 IP 或形如域名（不含端口、空格），非法项丢弃、全非法返回 `400`。
+- **`version` 不越权单栈配置**：节点 `single-stack` 非空时一律以配置为准（单栈机指定另一栈也跑不起来）；仅当配置为空（双栈机）时 `version` 才生效。跳过文案借此区分来源：配置造成记 `SINGLE_STACK`，参数造成记 `version`。
+- **作用止于「域名 → IP」这一步**：`dns*` 只更换解析服务器、`resolve*` 只改写解析结果，都不改变探测目标与端口；`dnssec` / `location` / `asn` 三类接口不接受上述参数，`whois` / `dns` 只取 `dns*`、忽略 `resolve*`（`dns` 拨测问的就是真实解析，改写会自相矛盾）。
+- **SSRF 预检同源**：开启 `block-private-ips` 时，预检校验的是**拨号真正会连的地址**（即 `resolve*` 改写后的目标），不会拿原域名的解析结果去判定。`tcping` 没有独立的预检步骤，同一判断落在 `ResolveHostWith` 进入拨号之前，口径与上述一致。
+- **带覆盖时按独立缓存键缓存**：规范化后的参数会拼进缓存键（见「七、缓存与并发」），不同服务器/不同映射的结果各占一条，既不串味、也不牺牲命中率。
 
 ---
 
@@ -198,16 +227,47 @@ POST /v1/ota
 
 业务探测结果在节点侧缓存，避免同 key 洪打把上游打崩：
 
-| 缓存 | 键 | TTL |
-|------|-----|-----|
-| `detail` | 归一化 URL | 5 分钟 |
-| `ssl` | URL | 5 分钟 |
-| `speed` | `url:version` | 5 分钟 |
-| `tcping` | `host:port:count` | 5 分钟 |
-| `whois` | 域名 | 5 分钟 |
-| `asn whois` | `AS<asn>` | 5 分钟 |
-| Bilibili 归属地（在线 API） | IP | 24 小时 |
+| 缓存 | 键（末尾拼请求级解析片段） | TTL（成功 / 失败） |
+|------|-----|--------------------|
+| `detail` | 归一化 URL | 30s / 5s |
+| `ssl` | URL | 30s / 5s |
+| `speed` | `url:version` | 30s / 5s |
+| `tcping` | `host:port:count:stack` | 30s / 5s |
+| `whois` | 域名 | 30s / 5s |
+| `asn whois` | `AS<asn>` | 30s / 5s |
+| Bilibili 归属地（在线 API） | IP | 24 小时（不分成败） |
 
-- **失败结果 30s 后删除**：探测失败（如目标不可达）不缓存整 5 分钟，避免故障恢复后长时间返回旧结论。
-- **singleflight 合并**：`detail` / `ssl` / `tcping` / `speed` 的并发同 key 请求合并为一次真实探测。
-- **定时清扫**：每 10 分钟清理过期缓存条目与 Bilibili 缓存，防止只靠"同 key 重访才淘汰"时内存无限增长。
+- **TTL 按结果分档**（`cacheTTL`）：成功 30s、失败 5s。失败结果不缓存太久，避免故障恢复后长时间返回旧结论；TTL 记在条目里、读时判断，无需后台协程唤醒。
+- **缓存键含生效栈**：`tcping` 的键为 `host:port:count:stack`，`version=ipv6` 的结果与默认双栈不会互相污染。
+- **singleflight 合并**：`detail` / `ssl` / `tcping` / `speed` 的并发同 key 请求合并为一次真实探测（合并键同缓存键）。
+- **请求级解析参数进键**：`dns*` 与 `resolve*` 一并拼入，详见下一节。
+- **定时清扫**：每 1 分钟清理过期缓存条目，防止只靠「同 key 重访才淘汰」时内存无限增长。
+
+### 7.1 请求级解析参数如何进入缓存键
+
+缓存键的基础部分只含**目标**维度（URL / host），但探测结果依赖**怎么解析**——同一域名经不同服务器、或经 `resolve*` 改写后可能指向完全不同的 IP（企业内网、CDN 调度、分线路权威、上线前的强制指向）。若把两者混在一条键里，会双向串味且无从察觉：
+
+- 带 `dns=1.1.1.1:53` 的结果写进 `example.com` 这条 → 随后的普通请求（用配置的 `dns-server`）读出来，用户以为是自己默认 DNS 的结果；
+- 反过来，普通请求的结果也会被带 `dns=` 的请求读走——用户明明指定了服务器，却拿到别人用另一台服务器查的结果；
+- `resolve*` 更直接：强制指向 A 与强制指向 B 是两次不同探测，共用一条键等于互相覆盖。
+
+因此把**规范化后的参数片段拼在键末尾**（`ReqResolve.CacheKey()`），两件事同时成立：不同解析配置各占一条，相同配置仍能命中。
+
+```
+https://example.com                                      ← 无请求级参数
+https://example.com;dns=1.1.1.1:53                       ← dns=
+https://example.com:v4;dns=8.8.8.8:53;dns6=[2400::1]:53   ← speed，按栈覆盖
+qq.com:80:4:ipv4;dns=1.1.1.1:53                           ← tcping
+https://example.com;resolve4=example.com:127.0.0.1        ← resolve4，强制解析
+```
+
+片段规则：
+
+- **字段顺序固定**为 `dns` → `dns4` → `dns6` → `resolve` → `resolve4` → `resolve6`。所以参数在 URL 里谁先谁后不影响键（`?dns6=…&dns=…` 与 `?dns=…&dns6=…` 是同一个键）。
+- **`dns*` 内部按输入顺序，`resolve*` 内部按域名排序**：映射表本质是 map，迭代顺序随机；不排序的话同一请求每次算出的键都不同，缓存永远命不中。
+- **无参数时片段为空串** ⇒ 键与未引入该特性时**逐字节一致**，升级后旧缓存条目照常命中。
+- **按规范化结果拼**：非法项在校验阶段已被丢弃，故 `dns=1.1.1.1:53,garbage` 与 `dns=1.1.1.1:53` 落在同一个键上；`resolve4=Example.COM.:1.2.3.4` 与 `resolve4=example.com:1.2.3.4` 同理（域名统一小写、去尾点）。
+- **键空间随组合增长**：每条仍受 30s / 5s 的 TTL 约束，由每分钟的清扫兜住，不会无限堆积。
+- `asn` / `location` / `dnssec` 不接这些参数，键与以前相同。
+
+> 已知残留（与本次改动无关）：`detail` 与 `ssl` 的 singleflight 合并键都是「URL + 片段」，两种探测**并发**打同一 URL 时会撞在一起，后到者按另一类型断言会 panic（被 `recover` 接住 → 500）。修法是给合并键加探测类型前缀，暂未处理。

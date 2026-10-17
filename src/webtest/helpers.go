@@ -1,6 +1,7 @@
 package webtest
 
 import (
+	"net"
 	"net/netip"
 	"net/url"
 	"strings"
@@ -21,8 +22,8 @@ func CleanHostRecord(addr string) string {
 	return addr
 }
 
-// measureDNSTime 当 trace 未提供 DNS 耗时时的兜底测量
-func measureDNSTime(urlStr string, version string) float64 {
+// measureDNSTime 当 trace 未提供 DNS 耗时时的兜底测量。req 为请求级解析配置（dns 服务器）。
+func measureDNSTime(urlStr string, version string, req ReqResolve) float64 {
 	parsed, err := url.Parse(urlStr)
 	if err != nil {
 		return 0
@@ -31,12 +32,20 @@ func measureDNSTime(urlStr string, version string) float64 {
 	if host == "" {
 		return 0
 	}
+	// 强制解析：目标是 IP 时原域名根本不查 DNS，不能报一个凭空的耗时；
+	// 目标是域名则改按新 host 计时（真实查询的是它）。
+	if target := req.Override(host, version == "v6"); target != "" {
+		host = strings.Trim(target, "[]")
+		if net.ParseIP(host) != nil {
+			return 0
+		}
+	}
 	start := time.Now()
 	var dnsErr error
 	if version == "v6" {
-		_, dnsErr = ResolveAAAARecord(host)
+		_, dnsErr = ResolveAAAARecord(host, req.Servers("ipv6"))
 	} else {
-		_, dnsErr = ResolveARecord(host)
+		_, dnsErr = ResolveARecord(host, req.Servers("ipv4"))
 	}
 	if dnsErr != nil {
 		return 0

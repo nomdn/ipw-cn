@@ -348,6 +348,18 @@ func middlewareHandler(c fiber.Ctx) error {
 
 	query := c.Queries()
 
+	// 请求级 query 透传给节点（过滤空值，等价 TS 版 URLSearchParams 过滤）：
+	// 两个分支都要用 —— tcping/udping/speed 的 port/count/version，以及 detail/ssl/dns/whois 的 dns/dns4/dns6。
+	// HTTP 侧用 url.Values 重新编码后拼接（原样透传会被下一跳的 query 解析器重新切分），WS 侧以 map 形式进 RequestProbe。
+	queryString := url.Values{}
+	queryMap := make(map[string]string)
+	for k, v := range query {
+		if v != "" {
+			queryString.Set(k, v)
+			queryMap[k] = v
+		}
+	}
+
 	// 从 API_KEYS 查找 token，未配置时回退到环境变量 API_KEYS (JSON 字符串)
 	apiKey := lookupAPIKey(backendID)
 
@@ -378,7 +390,7 @@ func middlewareHandler(c fiber.Ctx) error {
 				// 不再静默落回空 URL 的 HTTP 转发（必然 502 且掩盖真实配置错误）
 				return c.Status(fiber.StatusBadGateway).SendString("Node " + backendID + " is WS-only but WS channel is disabled (ws-port=0 or bind failed)")
 			}
-			status, body, err := wsSrv.RequestProbe(backendID, apiType, raw, nil, wsProbeTimeout())
+			status, body, err := wsSrv.RequestProbe(backendID, apiType, raw, queryMap, wsProbeTimeout())
 			if err != nil {
 				return c.Status(fiber.StatusBadGateway).SendString("WS probe failed: " + err.Error())
 			}
@@ -391,21 +403,11 @@ func middlewareHandler(c fiber.Ctx) error {
 		}
 
 		// 上游错误原样透传（状态码 + body），网络错误返回 502
-		return forwardUpstream(c, apiBaseUrl, apiBaseUrl+"v1/"+apiType+"/"+raw, authHeaders, nil)
+		return forwardUpstream(c, apiBaseUrl, apiBaseUrl+"v1/"+apiType+"/"+raw, authHeaders, queryString)
 
 	case "tcping", "udping", "speed":
 		// tcping/udping/speed 统一走 APIBaseURL 节点池
 		apiBaseUrls := flattenStack(API_BASE_URLS)
-
-		// 转发 query 参数（过滤空值，等价于 TS 中 URLSearchParams 过滤 undefined）
-		queryString := url.Values{}
-		queryMap := make(map[string]string)
-		for k, v := range query {
-			if v != "" {
-				queryString.Set(k, v)
-				queryMap[k] = v
-			}
-		}
 
 		node := findNode(apiBaseUrls, backendID)
 		if node == nil || (!node.UseWS() && node.URL == "") {

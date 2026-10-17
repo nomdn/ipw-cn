@@ -35,15 +35,23 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 	switch apiType {
 	case "detail":
 		testURL := normalizeURL(raw)
-		if cached, ok := websiteCache.Load(testURL); ok {
+		req, err := webtest.ParseReqResolve(func(k string) string { return query[k] })
+		if err != nil {
+			return 400, map[string]string{"error": err.Error()}
+		}
+		// 缓存键带上请求级 DNS 覆盖（结果取决于所用服务器，参数不同不能共用）
+		cacheKey := testURL + req.CacheKey()
+		if cached, ok := websiteCache.Load(cacheKey); ok {
 			entry := cached.(websiteCacheEntry)
 			if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
 				return 200, entry.result
 			}
-			websiteCache.Delete(testURL)
+			websiteCache.Delete(cacheKey)
 		}
 		ipv4, ipv6 := wsDual[webtest.WebsiteCheckDetail](
-			func(v string) (*webtest.WebsiteCheckDetail, error) { return webtest.CheckWebsite(testURL, v) },
+			func(v string) (*webtest.WebsiteCheckDetail, error) {
+				return webtest.CheckWebsite(testURL, v, req)
+			},
 			func(err error) *webtest.WebsiteCheckDetail {
 				return &webtest.WebsiteCheckDetail{HostRecord: "Error: " + err.Error(), IsReachable: false}
 			},
@@ -55,20 +63,28 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 		failed := dualAnyFailed(result.IPv4, result.IPv6, func(d *webtest.WebsiteCheckDetail) bool {
 			return d != nil && !d.IsReachable
 		})
-		websiteCache.Store(testURL, websiteCacheEntry{result: result, timestamp: time.Now(), failed: failed})
+		websiteCache.Store(cacheKey, websiteCacheEntry{result: result, timestamp: time.Now(), failed: failed})
 		return 200, result
 
 	case "ssl":
 		testURL := normalizeURL(raw)
-		if cached, ok := sslCache.Load(testURL); ok {
+		req, err := webtest.ParseReqResolve(func(k string) string { return query[k] })
+		if err != nil {
+			return 400, map[string]string{"error": err.Error()}
+		}
+		// 缓存键带上请求级 DNS 覆盖（结果取决于所用服务器，参数不同不能共用）
+		cacheKey := testURL + req.CacheKey()
+		if cached, ok := sslCache.Load(cacheKey); ok {
 			entry := cached.(sslCacheEntry)
 			if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
 				return 200, entry.result
 			}
-			sslCache.Delete(testURL)
+			sslCache.Delete(cacheKey)
 		}
 		ipv4, ipv6 := wsDual[webtest.SSLCheckDetail](
-			func(v string) (*webtest.SSLCheckDetail, error) { return webtest.CheckSSL(testURL, v) },
+			func(v string) (*webtest.SSLCheckDetail, error) {
+				return webtest.CheckSSL(testURL, v, req)
+			},
 			func(err error) *webtest.SSLCheckDetail {
 				return &webtest.SSLCheckDetail{HostRecord: "Error: " + err.Error(), IsExpired: true, IsReachable: false}
 			},
@@ -80,7 +96,7 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 		failed := dualAnyFailed(result.IPv4, result.IPv6, func(d *webtest.SSLCheckDetail) bool {
 			return d != nil && !d.IsReachable
 		})
-		sslCache.Store(testURL, sslCacheEntry{result: result, timestamp: time.Now(), failed: failed})
+		sslCache.Store(cacheKey, sslCacheEntry{result: result, timestamp: time.Now(), failed: failed})
 		return 200, result
 
 	case "speed":
@@ -90,7 +106,12 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 			version = "v4"
 		}
 		testURL = normalizeURL(testURL)
-		cacheKey := fmt.Sprintf("%s:%s", testURL, version)
+		req, err := webtest.ParseReqResolve(func(k string) string { return query[k] })
+		if err != nil {
+			return 400, map[string]string{"error": err.Error()}
+		}
+		// 缓存键：URL + 版本 + 请求级 DNS 覆盖（结果取决于所用服务器，参数不同不能共用）
+		cacheKey := fmt.Sprintf("%s:%s%s", testURL, version, req.CacheKey())
 		if cached, ok := speedCache.Load(cacheKey); ok {
 			entry := cached.(speedCacheEntry)
 			if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
@@ -98,7 +119,7 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 			}
 			speedCache.Delete(cacheKey)
 		}
-		r, e := webtest.SpeedTest(testURL, version)
+		r, e := webtest.SpeedTest(testURL, version, req)
 		if e != nil {
 			errorResult := &webtest.WebsiteSpeedTestResult{HostRecord: "Error: " + e.Error()}
 			speedCache.Store(cacheKey, speedCacheEntry{result: errorResult, timestamp: time.Now(), failed: true})
@@ -126,7 +147,20 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 				n = c
 			}
 		}
-		cacheKey := fmt.Sprintf("%s:%s:%d", host, port, n)
+		// version=ipv4/ipv6：与 HTTP handler 同义，请求级指定单栈（配置优先）
+		version := query["version"]
+		if version != "" && normalizeStack(version) == "" {
+			return 400, map[string]string{"error": "version must be ipv4 or ipv6"}
+		}
+		stack, skipLabel := probeStackFor(version)
+		// 请求级解析参数（dns=/dns4=/dns6=）：与 HTTP handler 同解析；
+		// 带覆盖时旁路共享缓存（结果取决于所用服务器）
+		req, err := webtest.ParseReqResolve(func(k string) string { return query[k] })
+		if err != nil {
+			return 400, map[string]string{"error": err.Error()}
+		}
+		// 缓存键与 HTTP handler 保持一致（含生效栈 + 请求级 DNS 覆盖），两边共用 pingCache
+		cacheKey := fmt.Sprintf("%s:%s:%d:%s%s", host, port, n, stack, req.CacheKey())
 		if cached, ok := pingCache.Load(cacheKey); ok {
 			entry := cached.(pingCacheEntry)
 			if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
@@ -134,13 +168,13 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 			}
 			pingCache.Delete(cacheKey)
 		}
-		ipv4, ipv6 := wsDual[webtest.TCPingStats](
+		ipv4, ipv6 := wsDualStack[webtest.TCPingStats](stack,
 			func(v string) (*webtest.TCPingStats, error) {
-				return webtest.TCPingRun(host, port, n, v, 10*time.Second, 100*time.Millisecond)
+				return webtest.TCPingRunWith(host, port, n, v, 10*time.Second, 100*time.Millisecond, req)
 			},
 			func(err error) *webtest.TCPingStats { return &webtest.TCPingStats{IP: "Error: " + err.Error()} },
-			func(v string) *webtest.TCPingStats {
-				return &webtest.TCPingStats{IP: "Skipped due to SINGLE_STACK=" + v}
+			func(skipStack string) *webtest.TCPingStats {
+				return &webtest.TCPingStats{IP: "Skipped due to " + skipLabel + "=" + skipStack}
 			},
 		)
 		result := &TCPingResult{IPv4: ipv4, IPv6: ipv6}
@@ -157,29 +191,25 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 			return 400, map[string]string{"error": "Invalid domain"}
 		}
 		domain = parsedURL.Host
-		var result any
 		switch recodeType {
-		case "a":
-			result, err = webtest.ResolveARecord(domain)
-		case "aaaa":
-			result, err = webtest.ResolveAAAARecord(domain)
-		case "cname":
-			result, err = webtest.ResolveCNAMERecord(domain)
-		case "mx":
-			result, err = webtest.ResolveMXRecord(domain)
-		case "ns":
-			result, err = webtest.ResolveNSRecord(domain)
-		case "txt":
-			result, err = webtest.ResolveTXTRecord(domain)
-		case "srv":
-			result, err = webtest.ResolveSRVRecord(domain)
-		case "ptr":
-			result, err = webtest.ResolvePTRRecord(domain)
-		case "caa":
-			result, err = webtest.ResolveCAARecord(domain)
+		case "a", "aaaa", "cname", "mx", "ns", "ptr", "srv", "txt", "caa":
 		default:
 			return 400, map[string]string{"error": "Unsupported record type: " + recodeType}
 		}
+
+		req, err := webtest.ParseReqResolve(func(k string) string { return query[k] })
+		if err != nil {
+			return 400, map[string]string{"error": err.Error()}
+		}
+		// 按 qtype 选栈：a→dns4|dns，aaaa→dns6|dns，其余→dns
+		stack := ""
+		if recodeType == "a" {
+			stack = "ipv4"
+		} else if recodeType == "aaaa" {
+			stack = "ipv6"
+		}
+
+		result, err := webtest.ResolveByType(domain, recodeType, req.Servers(stack))
 		if err != nil {
 			return 500, map[string]string{"error": err.Error()}
 		}
@@ -196,18 +226,24 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 		if raw == "" {
 			return 400, map[string]string{"error": "Domain parameter is required"}
 		}
-		if cached, ok := whoisCache.Load(raw); ok {
+		req, err := webtest.ParseReqResolve(func(k string) string { return query[k] })
+		if err != nil {
+			return 400, map[string]string{"error": err.Error()}
+		}
+		// 缓存键带上请求级 DNS 覆盖（结果取决于所用服务器，参数不同不能共用）
+		cacheKey := raw + req.CacheKey()
+		if cached, ok := whoisCache.Load(cacheKey); ok {
 			entry := cached.(whoisCacheEntry)
 			if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
 				return 200, entry.result
 			}
-			whoisCache.Delete(raw)
+			whoisCache.Delete(cacheKey)
 		}
-		result, err := webtest.QueryWhois(raw)
+		result, err := webtest.QueryWhois(raw, req.Servers("ipv4"), req.Servers("ipv6"))
 		if err != nil {
 			return 500, map[string]string{"error": err.Error()}
 		}
-		whoisCache.Store(raw, whoisCacheEntry{result: result, timestamp: time.Now()})
+		whoisCache.Store(cacheKey, whoisCacheEntry{result: result, timestamp: time.Now()})
 		return 200, result
 
 	case "location":
@@ -258,7 +294,13 @@ func splitRaw(raw string) (string, string) {
 
 // wsDual 双栈编排（ws.go 内部，学 main.go handler 的 SINGLE_STACK 处理）
 func wsDual[T any](run func(version string) (*T, error), mkErr func(err error) *T, mkSkip func(version string) *T) (ipv4, ipv6 *T) {
-	switch SINGLE_STACK {
+	return wsDualStack(SINGLE_STACK, run, mkErr, mkSkip)
+}
+
+// wsDualStack 是 wsDual 的可指定栈版本：stack 为 "" 双栈并行，"ipv4"/"ipv6" 只跑该栈。
+// tcping 借此支持请求级 version 参数（probeStackFor 已把配置优先规则算好）。
+func wsDualStack[T any](stack string, run func(version string) (*T, error), mkErr func(err error) *T, mkSkip func(stack string) *T) (ipv4, ipv6 *T) {
+	switch stack {
 	case "ipv4":
 		v4, err := run("v4")
 		if err != nil {

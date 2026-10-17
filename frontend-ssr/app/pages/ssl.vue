@@ -2,9 +2,10 @@
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { CircleCheckFilled, CircleCloseFilled,InfoFilled } from '@element-plus/icons-vue';
-import { config } from '../../config/index';
+import { config, devNodes } from '../../config/index';
 import { useMiddlewareFetch } from '../../utils/middleware';
-import { extractHost, getStatusCodeClass, formatTime, formatSpeed } from '../../utils/tools';
+import { extractHost, getStatusCodeClass, formatTime, formatSpeed, withQuery } from '../../utils/tools';
+import AdvancedOptions from '../components/AdvancedOptions.vue';
 const route = useRoute()
 
 const siteUrlWithSlash = computed(() => config.siteUrl.replace(/\/$/, '') + '/')
@@ -65,7 +66,11 @@ interface SSLCheckItem {
   is_expired: boolean
   is_reachable: boolean
 }
-const apiList = config.APIBaseURL.DualStack
+// 调试节点放最前（仅 dev 注入，生产为空数组）
+const apiList = [
+  ...devNodes,
+  ...config.APIBaseURL.DualStack,
+]
 const currentApiIndex = ref(0)
 const backendID = computed(() => apiList[currentApiIndex.value]?.id || '')
 const tmpDomain = ref('https://www.zakoflare.com')
@@ -73,7 +78,9 @@ const testDomain = ref('')
 const loading = ref(false)
 const error = ref('')
 const result = ref<SSLCheckResponse | null>(null)
-const sslUrl = computed(() => "/middleware/" + backendID.value + "/ssl/" + encodeURIComponent(testDomain.value));
+// 高级选项（dns4/dns6 + resolve/resolve4/resolve6）：本页一次探测两栈
+const adv = ref<InstanceType<typeof AdvancedOptions> | null>(null)
+const sslUrl = computed(() => withQuery("/middleware/" + backendID.value + "/ssl/" + encodeURIComponent(testDomain.value), adv.value?.query() ?? {}));
 
 const { data: sslData, error: sslError, execute: executeSSL } = useMiddlewareFetch<SSLCheckResponse>(sslUrl, {
   immediate: false,
@@ -156,6 +163,8 @@ onMounted(() => {
         SSL 证书检查
       </el-button>
     </div>
+
+    <AdvancedOptions ref="adv" />
 
     <div v-if="error" class="error-message">
       {{ error }}
