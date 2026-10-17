@@ -3,22 +3,6 @@
     前端的一系列配置
 */
 
-// 是否开发环境。
-// 本文件同时被 nuxt.config 与 nitro server 引用，那两处 import.meta.dev 尚未注入（undefined），
-// 因此只有严格为 true 才算 dev；应用代码里由 Vite 的 define 替换成真实布尔值。
-const __DEV__ = (import.meta as any).dev === true
-
-/**
- * 本机调试节点：仅开发环境注入，对应 middleware-go/setting.json 里的 local
- * （url 指向本机节点，默认 127.0.0.1:18081）。生产构建为空数组。
- *
- * 位置约定：调试节点放**第一优先级**——各页把 `...devNodes` 拼在节点列表最前面；
- * 本机只有 IPv4，所以 IPv6 页（ipv6tcping / ipv6speedtest）不拼它。
- */
-export const devNodes: { label: string; id: string; url: string }[] = __DEV__
-    ? [{ label: "本机 127.0.0.1:18081（调试）", id: "local", url: "" }]
-    : []
-
 const config = {
     siteUrl: "https://nipw.cn/",
     // 站点名称：用于页面标题 / 描述 / 页脚品牌展示
@@ -37,8 +21,10 @@ const config = {
     Middleware: <string[]>[
         // dev：本机 middleware-go（8091）排最前 —— 调试节点 id "local" 只有它认识，
         // 远端中间层拿到会直接返回 Invalid backend ID（400，不在重试码里）。
-        ...(__DEV__ ? ["http://127.0.0.1:8091/"] : []),
-        "https://middleware-1.api-ipw.wsmdn.top/"
+        
+        "https://middleware-1.api-ipw.wsmdn.top/",
+        "https://boce-api.api-ipw.wsmdn.top/"
+        
         // "https://middleware-2.wsmdn.top/",
     ],
     // Umami 统计
@@ -58,20 +44,21 @@ const config = {
     // IPLocationAPI：IP 归属查询（location / asn）上游节点池（纯数组，无栈区分）
     IPLocationAPI: [
         {
+            label: "中国 四川 沙渠 电信[ZFC]",
+            id: "cn2-sichuan",
+            url: "https://cn2-sichuan.api-ipw.wsmdn.top/"
+        },
+        {
             label: "中国 江苏 移动",
             id: "cn-jiangsu",
             url: "https://cn-jiangsu.api-ipw.wsmdn.top/"
-        },
+        }
         // {
         //     label: "中国 湖北 武汉 电信",
         //     id: "cn-wuhan-chinatelecom",
         //     url: ""
         // },
-        {
-            label: "中国 四川 沙渠 电信[ZFC]",
-            id: "cn2-sichuan",
-            url: "https://cn2-sichuan.api-ipw.wsmdn.top/"
-        }
+
     ],
     // APIBaseURL：其余拨测（whois / ssl / detail / dns / dnssec / tcping / speed）上游节点池，含 { IPv6, IPv4, DualStack } 三栈
     APIBaseURL: {
