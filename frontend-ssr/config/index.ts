@@ -122,10 +122,10 @@ const config = {
                 id: "cn-shenzhen",
                 url: "https://cn-shenzhen.api-ipw.wsmdn.top/"
             },
-            {
-                label: "河南 安阳 联通",
-                "id": "anyang-cu"
-            },
+            // {
+            //     label: "河南 安阳 联通",
+            //     "id": "anyang-cu"
+            // },
             // 仅经独立中间件转发：URL 留空，内置中间件会直接报 502 "Backend URL not configured"
             {
                 label: "上海市 上海市 奉贤区 移动",
