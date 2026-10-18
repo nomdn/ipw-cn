@@ -2,7 +2,7 @@
 import { useMiddlewareFetch } from '../../utils/middleware';
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { config, devNodes } from '../../config/index'
+import { config } from '../../config/index'
 import { withQuery } from '../../utils/tools'
 import AdvancedOptions from '../components/AdvancedOptions.vue'
 import { isIPv6 } from 'is-ip'
@@ -66,9 +66,7 @@ const result = ref<any>(null)
 const error = ref('')
 const userIP = ref('')
 
-// 调试节点放最前（仅 dev 注入，生产为空数组）
 const apiList = [
-  ...devNodes,
   ...config.APIBaseURL.DualStack,
 ]
 const currentApiIndex = ref(0)

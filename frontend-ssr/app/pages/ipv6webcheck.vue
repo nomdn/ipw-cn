@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { config, devNodes } from '../../config/index';
+import { config } from '../../config/index';
 import { useMiddlewareFetch } from '../../utils/middleware';
 import { CircleCheckFilled, CircleCloseFilled,InfoFilled,Position } from '@element-plus/icons-vue';
 import { extractHost, getStatusCodeClass, formatTime, formatSize, formatSpeed, withQuery } from '../../utils/tools';
@@ -64,9 +64,7 @@ interface PerformanceCheckItem {
   download_speed: number
   is_reachable: boolean
 }
-// 调试节点放最前（仅 dev 注入，生产为空数组）
 const apiList = [
-  ...devNodes,
   ...config.APIBaseURL.DualStack,
 ]
 const currentApiIndex = ref(0)

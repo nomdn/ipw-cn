@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { config, devNodes } from '../../config/index';
+import { config } from '../../config/index';
 import { useMiddlewareFetch } from '../../utils/middleware';
 import { extractHost, withQuery } from '../../utils/tools';
 import AdvancedOptions from '../components/AdvancedOptions.vue';
@@ -83,8 +83,6 @@ const adv = ref<InstanceType<typeof AdvancedOptions> | null>(null)
 let queryId = 0
 
 const allServers = [
-  // 调试节点放最前（仅 dev 注入，生产为空数组）；本页固定 version=ipv4，故按 IPv4 组对待
-  ...devNodes.map((s: ServerConfig) => ({ ...s, type: 'IPv4' })),
   ...config.APIBaseURL.DualStack.map((s: ServerConfig) => ({ ...s, type: 'DualStack' })),
   ...config.APIBaseURL.IPv4.map((s: ServerConfig) => ({ ...s, type: 'IPv4' }))
 ];
@@ -101,15 +99,7 @@ const tcpingFetches = allServers.map((server) => {
 function initServerResults() {
   const results: ServerResult[] = []
 
-  // 与 allServers 顺序保持一致：调试节点 → DualStack → IPv4
-  devNodes.forEach((server) => {
-    results.push({
-      label: server.label,
-      loading: false,
-      error: ''
-    })
-  })
-
+  // 与 allServers 顺序保持一致：DualStack → IPv4
   config.APIBaseURL.DualStack.forEach((server: ServerConfig) => {
     results.push({
       label: server.label,

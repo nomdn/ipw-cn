@@ -19,9 +19,6 @@ const config = {
     // 前端自带中间件始终放在候选列表最后一位兜底。
     // 未配置或为空数组时，直接使用前端自带中间件。
     Middleware: <string[]>[
-        // dev：本机 middleware-go（8091）排最前 —— 调试节点 id "local" 只有它认识，
-        // 远端中间层拿到会直接返回 Invalid backend ID（400，不在重试码里）。
-        
         "https://middleware-1.api-ipw.wsmdn.top/",
         "https://boce-api.api-ipw.wsmdn.top/"
         

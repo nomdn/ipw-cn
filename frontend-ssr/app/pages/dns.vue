@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { config, devNodes } from '../../config/index';
+import { config } from '../../config/index';
 import { useMiddlewareFetch } from '../../utils/middleware';
 import { isIPv6 } from 'is-ip';
 import { formatTime, withQuery } from '../../utils/tools';
@@ -78,9 +78,7 @@ const recordTypes = [
 // 高级选项：DNS 拨测问的就是真实解析结果，只取 DNS 服务器（dns4/dns6），不支持强制解析
 const adv = ref<InstanceType<typeof AdvancedOptions> | null>(null)
 
-// 调试节点放最前（仅 dev 注入，生产为空数组）
 const dnsServerFetches = [
-  ...devNodes,
   ...config.APIBaseURL.DualStack,
   ...config.APIBaseURL.IPv4,
   ...config.APIBaseURL.IPv6

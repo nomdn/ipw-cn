@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { CircleCheckFilled, CircleCloseFilled,InfoFilled } from '@element-plus/icons-vue';
-import { config, devNodes } from '../../config/index';
+import { config } from '../../config/index';
 import { useMiddlewareFetch } from '../../utils/middleware';
 import { extractHost, getStatusCodeClass, formatTime, formatSpeed, withQuery } from '../../utils/tools';
 import AdvancedOptions from '../components/AdvancedOptions.vue';
@@ -66,9 +66,7 @@ interface SSLCheckItem {
   is_expired: boolean
   is_reachable: boolean
 }
-// 调试节点放最前（仅 dev 注入，生产为空数组）
 const apiList = [
-  ...devNodes,
   ...config.APIBaseURL.DualStack,
 ]
 const currentApiIndex = ref(0)
