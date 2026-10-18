@@ -99,11 +99,6 @@ const config = {
             },
             // IP 直连新节点：URL 留空，仅经独立中间件转发
             {
-                label: "山东 枣庄 双线",
-                id: "zaozhuang",
-                url: ""
-            },
-            {
                 label: "香港 Cogent",
                 id: "hongkong",
                 url: ""
@@ -130,6 +125,22 @@ const config = {
             {
                 label: "河南 安阳 联通",
                 "id": "anyang-cu"
+            },
+            // 仅经独立中间件转发：URL 留空，内置中间件会直接报 502 "Backend URL not configured"
+            {
+                label: "上海市 上海市 奉贤区 移动",
+                id: "70dc5411-0cb6-425d-838f-a9bc81984ed4",
+                url: ""
+            },
+            {
+                label: "江西 南昌 移动",
+                id: "97d8873f-f0bb-4e3a-bf41-0b78878b8f34",
+                url: ""
+            },
+            {
+                label: "中国 广东 梅州 电信",
+                id: "b3e06025-d9bd-458d-b1c4-cbba27f2a537",
+                url: ""
             }
             // {
             //     label: "中国 湖北 武汉 电信",
