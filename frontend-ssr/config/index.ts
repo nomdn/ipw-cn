@@ -87,11 +87,11 @@ const config = {
                 id: "hk-shatin",
                 url: "https://china-hk-kowloon-shatindistrict-newcloud.ipwapi.zfap.wsmdn.top/"
             },
-            {
-                label: "中国 陕西 西安 北经济技术开发区 未央区凤城 中国电信[ZFC]",
-                id: "cn-xian",
-                url: "https://cn-xian-shaanxiprovince.api-ipw.wsmdn.top/"
-            },
+            // {
+            //     label: "中国 陕西 西安 北经济技术开发区 未央区凤城 中国电信[ZFC]",
+            //     id: "cn-xian",
+            //     url: "https://cn-xian-shaanxiprovince.api-ipw.wsmdn.top/"
+            // },
             {
                 label: "美国/加利福尼亚州/洛杉矶/蒙特利奇帕克/USCD[ZFC]",
                 id: "us-la",
