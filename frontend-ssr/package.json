@@ -27,7 +27,7 @@
     "github-markdown-css": "^5.9.0",
     "github-slugger": "^2.0.0",
     "is-ip": "^5.0.1",
-    "markdown-it": "^14.3.0",
+    "markdown-it": "^14.3.3",
     "markdown-it-anchor": "^9.2.1",
     "nuxt": "^4.5.1",
     "nuxt-security": "2.6.0",
