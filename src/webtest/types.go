@@ -31,8 +31,11 @@ type SSLCheckDetail struct {
 	IssuerOrganization []string  `json:"issuer_organization"`
 	IssuerCommonName   string    `json:"issuer_common_name"`
 	SubjectCommonName  string    `json:"subject_common_name"`
-	IsExpired          bool      `json:"is_expired"`
-	IsReachable        bool      `json:"is_reachable"`
+	// SAN 证书主体别名（Subject Alternative Names）：DNS 名在前、IP 在后，
+	// 与 CN 相互独立——校验「证书覆盖了哪些域名」以这里为准
+	SAN       []string `json:"san"`
+	IsExpired bool     `json:"is_expired"`
+	IsReachable bool   `json:"is_reachable"`
 }
 
 type WebsiteSpeedTestResult struct {

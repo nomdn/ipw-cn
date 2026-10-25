@@ -131,7 +131,10 @@ export default defineNuxtConfig({
     }
   },
   runtimeConfig: {
-    indexnowKey: '',
+    // IndexNow 所有权凭证：与 public/<同名>.txt 一致（IndexNow 靠抓取该文件验证），
+    // key 本身是公开凭证不是机密；环境变量 NUXT_INDEXNOW_KEY 可覆盖。
+    // 消费方：server/api/indexnow.*.ts（运行时提交端点）。
+    indexnowKey: 'd49c90fb2fb160cdd2cd4b09532bc380',
     apiKeys: '',
     public: {
       siteUrl: config.siteUrl,
@@ -196,7 +199,7 @@ export default defineNuxtConfig({
         ],
         
         'style-src': ["'self'", 'https:', "'unsafe-inline'"],
-        'img-src': ["'self'", 'https://s0.wp.com', 'data:', 'https:'],
+        'img-src': ["'self'", 'https://s0.wp.com', 'data:', 'blob:', 'https:'],
         'font-src': ["'self'", 'https:', 'data:'],
       }
     }

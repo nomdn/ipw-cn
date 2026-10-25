@@ -184,8 +184,11 @@ type SSLCheckDetail struct {
 	IssuerOrganization []string  `json:"issuer_organization"`
 	IssuerCommonName   string    `json:"issuer_common_name"`
 	SubjectCommonName  string    `json:"subject_common_name"`
-	IsExpired          bool      `json:"is_expired"`
-	IsReachable        bool      `json:"is_reachable"`
+	// SAN 证书主体别名（Subject Alternative Names）：DNS 名在前、IP 在后，
+	// 与 CN 相互独立——校验「证书覆盖了哪些域名」以这里为准
+	SAN         []string `json:"san"`
+	IsExpired   bool     `json:"is_expired"`
+	IsReachable bool     `json:"is_reachable"`
 }
 
 type SSLCheckResult struct {
@@ -202,26 +205,39 @@ func initHttpClient() {
 		dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 		return &http.Transport{
 			DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
-				if ssrf.Enabled() {
-					host, port, err := net.SplitHostPort(addr)
+				// DNS 接管与 SSRF 解耦：域名一律先经 webtest 解析成 IP 再拨号。
+				// 服务器取请求级覆盖（dns=/dns4=/dns6=，经 ctx 传来），无覆盖则用配置 dns-server；
+				// 不这样时关掉 SSRF 会绕过配置/系统 DNS，detail/ssl/speed 与 tcping/dns 各问各的。
+				// SSRF 只保留「私网校验」职责，不再是 DNS 接管的开关。
+				// 同源：SSRF 预检（ValidateOutboundTarget）经 InstallSSRFResolver 读到的是同一份 ctx 配置。
+				req := webtest.ReqResolveFromContext(ctx)
+				host, port, err := net.SplitHostPort(addr)
+				if err != nil {
+					return nil, err
+				}
+				// 强制解析（resolve=/resolve4=/resolve6=）：命中就把目标填回 host。
+				// 目标是 IP → 走下面的字面 IP 分支（私网检测后直连，不再查 DNS）；
+				// 目标是域名 → 当作新 host 交给下面的解析分支。
+				if target := req.Override(host, network == "tcp6"); target != "" {
+					host = strings.Trim(target, "[]")
+					addr = net.JoinHostPort(host, port)
+				}
+				if ip := net.ParseIP(host); ip != nil {
+					if ssrf.Enabled() && ssrf.IsPrivateIP(ip) {
+						slog.Warn("Blocked connection to private IP", "host", host)
+						return nil, fmt.Errorf("request to private/internal address is not allowed")
+					}
+				} else {
+					var dnsResult webtest.DNSResult
+					if network == "tcp4" {
+						dnsResult, err = webtest.ResolveARecord(host, req.Servers("ipv4"))
+					} else {
+						dnsResult, err = webtest.ResolveAAAARecord(host, req.Servers("ipv6"))
+					}
 					if err != nil {
 						return nil, err
 					}
-					if ip := net.ParseIP(host); ip != nil {
-						if ssrf.IsPrivateIP(ip) {
-							slog.Warn("Blocked connection to private IP", "host", host)
-							return nil, fmt.Errorf("request to private/internal address is not allowed")
-						}
-					} else {
-						var dnsResult webtest.DNSResult
-						if network == "tcp4" {
-							dnsResult, err = webtest.ResolveARecord(host)
-						} else {
-							dnsResult, err = webtest.ResolveAAAARecord(host)
-						}
-						if err != nil {
-							return nil, err
-						}
+					if ssrf.Enabled() {
 						for _, ipStr := range dnsResult.Record {
 							ip := net.ParseIP(ipStr)
 							if ip != nil && ssrf.IsPrivateIP(ip) {
@@ -229,9 +245,9 @@ func initHttpClient() {
 								return nil, fmt.Errorf("request to private/internal address is not allowed")
 							}
 						}
-						if len(dnsResult.Record) > 0 {
-							addr = net.JoinHostPort(dnsResult.Record[0], port)
-						}
+					}
+					if len(dnsResult.Record) > 0 {
+						addr = net.JoinHostPort(dnsResult.Record[0], port)
 					}
 				}
 				return dialer.DialContext(ctx, network, addr)
@@ -301,13 +317,16 @@ func (b *zstdReader) Close() error {
 	return b.closeErr
 }
 
-func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
+// checkWebsite 对单个栈做站点拨测；req 为请求级解析配置（dns*/resolve*，零值 = 用配置 DNS）。
+func checkWebsite(url string, version string, req webtest.ReqResolve) (*WebsiteCheckDetail, error) {
 	ctx := context.Background()
 	var err error
 	ctx, err = ssrf.ValidateOutboundTarget(ctx, url)
 	if err != nil {
 		return nil, err
 	}
+	// 请求级解析配置进 ctx：DialContext 与 SSRF 预检同源读取（dns=/dns4=/dns6=、resolve=）
+	ctx = webtest.WithReqResolve(ctx, req)
 
 	client := V4Client
 	if version == "v6" {
@@ -338,7 +357,7 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 
 	dnsLookupTime := trace.DNSLookup.Seconds() * 1000
 	if dnsLookupTime == 0 {
-		dnsLookupTime = measureDNSTime(url, version)
+		dnsLookupTime = measureDNSTime(url, version, req)
 	}
 	tcpConnectTime := trace.TCPConnTime.Seconds() * 1000
 	httpConnectTime := trace.ConnTime.Seconds() * 1000
@@ -373,13 +392,16 @@ func checkWebsite(url string, version string) (*WebsiteCheckDetail, error) {
 	return result, nil
 }
 
-func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
+// websiteSpeed 对单个栈做测速拨测；req 为请求级解析配置（零值 = 用配置 DNS）。
+func websiteSpeed(url string, version string, req webtest.ReqResolve) (*WebsiteSpeedTestResult, error) {
 	ctx := context.Background()
 	var err error
 	ctx, err = ssrf.ValidateOutboundTarget(ctx, url)
 	if err != nil {
 		return nil, err
 	}
+	// 请求级解析配置进 ctx：DialContext 与 SSRF 预检同源读取（dns=/dns4=/dns6=、resolve=）
+	ctx = webtest.WithReqResolve(ctx, req)
 
 	client := V4Client
 	if version == "v6" {
@@ -409,7 +431,7 @@ func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
 
 	dnsLookupTime := trace.DNSLookup.Seconds() * 1000
 	if dnsLookupTime == 0 {
-		dnsLookupTime = measureDNSTime(url, version)
+		dnsLookupTime = measureDNSTime(url, version, req)
 	}
 	tcpConnectTime := trace.TCPConnTime.Seconds() * 1000
 	httpConnectTime := trace.ConnTime.Seconds() * 1000
@@ -445,7 +467,7 @@ func websiteSpeed(url string, version string) (*WebsiteSpeedTestResult, error) {
 	return result, nil
 }
 
-func measureDNSTime(urlStr string, version string) float64 {
+func measureDNSTime(urlStr string, version string, req webtest.ReqResolve) float64 {
 	parsed, err := url.Parse(urlStr)
 	if err != nil {
 		return 0
@@ -454,12 +476,15 @@ func measureDNSTime(urlStr string, version string) float64 {
 	if host == "" {
 		return 0
 	}
+	// 与拨测同源：走请求级 DNS 覆盖（dns4/dns6），无覆盖用配置 dns-server
+	servers := req.Servers("ipv4")
 	start := time.Now()
 	var dnsErr error
 	if version == "v6" {
-		_, dnsErr = webtest.ResolveAAAARecord(host)
+		servers = req.Servers("ipv6")
+		_, dnsErr = webtest.ResolveAAAARecord(host, servers)
 	} else {
-		_, dnsErr = webtest.ResolveARecord(host)
+		_, dnsErr = webtest.ResolveARecord(host, servers)
 	}
 	if dnsErr != nil {
 		return 0
@@ -467,13 +492,15 @@ func measureDNSTime(urlStr string, version string) float64 {
 	return time.Since(start).Seconds() * 1000
 }
 
-func checkSSL(url string, version string) (*SSLCheckDetail, error) {
+func checkSSL(url string, version string, req webtest.ReqResolve) (*SSLCheckDetail, error) {
 	ssrfCtx := context.Background()
 	var err error
 	ssrfCtx, err = ssrf.ValidateOutboundTarget(ssrfCtx, url)
 	if err != nil {
 		return nil, err
 	}
+	// 请求级解析配置进 ctx：DialContext 与 SSRF 预检同源读取（dns=/dns4=/dns6=、resolve=）
+	ssrfCtx = webtest.WithReqResolve(ssrfCtx, req)
 
 	client := V4Client
 	if version == "v6" {
@@ -504,6 +531,7 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 	var certStartTime, certEndTime time.Time
 	var issuerOrganization []string
 	var issuerCommonName, subjectCommonName, domain string
+	var san []string
 
 	if rawResp.TLS != nil && len(rawResp.TLS.PeerCertificates) > 0 {
 		cert = rawResp.TLS.PeerCertificates[0]
@@ -516,6 +544,12 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 		issuerCommonName = cert.Issuer.CommonName
 		subjectCommonName = cert.Subject.CommonName
 		domain = cleanHostRecord(cert.Subject.CommonName)
+		// SAN：DNS 名在前、IP 在后（IP 站点证书可能只有 IP SAN）
+		san = make([]string, 0, len(cert.DNSNames)+len(cert.IPAddresses))
+		san = append(san, cert.DNSNames...)
+		for _, ip := range cert.IPAddresses {
+			san = append(san, ip.String())
+		}
 	} else {
 		return nil, fmt.Errorf("no SSL certificate found")
 	}
@@ -534,6 +568,7 @@ func checkSSL(url string, version string) (*SSLCheckDetail, error) {
 		IssuerOrganization: issuerOrganization,
 		IssuerCommonName:   issuerCommonName,
 		SubjectCommonName:  subjectCommonName,
+		SAN:                san,
 		IsReachable:        true,
 	}
 
@@ -600,19 +635,28 @@ func checkWebsiteHandler(c *gin.Context) {
 		return
 	}
 
-	if cached, ok := websiteCache.Load(testUrl); ok {
+	req, err := webtest.ParseReqResolve(func(k string) string { return c.Query(k) })
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// 缓存键带上请求级 DNS 覆盖：结果取决于所用服务器，参数不同必须各占一条，
+	// 否则互相串味；无覆盖时 req.CacheKey() 为空串，键与旧版完全一致。
+	cacheKey := testUrl + req.CacheKey()
+
+	if cached, ok := websiteCache.Load(cacheKey); ok {
 		entry := cached.(websiteCacheEntry)
 		if time.Since(entry.timestamp) < 5*time.Minute {
 			c.JSON(200, entry.result)
 			return
 		}
-		websiteCache.Delete(testUrl)
+		websiteCache.Delete(cacheKey)
 	}
 
 	result := &WebsiteCheckResult{}
 	switch SINGLE_STACK {
 	case "ipv4":
-		ipv4, errV4 := checkWebsite(testUrl, "v4")
+		ipv4, errV4 := checkWebsite(testUrl, "v4", req)
 		if errV4 != nil {
 			ipv4 = &WebsiteCheckDetail{
 				HostRecord:  "Error: " + errV4.Error(),
@@ -625,7 +669,7 @@ func checkWebsiteHandler(c *gin.Context) {
 			IsReachable: false,
 		}
 	case "ipv6":
-		ipv6, errV6 := checkWebsite(testUrl, "v6")
+		ipv6, errV6 := checkWebsite(testUrl, "v6", req)
 		if errV6 != nil {
 			ipv6 = &WebsiteCheckDetail{
 				HostRecord:  "Error: " + errV6.Error(),
@@ -643,7 +687,7 @@ func checkWebsiteHandler(c *gin.Context) {
 
 		go func() {
 			defer wg.Done()
-			ipv6, errV6 := checkWebsite(testUrl, "v6")
+			ipv6, errV6 := checkWebsite(testUrl, "v6", req)
 			if errV6 != nil {
 				ipv6 = &WebsiteCheckDetail{
 					HostRecord:  "Error: " + errV6.Error(),
@@ -655,7 +699,7 @@ func checkWebsiteHandler(c *gin.Context) {
 
 		go func() {
 			defer wg.Done()
-			ipv4, errV4 := checkWebsite(testUrl, "v4")
+			ipv4, errV4 := checkWebsite(testUrl, "v4", req)
 			if errV4 != nil {
 				ipv4 = &WebsiteCheckDetail{
 					HostRecord:  "Error: " + errV4.Error(),
@@ -667,14 +711,14 @@ func checkWebsiteHandler(c *gin.Context) {
 
 		wg.Wait()
 	}
-	websiteCache.Store(testUrl, websiteCacheEntry{result: result, timestamp: time.Now()})
+	websiteCache.Store(cacheKey, websiteCacheEntry{result: result, timestamp: time.Now()})
 
 	// If both IPv4 and IPv6 fail, only cache for 30 seconds
 	// 如果 IPv4 和 IPv6 都失败，只缓存30秒
 	if (result.IPv4 != nil && !result.IPv4.IsReachable) && (result.IPv6 != nil && !result.IPv6.IsReachable) {
 		go func() {
 			time.Sleep(30 * time.Second)
-			websiteCache.Delete(testUrl)
+			websiteCache.Delete(cacheKey)
 		}()
 	}
 
@@ -701,19 +745,27 @@ func sslCheckHandler(c *gin.Context) {
 		return
 	}
 
-	if cached, ok := sslCache.Load(testUrl); ok {
+	req, err := webtest.ParseReqResolve(func(k string) string { return c.Query(k) })
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// 缓存键带上请求级 DNS 覆盖（结果取决于所用服务器，参数不同不能共用）
+	cacheKey := testUrl + req.CacheKey()
+
+	if cached, ok := sslCache.Load(cacheKey); ok {
 		entry := cached.(sslCacheEntry)
 		if time.Since(entry.timestamp) < 5*time.Minute {
 			c.JSON(200, entry.result)
 			return
 		}
-		sslCache.Delete(testUrl)
+		sslCache.Delete(cacheKey)
 	}
 
 	result := &SSLCheckResult{}
 	switch SINGLE_STACK {
 	case "ipv4":
-		ipv4, errV4 := checkSSL(testUrl, "v4")
+		ipv4, errV4 := checkSSL(testUrl, "v4", req)
 		if errV4 != nil {
 			ipv4 = &SSLCheckDetail{
 				HostRecord: "Error: " + errV4.Error(),
@@ -726,7 +778,7 @@ func sslCheckHandler(c *gin.Context) {
 			IsExpired:  true,
 		}
 	case "ipv6":
-		ipv6, errV6 := checkSSL(testUrl, "v6")
+		ipv6, errV6 := checkSSL(testUrl, "v6", req)
 		if errV6 != nil {
 			ipv6 = &SSLCheckDetail{
 				HostRecord: "Error: " + errV6.Error(),
@@ -745,7 +797,7 @@ func sslCheckHandler(c *gin.Context) {
 
 		go func() {
 			defer wg.Done()
-			ipv6, errV6 := checkSSL(testUrl, "v6")
+			ipv6, errV6 := checkSSL(testUrl, "v6", req)
 			if errV6 != nil {
 				ipv6 = &SSLCheckDetail{
 					HostRecord: "Error: " + errV6.Error(),
@@ -757,7 +809,7 @@ func sslCheckHandler(c *gin.Context) {
 
 		go func() {
 			defer wg.Done()
-			ipv4, errV4 := checkSSL(testUrl, "v4")
+			ipv4, errV4 := checkSSL(testUrl, "v4", req)
 			if errV4 != nil {
 				ipv4 = &SSLCheckDetail{
 					HostRecord: "Error: " + errV4.Error(),
@@ -770,13 +822,13 @@ func sslCheckHandler(c *gin.Context) {
 		wg.Wait()
 	}
 
-	sslCache.Store(testUrl, sslCacheEntry{result: result, timestamp: time.Now()})
+	sslCache.Store(cacheKey, sslCacheEntry{result: result, timestamp: time.Now()})
 
 	// 如果 IPv4 和 IPv6 都失败，只缓存30秒
 	if (result.IPv4 != nil && !result.IPv4.IsReachable) && (result.IPv6 != nil && !result.IPv6.IsReachable) {
 		go func() {
 			time.Sleep(30 * time.Second)
-			sslCache.Delete(testUrl)
+			sslCache.Delete(cacheKey)
 		}()
 	}
 
@@ -796,6 +848,13 @@ func websiteSpeedTestHandler(c *gin.Context) {
 	}
 	url := normalizeURL(testUrl)
 
+	req, err := webtest.ParseReqResolve(func(k string) string { return c.Query(k) })
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 检查请求版本是否与 SINGLE_STACK 配置匹配
 	switch SINGLE_STACK {
 	case "ipv4":
 		if version != "v4" {
@@ -815,7 +874,8 @@ func websiteSpeedTestHandler(c *gin.Context) {
 		}
 	}
 
-	cacheKey := fmt.Sprintf("%s:%s", url, version)
+	// 缓存键：URL + 版本 + 请求级 DNS 覆盖（结果取决于所用服务器，参数不同不能共用）
+	cacheKey := fmt.Sprintf("%s:%s%s", url, version, req.CacheKey())
 
 	if cached, ok := speedCache.Load(cacheKey); ok {
 		entry := cached.(speedCacheEntry)
@@ -828,9 +888,9 @@ func websiteSpeedTestHandler(c *gin.Context) {
 
 	switch version {
 	case "v6":
-		result, err = websiteSpeed(url, "v6")
+		result, err = websiteSpeed(url, "v6", req)
 	case "v4":
-		result, err = websiteSpeed(url, "v4")
+		result, err = websiteSpeed(url, "v4", req)
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid version",
@@ -868,93 +928,35 @@ func dnsQueryHandler(c *gin.Context) {
 	domain = parsedURL.Host
 	recodeType := c.Param("type")
 	switch recodeType {
-	case "a":
-		result, err := webtest.ResolveARecord(domain)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, result)
-	case "aaaa":
-		result, err := webtest.ResolveAAAARecord(domain)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, result)
-	case "cname":
-		result, err := webtest.ResolveCNAMERecord(domain)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, result)
-	case "mx":
-		result, err := webtest.ResolveMXRecord(domain)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, result)
-	case "ns":
-		result, err := webtest.ResolveNSRecord(domain)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, result)
-	case "ptr":
-		result, err := webtest.ResolvePTRRecord(domain)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, result)
-	case "srv":
-		result, err := webtest.ResolveSRVRecord(domain)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, result)
-	case "txt":
-		result, err := webtest.ResolveTXTRecord(domain)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, result)
-	case "caa":
-		result, err := webtest.ResolveCAARecord(domain)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-		c.JSON(http.StatusOK, result)
+	case "a", "aaaa", "cname", "mx", "ns", "ptr", "srv", "txt", "caa":
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid record type",
 		})
 		return
 	}
+
+	req, err := webtest.ParseReqResolve(func(k string) string { return c.Query(k) })
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// 按 qtype 选栈：a→dns4|dns，aaaa→dns6|dns，其余→dns
+	stack := ""
+	if recodeType == "a" {
+		stack = "ipv4"
+	} else if recodeType == "aaaa" {
+		stack = "ipv6"
+	}
+
+	result, err := webtest.ResolveByType(domain, recodeType, req.Servers(stack))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, result)
 }
 
 func pingHandler(c *gin.Context) {
@@ -982,7 +984,15 @@ func pingHandler(c *gin.Context) {
 		count = n
 	}
 
-	cacheKey := fmt.Sprintf("%s:%s:%d", host, port, count)
+	req, err := webtest.ParseReqResolve(func(k string) string { return c.Query(k) })
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 缓存键带上请求级 DNS 覆盖：不同 dns=/resolve= 的结果不能互相污染；
+	// 无覆盖时 req.CacheKey() 为空串，键与旧版完全一致。
+	cacheKey := fmt.Sprintf("%s:%s:%d%s", host, port, count, req.CacheKey())
 	if cached, ok := pingCache.Load(cacheKey); ok {
 		entry := cached.(pingCacheEntry)
 		if time.Since(entry.timestamp) < 5*time.Minute {
@@ -996,7 +1006,7 @@ func pingHandler(c *gin.Context) {
 
 	switch SINGLE_STACK {
 	case "ipv4":
-		ipv4, errV4 := webtest.TCPingRun(host, port, count, "v4", 10*time.Second, 100*time.Millisecond)
+		ipv4, errV4 := webtest.TCPingRunWith(host, port, count, "v4", 10*time.Second, 100*time.Millisecond, req)
 		if errV4 != nil {
 			ipv4 = &webtest.TCPingStats{
 				IP: "Error: " + errV4.Error(),
@@ -1007,7 +1017,7 @@ func pingHandler(c *gin.Context) {
 			IP: "Skipped due to SINGLE_STACK=ipv4",
 		}
 	case "ipv6":
-		ipv6, errV6 := webtest.TCPingRun(host, port, count, "v6", 10*time.Second, 100*time.Millisecond)
+		ipv6, errV6 := webtest.TCPingRunWith(host, port, count, "v6", 10*time.Second, 100*time.Millisecond, req)
 		if errV6 != nil {
 			ipv6 = &webtest.TCPingStats{
 				IP: "Error: " + errV6.Error(),
@@ -1023,7 +1033,7 @@ func pingHandler(c *gin.Context) {
 
 		go func() {
 			defer wg.Done()
-			ipv6, errV6 := webtest.TCPingRun(host, port, count, "v6", 10*time.Second, 100*time.Millisecond)
+			ipv6, errV6 := webtest.TCPingRunWith(host, port, count, "v6", 10*time.Second, 100*time.Millisecond, req)
 			if errV6 != nil {
 				ipv6 = &webtest.TCPingStats{
 					IP: "Error: " + errV6.Error(),
@@ -1034,7 +1044,7 @@ func pingHandler(c *gin.Context) {
 
 		go func() {
 			defer wg.Done()
-			ipv4, errV4 := webtest.TCPingRun(host, port, count, "v4", 10*time.Second, 100*time.Millisecond)
+			ipv4, errV4 := webtest.TCPingRunWith(host, port, count, "v4", 10*time.Second, 100*time.Millisecond, req)
 			if errV4 != nil {
 				ipv4 = &webtest.TCPingStats{
 					IP: "Error: " + errV4.Error(),
@@ -1315,6 +1325,9 @@ func main() {
 	initHttpClient()
 	webtest.SetDNSServer(DNS_SERVER)
 	webtest.SetDNSSecServer(DNSSEC_DNS_SERVER)
+	// SSRF 预检改走 webtest 的自定义 DNS（含请求级 dns= 覆盖），
+	// 避免「预检用系统解析器、拨号用自定义 DNS」两套解析器口径不一
+	webtest.InstallSSRFResolver()
 	slog.Info("Starting server", "port", PORTS, "single_stack", SINGLE_STACK)
 
 	// 数据上报：周期把本节点的统计与拨测明细上报到收集中心（详见 report.go）

@@ -41,10 +41,20 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 429, statusMessage: 'Too Many Requests' })
     }
 
-    const slugString: string = event.context.params?.slug as any
-    if (!slugString) {
+    const rawSlug: string = event.context.params?.slug as any
+    if (!rawSlug) {
         throw createError({ statusCode: 400, statusMessage: 'Missing slug parameter' })
-    } 
+    }
+    // h3 出于路径安全不会把 %2F 解码回 '/'，而 detail/ssl/speed 的目标 URL 恰恰依赖它
+    // （前端 encodeURIComponent('https://x') → 'https%3A%2F%2Fx'）。远程中间件（fiber）会解码，
+    // 这里补齐同样的语义，否则内置中间件转发带协议头的拨测目标必然拼坏
+    // （下游拿到 'https://https:%2F%2Fx'）。畸形 % 序列解码失败时按原文处理。
+    let slugString: string = rawSlug
+    try {
+        slugString = decodeURIComponent(rawSlug)
+    } catch {
+        // keep raw
+    }
     // 将路径参数转为数组
     let slug: string[] = slugString ? slugString.split('/') : []
     console.debug('[middleware debug] raw slugString:', slugString, '| split:', slug)

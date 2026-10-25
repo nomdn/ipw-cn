@@ -1,0 +1,338 @@
+{
+  "schema_version": 1,
+  "mode": "architecture",
+  "template_type": "architecture",
+  "style": 7,
+  "quality_profile": "standard",
+  "width": 1240,
+  "height": 880,
+  "title": "域名生命周期状态机",
+  "subtitle": "从可注册到释放的完整 EPP 状态流转（REGISTRY / REGISTRAR 管理方标注）",
+  "composition": {
+    "profile": "standard",
+    "max_bridged_crossings": 14,
+    "max_total_bends": 30,
+    "max_bends_per_edge": 4
+  },
+  "containers": [
+    {
+      "id": "reg",
+      "x": 40,
+      "y": 70,
+      "width": 1160,
+      "height": 220,
+      "label": "注册与活跃",
+      "stroke": "#e2e8f0",
+      "fill": "none"
+    },
+    {
+      "id": "grace",
+      "x": 40,
+      "y": 330,
+      "width": 1160,
+      "height": 140,
+      "label": "续费 · 到期 · 转移中",
+      "stroke": "#e2e8f0",
+      "fill": "none"
+    },
+    {
+      "id": "end",
+      "x": 40,
+      "y": 510,
+      "width": 1160,
+      "height": 300,
+      "label": "赎回 · 释放 · 转移完成",
+      "stroke": "#e2e8f0",
+      "fill": "none"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "available",
+      "kind": "rect",
+      "x": 70,
+      "y": 140,
+      "width": 200,
+      "height": 60,
+      "type_label": "REGISTRY",
+      "label": "Available · 域名可注册",
+      "fill": "#ffffff",
+      "stroke": "#dce5e3",
+      "flat": true
+    },
+    {
+      "id": "addperiod",
+      "kind": "rect",
+      "x": 380,
+      "y": 140,
+      "width": 220,
+      "height": 60,
+      "type_label": "REGISTRY",
+      "label": "AddPeriod · 注册完成 5天",
+      "fill": "#ffffff",
+      "stroke": "#dce5e3",
+      "flat": true
+    },
+    {
+      "id": "active",
+      "kind": "double_rect",
+      "x": 700,
+      "y": 140,
+      "width": 210,
+      "height": 60,
+      "type_label": "REGISTRAR · Active",
+      "label": "Active (ok) · 正常解析",
+      "fill": "#ffffff",
+      "stroke": "#10a37f"
+    },
+    {
+      "id": "clienthold",
+      "kind": "rect",
+      "x": 990,
+      "y": 110,
+      "width": 200,
+      "height": 54,
+      "type_label": "REGISTRAR",
+      "label": "ClientHold · 客户暂停",
+      "fill": "#ffffff",
+      "stroke": "#f97316",
+      "flat": true
+    },
+    {
+      "id": "serverhold",
+      "kind": "rect",
+      "x": 990,
+      "y": 205,
+      "width": 200,
+      "height": 54,
+      "type_label": "REGISTRY",
+      "label": "ServerHold · 注册局暂停",
+      "fill": "#ffffff",
+      "stroke": "#f97316",
+      "flat": true
+    },
+    {
+      "id": "renewperiod",
+      "kind": "rect",
+      "x": 700,
+      "y": 380,
+      "width": 210,
+      "height": 60,
+      "type_label": "REGISTRY",
+      "label": "RenewPeriod · 手动续费 5天",
+      "fill": "#ffffff",
+      "stroke": "#dce5e3",
+      "flat": true
+    },
+    {
+      "id": "autorenew",
+      "kind": "rect",
+      "x": 380,
+      "y": 380,
+      "width": 260,
+      "height": 60,
+      "type_label": "REGISTRY",
+      "label": "AutoRenewPeriod · 等待扣费",
+      "fill": "#ffffff",
+      "stroke": "#dce5e3",
+      "flat": true
+    },
+    {
+      "id": "pendingtransfer",
+      "kind": "rect",
+      "x": 980,
+      "y": 380,
+      "width": 200,
+      "height": 60,
+      "type_label": "REGISTRAR",
+      "label": "PendingTransfer · 转移中",
+      "fill": "#ffffff",
+      "stroke": "#dce5e3",
+      "flat": true
+    },
+    {
+      "id": "transferperiod",
+      "kind": "rect",
+      "x": 700,
+      "y": 560,
+      "width": 210,
+      "height": 60,
+      "type_label": "REGISTRAR",
+      "label": "TransferPeriod · 5天",
+      "fill": "#ffffff",
+      "stroke": "#dce5e3",
+      "flat": true
+    },
+    {
+      "id": "redemption",
+      "kind": "rect",
+      "x": 380,
+      "y": 560,
+      "width": 260,
+      "height": 60,
+      "type_label": "REGISTRY",
+      "label": "RedemptionPeriod · 赎回 30天",
+      "fill": "#ffffff",
+      "stroke": "#dce5e3",
+      "flat": true
+    },
+    {
+      "id": "pendingdelete",
+      "kind": "rect",
+      "x": 70,
+      "y": 560,
+      "width": 240,
+      "height": 60,
+      "type_label": "REGISTRY",
+      "label": "PendingDelete · 删除 5天",
+      "fill": "#ffffff",
+      "stroke": "#dce5e3",
+      "flat": true
+    },
+    {
+      "id": "released",
+      "kind": "double_rect",
+      "x": 70,
+      "y": 740,
+      "width": 260,
+      "height": 60,
+      "type_label": "END",
+      "label": "已释放 · 重新开放注册",
+      "fill": "#ffffff",
+      "stroke": "#1d4ed8"
+    }
+  ],
+  "arrows": [
+    {
+      "id": "a-reg",
+      "source": "available",
+      "target": "addperiod",
+      "source_port": "right",
+      "target_port": "left",
+      "flow": "control",
+      "label": "注册"
+    },
+    {
+      "id": "a-ok",
+      "source": "addperiod",
+      "target": "active",
+      "source_port": "right",
+      "target_port": "left",
+      "flow": "control",
+      "label": "注册完成"
+    },
+    {
+      "id": "a-hold-c",
+      "source": "active",
+      "target": "clienthold",
+      "source_port": "right",
+      "target_port": "left",
+      "flow": "feedback",
+      "label": "暂停解析"
+    },
+    {
+      "id": "a-hold-s",
+      "source": "active",
+      "target": "serverhold",
+      "source_port": "right",
+      "target_port": "left",
+      "flow": "feedback",
+      "label": "违规暂停"
+    },
+    {
+      "id": "a-renew",
+      "source": "active",
+      "target": "renewperiod",
+      "source_port": "bottom",
+      "target_port": "top",
+      "flow": "control",
+      "label": "续费"
+    },
+    {
+      "id": "a-renew-back",
+      "source": "renewperiod",
+      "target": "active",
+      "source_port": "top",
+      "target_port": "bottom",
+      "flow": "feedback",
+      "label": "期满回到正常"
+    },
+    {
+      "id": "a-expire",
+      "source": "active",
+      "target": "autorenew",
+      "source_port": "left",
+      "target_port": "top",
+      "flow": "control",
+      "label": "到期"
+    },
+    {
+      "id": "a-no-pay",
+      "source": "autorenew",
+      "target": "redemption",
+      "source_port": "bottom",
+      "target_port": "top",
+      "flow": "control",
+      "label": "未支付"
+    },
+    {
+      "id": "a-redemption-end",
+      "source": "redemption",
+      "target": "pendingdelete",
+      "source_port": "left",
+      "target_port": "right",
+      "flow": "control",
+      "label": "赎回期满"
+    },
+    {
+      "id": "a-release",
+      "source": "pendingdelete",
+      "target": "released",
+      "source_port": "bottom",
+      "target_port": "top",
+      "flow": "control",
+      "label": "释放"
+    },
+    {
+      "id": "a-transfer",
+      "source": "active",
+      "target": "pendingtransfer",
+      "source_port": "right",
+      "target_port": "left",
+      "flow": "control",
+      "label": "转移"
+    },
+    {
+      "id": "a-transfer-done",
+      "source": "pendingtransfer",
+      "target": "transferperiod",
+      "source_port": "bottom",
+      "target_port": "left",
+      "flow": "control",
+      "label": "转移完成"
+    },
+    {
+      "id": "a-transfer-ok",
+      "source": "transferperiod",
+      "target": "active",
+      "source_port": "left",
+      "target_port": "bottom",
+      "flow": "feedback",
+      "label": "转移生效"
+    }
+  ],
+  "legend_orientation": "horizontal",
+  "legend": [
+    {
+      "flow": "control",
+      "label": "状态流转"
+    },
+    {
+      "flow": "feedback",
+      "label": "回到活跃 / 暂停"
+    }
+  ],
+  "footer": "Style 7 · OpenAI Official · EPP domain lifecycle states",
+  "footer_x": 48,
+  "footer_y": 845
+}

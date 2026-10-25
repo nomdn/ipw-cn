@@ -168,6 +168,11 @@ async function getUserIP() {
   }
   return userIP.value
 }
+
+const { data: page, error } = await useAsyncData('dnssec-page', () =>
+  $fetch('/api/markdown/dnssec')
+)
+const doc = page.value;
 </script>
 
 <template>
@@ -256,10 +261,12 @@ async function getUserIP() {
       </table>
     </div>
 
+    <div class="markdown">
+      <div v-html="doc"></div>
+    </div>
+
     <blockquote>
-      DNSSEC 原理介绍即将上线<br/>
-      DNSSEC 通过 DNSKEY、RRSIG、DS 记录为 DNS 数据提供完整性验证，防止 DNS 欺骗攻击。<br/>
-      如果显示 "验证失败"，可能原因：域名未配置 DNSSEC、DNSKEY 密钥不匹配、DS 记录缺失等。<br/>
+      如果显示 "验证失败"，可能原因：域名未配置 DNSSEC、DNSKEY 密钥不匹配、DS 记录缺失等（详见上方原理介绍）。<br/>
       <a href="/dns" target="_blank">DNS 解析查询</a> | <a href="/whois" target="_blank">Whois 查询</a><br/>
       访客IP: {{ userIP || '获取中...' }}，您的网络{{ isIPv6(userIP) ? 'IPv6' : 'IPv4' }}优先<br/>
     </blockquote>
@@ -269,6 +276,26 @@ async function getUserIP() {
 <style scoped>
 @import "../style.css";
 @import "../../assets/css/tool-common.css";
+
+.markdown :deep(a) {
+  color: #299764 !important;
+  font-size: 1.3em;
+  text-decoration: none
+}
+/* 1240px 宽的验证链图必须缩进 60% 的内容列，桌面端也要约束（仅移动端限制不够） */
+.markdown :deep(img) {
+  height: auto;
+  max-width: 100%;
+}
+@media (max-width: 768px) {
+  .markdown :deep(a) {
+    font-size: 1.1em;
+  }
+  .markdown :deep(img) {
+    height: auto;
+    max-width: 100%;
+  }
+}
 
 .el-menu--horizontal > .el-menu-item:nth-child(1) {
   margin-right: auto;

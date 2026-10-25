@@ -21,7 +21,7 @@ const config = {
     Middleware: <string[]>[
         "https://middleware-1.api-ipw.wsmdn.top/",
         "https://boce-api.api-ipw.wsmdn.top/"
-        
+
         // "https://middleware-2.wsmdn.top/",
     ],
     // Umami 统计
@@ -37,6 +37,12 @@ const config = {
     v4OnlyAPI: "https://4.wsmdn.top",
     v6OnlyAPI: "https://6.wsmdn.top",
     DualStackAPI: "https://test.wsmdn.top",
+    // 网站截图服务（screenshot 页主通道）：thum.io 同步出图、CORS 全开，
+    // 响应 content-type 即结果信号（PNG/JPEG=成品，GIF=生成中或目标不可达），
+    // 失败自动回退 WordPress mshots（s0.wp.com，见 screenshot.vue）。
+    // 写进 config 的另一个作用：nuxt.config 的 extractDomains 会把它收进
+    // CSP connect-src 白名单，页面里的 fetch 才能通过安全头。
+    screenshotAPI: "https://image.thum.io",
     // ---- 节点池结构 ----
     // IPLocationAPI：IP 归属查询（location / asn）上游节点池（纯数组，无栈区分）
     IPLocationAPI: [
@@ -111,7 +117,6 @@ const config = {
             // }
         ],
         DualStack: [
-
             {
                 label: "中国 江苏 移动",
                 id: "cn-jiangsu",

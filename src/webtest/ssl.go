@@ -50,6 +50,7 @@ func CheckSSL(url string, version string, req ReqResolve) (*SSLCheckDetail, erro
 	var isExpired bool
 	var issuerOrganization []string
 	var issuerCommonName, subjectCommonName, domain string
+	var san []string
 
 	if rawResp.TLS != nil && len(rawResp.TLS.PeerCertificates) > 0 {
 		cert = rawResp.TLS.PeerCertificates[0]
@@ -60,6 +61,12 @@ func CheckSSL(url string, version string, req ReqResolve) (*SSLCheckDetail, erro
 		issuerCommonName = cert.Issuer.CommonName
 		subjectCommonName = cert.Subject.CommonName
 		domain = CleanHostRecord(cert.Subject.CommonName)
+		// SAN：DNS 名在前、IP 在后（IP 站点证书可能只有 IP SAN）
+		san = make([]string, 0, len(cert.DNSNames)+len(cert.IPAddresses))
+		san = append(san, cert.DNSNames...)
+		for _, ip := range cert.IPAddresses {
+			san = append(san, ip.String())
+		}
 	} else {
 		return nil, fmt.Errorf("no SSL certificate found")
 	}
@@ -78,6 +85,7 @@ func CheckSSL(url string, version string, req ReqResolve) (*SSLCheckDetail, erro
 		IssuerOrganization: issuerOrganization,
 		IssuerCommonName:   issuerCommonName,
 		SubjectCommonName:  subjectCommonName,
+		SAN:                san,
 		IsReachable:        true,
 	}
 

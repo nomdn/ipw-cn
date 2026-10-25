@@ -2,11 +2,10 @@ package ipdb
 
 import (
 	"bufio"
-	"math/rand"
-	"net"
-
 	"fmt"
 	"log/slog"
+	"math/rand"
+	"net"
 	"net/netip"
 	"os"
 	"strconv"
@@ -18,6 +17,7 @@ import (
 	"github.com/ip2location/ip2location-go/v9"
 	"github.com/lionsoul2014/ip2region/binding/golang/service"
 	maxminddb "github.com/oschwald/maxminddb-golang/v2"
+	"golang.org/x/sync/singleflight"
 	"resty.dev/v3"
 )
 
@@ -36,11 +36,35 @@ var (
 	divisionShort map[int]string
 	divisionMu    sync.RWMutex
 	bilibiliCache sync.Map
+	// bilibiliGroup 同一 IP 的并发未命中合并为一次上游调用（SearchIP 之外
+	// 定时任务/多 handler 并发触达同一 IP 时，避免重复打 B 站 API）
+	bilibiliGroup singleflight.Group
 )
+
+// bilibiliClient 共享的 B 站归属地客户端：连接池跨查询复用。
+// 原实现每次 searchBilibili 都 resty.New()，每个未缓存 IP 都付一次完整 TCP+TLS 握手
+// （实测首查 ~440ms，其中 TLS 209ms；复用后热查询 ~80ms）。进程生命周期内不 Close。
+var bilibiliClient = resty.New().SetTimeout(10 * time.Second)
 
 type bilibiliCacheEntry struct {
 	result    *BilibiliResult
+	errMsg    string // 非空 = 负缓存（上游失败），TTL 远短于正缓存，避免对非法/不可达 IP 反复打上游
 	timestamp time.Time
+}
+
+// ttl：正结果 24h（归属地几乎不变），负结果 1 分钟
+func (e bilibiliCacheEntry) ttl() time.Duration {
+	if e.errMsg != "" {
+		return time.Minute
+	}
+	return 24 * time.Hour
+}
+
+func (e bilibiliCacheEntry) err() error {
+	if e.errMsg == "" {
+		return nil
+	}
+	return fmt.Errorf("%s", e.errMsg)
 }
 
 type MMDBCityResult struct {
@@ -160,14 +184,12 @@ func loadDivisionData() error {
 	return nil
 }
 
-func loadIp2Region() error {
-	ip2regionMu.Lock()
-	defer ip2regionMu.Unlock()
+// —— 加载器的统一模式：先在锁外构建新实例，再持锁原子换指针，旧实例放锁外 Close ——
+// 原实现是「持锁 → 关旧 → 开新」，重载期间该库有几百 ms 到几秒的查询真空窗
+// （查询拿到 "not loaded"）；换成换指针模式后窗口降到 μs 级。
+// 榜样本来就是 reloadQQWry 的写法，这里推广到全部加载器。
 
-	if ip2region != nil {
-		ip2region.Close()
-		slog.Info("Previous ip2region closed")
-	}
+func loadIp2Region() error {
 	v4Config, err := service.NewV4Config(service.VIndexCache, "ip2region_v4.xdb", 20)
 	if err != nil {
 		slog.Error("failed to create v4 config", "error", err)
@@ -180,10 +202,19 @@ func loadIp2Region() error {
 		return err
 	}
 
-	ip2region, err = service.NewIp2Region(v4Config, v6Config)
+	next, err := service.NewIp2Region(v4Config, v6Config)
 	if err != nil {
 		slog.Error("failed to create ip2region service", "error", err)
 		return err
+	}
+
+	ip2regionMu.Lock()
+	old := ip2region
+	ip2region = next
+	ip2regionMu.Unlock()
+	if old != nil {
+		old.Close()
+		slog.Info("Previous ip2region closed")
 	}
 
 	slog.Info("ip2region loaded successfully")
@@ -192,149 +223,115 @@ func loadIp2Region() error {
 
 // loadIP2Location 加载 IP2Location LITE DB11 数据库（.BIN 格式，官方 ip2location-go 库读取）
 func loadIP2Location() error {
-	ip2locMu.Lock()
-	defer ip2locMu.Unlock()
-
-	if ip2locDB != nil {
-		ip2locDB.Close()
-		ip2locDB = nil
-		slog.Info("Previous ip2location closed")
-	}
-
 	db, err := ip2location.OpenDB("./IP2LOCATION-LITE-DB11.IPV6.BIN")
 	if err != nil {
 		slog.Error("failed to open ip2location db", "error", err)
 		return err
 	}
+
+	ip2locMu.Lock()
+	old := ip2locDB
 	ip2locDB = db
+	ip2locMu.Unlock()
+	if old != nil {
+		old.Close()
+		slog.Info("Previous ip2location closed")
+	}
+
 	slog.Info("ip2location loaded successfully")
 	return nil
 }
 
 // loadIP2LocationASN 加载 IP2Location LITE ASN 数据库（仅 asn / as 字段）
 func loadIP2LocationASN() error {
-	ip2locASNMu.Lock()
-	defer ip2locASNMu.Unlock()
-
-	if ip2locASNDB != nil {
-		ip2locASNDB.Close()
-		ip2locASNDB = nil
-		slog.Info("Previous ip2location asn closed")
-	}
-
 	db, err := ip2location.OpenDB("./IP2LOCATION-LITE-ASN.IPV6.BIN")
 	if err != nil {
 		slog.Error("failed to open ip2location asn db", "error", err)
 		return err
 	}
+
+	ip2locASNMu.Lock()
+	old := ip2locASNDB
 	ip2locASNDB = db
+	ip2locASNMu.Unlock()
+	if old != nil {
+		old.Close()
+		slog.Info("Previous ip2location asn closed")
+	}
+
 	slog.Info("ip2location asn loaded successfully")
 	return nil
 }
 
 func loadQQWry() error {
-	qqwryMu.Lock()
-	defer qqwryMu.Unlock()
-	if qqwryDB != nil {
-		qqwryDB = nil
-		slog.Info("Previous qqwry.ipdb closed")
-	}
-	var err error
-	qqwryDB, err = ipdbgo.NewCity("qqwry.ipdb")
-	if err != nil {
-		slog.Error("failed to load qqwry.ipdb", "error", err)
-		return err
-	}
-	slog.Info("qqwry.ipdb loaded successfully")
-	return nil
-}
-
-func reloadQQWry() error {
-	// 1. 先创建新实例
+	// 先建新实例，再持锁替换（旧实例由 GC 回收，ipdb-go 底层 mmap 会自动释放）
 	newDB, err := ipdbgo.NewCity("qqwry.ipdb")
 	if err != nil {
-		return fmt.Errorf("reload qqwry failed: %w", err)
+		slog.Error("failed to load qqwry.ipdb", "error", err)
+		return fmt.Errorf("load qqwry failed: %w", err)
 	}
 
-	// 2. 加锁替换（旧实例由 GC 回收，ipdb-go 底层 mmap 会自动释放）
 	qqwryMu.Lock()
 	qqwryDB = newDB
 	qqwryMu.Unlock()
 
-	slog.Info("qqwry.ipdb reloaded successfully")
+	slog.Info("qqwry.ipdb loaded successfully")
 	return nil
 }
 
+var mmdbFiles = map[string]string{
+	"geolite2_city": "GeoLite2-City.mmdb",
+	"geolite2_asn":  "GeoLite2-ASN.mmdb",
+	"geocn":         "GeoCN.mmdb",
+	"dbip_city":     "dbip-city-lite.mmdb",
+	"dbip_asn":      "dbip-asn-lite.mmdb",
+}
+
+// loadMMDB 重建全部 mmdb 并原子换指针。个别文件加载失败时沿用旧库（数据旧一点
+// 好过整库消失），只有首次加载（无旧库）才真正缺库。
 func loadMMDB() error {
-	mmdbMu.Lock()
-	defer mmdbMu.Unlock()
-
-	for name, db := range mmdbDBs {
-		db.Close()
-		slog.Info("Previous mmdb closed", "name", name)
-	}
-
-	mmdbFiles := map[string]string{
-		"geolite2_city": "GeoLite2-City.mmdb",
-		"geolite2_asn":  "GeoLite2-ASN.mmdb",
-		"geocn":         "GeoCN.mmdb",
-		"dbip_city":     "dbip-city-lite.mmdb",
-		"dbip_asn":      "dbip-asn-lite.mmdb",
-	}
-
-	mmdbDBs = make(map[string]*maxminddb.Reader)
+	next := make(map[string]*maxminddb.Reader, len(mmdbFiles))
 	for name, path := range mmdbFiles {
 		db, err := maxminddb.Open(path)
 		if err != nil {
 			slog.Error("failed to load mmdb", "name", name, "error", err)
 			continue
 		}
-		mmdbDBs[name] = db
+		next[name] = db
 		slog.Info("mmdb loaded", "name", name)
 	}
-	if len(mmdbDBs) < len(mmdbFiles) {
-		return fmt.Errorf("some mmdb files missing (%d/%d loaded)", len(mmdbDBs), len(mmdbFiles))
-	}
-	return nil
-}
 
-func reloadMMDB() error {
 	mmdbMu.Lock()
-	defer mmdbMu.Unlock()
-	for name, db := range mmdbDBs {
-		db.Close()
-		slog.Info("Previous mmdb closed", "name", name)
-	}
-
-	mmdbFiles := map[string]string{
-		"geolite2_city": "GeoLite2-City.mmdb",
-		"geolite2_asn":  "GeoLite2-ASN.mmdb",
-		"geocn":         "GeoCN.mmdb",
-		"dbip_city":     "dbip-city-lite.mmdb",
-		"dbip_asn":      "dbip-asn-lite.mmdb",
-	}
-
-	mmdbDBs = make(map[string]*maxminddb.Reader)
-	for name, path := range mmdbFiles {
-		db, err := maxminddb.Open(path)
-		if err != nil {
-			slog.Error("failed to reload mmdb", "name", name, "error", err)
-			continue
+	old := mmdbDBs
+	merged := make(map[string]*maxminddb.Reader, len(mmdbFiles))
+	for name := range mmdbFiles {
+		if db, ok := next[name]; ok {
+			merged[name] = db
+		} else if db, ok := old[name]; ok {
+			// 新文件损坏：沿用旧库，不跟着一起下线
+			merged[name] = db
+			delete(next, name)
 		}
-		mmdbDBs[name] = db
-		slog.Info("mmdb reloaded", "name", name)
+	}
+	mmdbDBs = merged
+	mmdbMu.Unlock()
+
+	// 换指针后再关被替换的旧库（合并时沿用的旧库保留，不关）
+	for name, db := range old {
+		if _, keep := merged[name]; !keep {
+			db.Close()
+			slog.Info("Previous mmdb closed", "name", name)
+		}
+	}
+
+	if len(merged) < len(mmdbFiles) {
+		return fmt.Errorf("some mmdb files missing (%d/%d loaded)", len(merged), len(mmdbFiles))
 	}
 	return nil
 }
 
-func searchMMDBCity(ip string) (*MMDBCityResult, error) {
-	mmdbMu.RLock()
-	defer mmdbMu.RUnlock()
-	db, ok := mmdbDBs["geolite2_city"]
-	if !ok {
-		return nil, fmt.Errorf("geolite2_city not loaded")
-	}
-
+// searchMMDBCityIn 在指定库上查城市（searchMMDBCity / searchDBIPCity 的公共实现）
+func searchMMDBCityIn(db *maxminddb.Reader, ip string) (*MMDBCityResult, error) {
 	addr, err := netip.ParseAddr(ip)
 	if err != nil {
 		return nil, err
@@ -385,72 +382,8 @@ func searchMMDBCity(ip string) (*MMDBCityResult, error) {
 	return result, nil
 }
 
-func searchDBIPCity(ip string) (*MMDBCityResult, error) {
-	mmdbMu.RLock()
-	defer mmdbMu.RUnlock()
-	db, ok := mmdbDBs["dbip_city"]
-	if !ok {
-		return nil, fmt.Errorf("dbip_city not loaded")
-	}
-
-	addr, err := netip.ParseAddr(ip)
-	if err != nil {
-		return nil, err
-	}
-
-	var record struct {
-		Country struct {
-			ISOCode string            `maxminddb:"iso_code"`
-			Names   map[string]string `maxminddb:"names"`
-		} `maxminddb:"country"`
-		Subdivisions []struct {
-			Names map[string]string `maxminddb:"names"`
-		} `maxminddb:"subdivisions"`
-		City struct {
-			Names map[string]string `maxminddb:"names"`
-		} `maxminddb:"city"`
-		Location struct {
-			Latitude  float64 `maxminddb:"latitude"`
-			Longitude float64 `maxminddb:"longitude"`
-		} `maxminddb:"location"`
-	}
-	if err := db.Lookup(addr).Decode(&record); err != nil {
-		return nil, err
-	}
-
-	result := &MMDBCityResult{
-		CountryCode: record.Country.ISOCode,
-		Latitude:    record.Location.Latitude,
-		Longitude:   record.Location.Longitude,
-	}
-	if name, ok := record.Country.Names["zh-CN"]; ok {
-		result.Country = name
-	} else if name, ok := record.Country.Names["en"]; ok {
-		result.Country = name
-	}
-	if len(record.Subdivisions) > 0 {
-		if name, ok := record.Subdivisions[0].Names["zh-CN"]; ok {
-			result.Region = name
-		} else if name, ok := record.Subdivisions[0].Names["en"]; ok {
-			result.Region = name
-		}
-	}
-	if name, ok := record.City.Names["zh-CN"]; ok {
-		result.City = name
-	} else if name, ok := record.City.Names["en"]; ok {
-		result.City = name
-	}
-	return result, nil
-}
-
-func searchMMDBASN(ip string) (*MMDBASNResult, error) {
-	mmdbMu.RLock()
-	defer mmdbMu.RUnlock()
-	db, ok := mmdbDBs["geolite2_asn"]
-	if !ok {
-		return nil, fmt.Errorf("geolite2_asn not loaded")
-	}
-
+// searchMMDBASNIn 在指定库上查 ASN（searchMMDBASN / searchDBIPASN 的公共实现）
+func searchMMDBASNIn(db *maxminddb.Reader, ip string) (*MMDBASNResult, error) {
 	addr, err := netip.ParseAddr(ip)
 	if err != nil {
 		return nil, err
@@ -470,37 +403,50 @@ func searchMMDBASN(ip string) (*MMDBASNResult, error) {
 	}, nil
 }
 
+func searchMMDBCity(ip string) (*MMDBCityResult, error) {
+	mmdbMu.RLock()
+	db, ok := mmdbDBs["geolite2_city"]
+	mmdbMu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("geolite2_city not loaded")
+	}
+	return searchMMDBCityIn(db, ip)
+}
+
+func searchDBIPCity(ip string) (*MMDBCityResult, error) {
+	mmdbMu.RLock()
+	db, ok := mmdbDBs["dbip_city"]
+	mmdbMu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("dbip_city not loaded")
+	}
+	return searchMMDBCityIn(db, ip)
+}
+
+func searchMMDBASN(ip string) (*MMDBASNResult, error) {
+	mmdbMu.RLock()
+	db, ok := mmdbDBs["geolite2_asn"]
+	mmdbMu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("geolite2_asn not loaded")
+	}
+	return searchMMDBASNIn(db, ip)
+}
+
 func searchDBIPASN(ip string) (*MMDBASNResult, error) {
 	mmdbMu.RLock()
-	defer mmdbMu.RUnlock()
 	db, ok := mmdbDBs["dbip_asn"]
+	mmdbMu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("dbip_asn not loaded")
 	}
-
-	addr, err := netip.ParseAddr(ip)
-	if err != nil {
-		return nil, err
-	}
-
-	var record struct {
-		ASN uint32 `maxminddb:"autonomous_system_number"`
-		Org string `maxminddb:"autonomous_system_organization"`
-	}
-	if err := db.Lookup(addr).Decode(&record); err != nil {
-		return nil, err
-	}
-
-	return &MMDBASNResult{
-		ASN: fmt.Sprintf("AS%d", record.ASN),
-		Org: record.Org,
-	}, nil
+	return searchMMDBASNIn(db, ip)
 }
 
 func searchGeoCN(ip string) (*GeoCNResult, error) {
 	mmdbMu.RLock()
-	defer mmdbMu.RUnlock()
 	db, ok := mmdbDBs["geocn"]
+	mmdbMu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("geocn not loaded")
 	}
@@ -536,107 +482,80 @@ func searchGeoCN(ip string) (*GeoCNResult, error) {
 	return result, nil
 }
 
-func searchBilibili(ip string) (*BilibiliResult, error) {
-	if net.ParseIP(ip) == nil {
-		return nil, fmt.Errorf("invalid IP address: %s", ip)
-	}
-
+// loadBilibiliEntry 查缓存（按正/负各自的 TTL 判新鲜），过期顺手删除
+func loadBilibiliEntry(ip string) (bilibiliCacheEntry, bool) {
 	if cached, ok := bilibiliCache.Load(ip); ok {
-		entry := cached.(bilibiliCacheEntry)
-		if time.Since(entry.timestamp) < 24*time.Hour {
-			return entry.result, nil
+		e := cached.(bilibiliCacheEntry)
+		if time.Since(e.timestamp) < e.ttl() {
+			return e, true
 		}
 		bilibiliCache.Delete(ip)
 	}
+	return bilibiliCacheEntry{}, false
+}
 
-	client := resty.New().SetTimeout(10 * time.Second)
-	defer client.Close()
-	resp, err := client.R().
+func fetchBilibili(ip string) bilibiliCacheEntry {
+	resp, err := bilibiliClient.R().
 		SetQueryParam("ip", ip).
 		SetResult(&BilibiliIPQueryResponse{}).
 		Get("https://api.live.bilibili.com/ip_service/v1/ip_service/get_ip_addr")
 	if err != nil {
-		return nil, err
+		return bilibiliCacheEntry{errMsg: err.Error(), timestamp: time.Now()}
 	}
-
 	if resp.IsError() {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode())
+		return bilibiliCacheEntry{errMsg: fmt.Sprintf("HTTP %d", resp.StatusCode()), timestamp: time.Now()}
 	}
-	result := &BilibiliResult{
-		Country:   resp.Result().(*BilibiliIPQueryResponse).Data.Country,
-		Region:    resp.Result().(*BilibiliIPQueryResponse).Data.Province,
-		City:      resp.Result().(*BilibiliIPQueryResponse).Data.City,
-		ISP:       resp.Result().(*BilibiliIPQueryResponse).Data.ISP,
-		Latitude:  resp.Result().(*BilibiliIPQueryResponse).Data.Latitude,
-		Longitude: resp.Result().(*BilibiliIPQueryResponse).Data.Longitude,
+	r := resp.Result().(*BilibiliIPQueryResponse)
+	return bilibiliCacheEntry{
+		result: &BilibiliResult{
+			Country:   r.Data.Country,
+			Region:    r.Data.Province,
+			City:      r.Data.City,
+			ISP:       r.Data.ISP,
+			Latitude:  r.Data.Latitude,
+			Longitude: r.Data.Longitude,
+		},
+		timestamp: time.Now(),
+	}
+}
+
+func searchBilibili(ip string) (*BilibiliResult, error) {
+	if net.ParseIP(ip) == nil {
+		// 非法 IP 是纯内存判断，不进缓存也不打上游
+		return nil, fmt.Errorf("invalid IP address: %s", ip)
 	}
 
-	bilibiliCache.Store(ip, bilibiliCacheEntry{result: result, timestamp: time.Now()})
-	return result, nil
+	if e, ok := loadBilibiliEntry(ip); ok {
+		return e.result, e.err()
+	}
+
+	v, _, _ := bilibiliGroup.Do(ip, func() (any, error) {
+		// singleflight 等待期间可能已被同 IP 的前一个请求填进缓存
+		if e, ok := loadBilibiliEntry(ip); ok {
+			return e, nil
+		}
+		e := fetchBilibili(ip)
+		bilibiliCache.Store(ip, e)
+		return e, nil
+	})
+	e := v.(bilibiliCacheEntry)
+	return e.result, e.err()
 }
 
 // SweepBilibiliCache 清理过期的 Bilibili 归属地缓存（由外部定时调用，
-// 防止公网端点被唯一 key 洪打时缓存内存无限增长）
+// 防止公网端点被唯一 key 洪打时缓存内存无限增长）。
+// 负缓存的 TTL 只有 1 分钟，但条目若按 24h 清扫会滞留内存——按各自 TTL 清。
 func SweepBilibiliCache() {
-	cutoff := time.Now().Add(-24 * time.Hour)
+	now := time.Now()
 	bilibiliCache.Range(func(k, v any) bool {
-		if e, ok := v.(bilibiliCacheEntry); ok && e.timestamp.Before(cutoff) {
+		if e, ok := v.(bilibiliCacheEntry); ok && now.Sub(e.timestamp) >= e.ttl() {
 			bilibiliCache.Delete(k)
 		}
 		return true
 	})
 }
 
-func loadAll() {
-	if err := loadIp2Region(); err != nil {
-		slog.Error("Error loading ip2region", "error", err)
-	}
-	if err := loadQQWry(); err != nil {
-		slog.Error("Error loading qqwry.ipdb", "error", err)
-	}
-	if err := loadMMDB(); err != nil {
-		slog.Error("Error loading mmdb", "error", err)
-	}
-	if err := loadDivisionData(); err != nil {
-		slog.Error("Error loading division data", "error", err)
-	}
-}
-
-func closeAllDBs() {
-	ip2regionMu.Lock()
-	if ip2region != nil {
-		ip2region.Close()
-		ip2region = nil
-	}
-	ip2regionMu.Unlock()
-
-	ip2locMu.Lock()
-	if ip2locDB != nil {
-		ip2locDB.Close()
-		ip2locDB = nil
-	}
-	ip2locMu.Unlock()
-
-	ip2locASNMu.Lock()
-	if ip2locASNDB != nil {
-		ip2locASNDB.Close()
-		ip2locASNDB = nil
-	}
-	ip2locASNMu.Unlock()
-
-	qqwryMu.Lock()
-	qqwryDB = nil
-	qqwryMu.Unlock()
-
-	mmdbMu.Lock()
-	for name, db := range mmdbDBs {
-		db.Close()
-		slog.Info("Closed mmdb", "name", name)
-	}
-	mmdbDBs = nil
-	mmdbMu.Unlock()
-}
-
+// reloadAll 全量重载（各加载器自身即「先建新再换指针」，重载期间查询不中断）
 func reloadAll() {
 	if err := loadIp2Region(); err != nil {
 		slog.Error("Error loading ip2region", "error", err)
@@ -647,11 +566,11 @@ func reloadAll() {
 	if err := loadIP2LocationASN(); err != nil {
 		slog.Error("Error loading ip2location asn", "error", err)
 	}
-	if err := reloadQQWry(); err != nil {
-		slog.Error("Error reloading qqwry.ipdb", "error", err)
+	if err := loadQQWry(); err != nil {
+		slog.Error("Error loading qqwry.ipdb", "error", err)
 	}
-	if err := reloadMMDB(); err != nil {
-		slog.Error("Error reloading mmdb", "error", err)
+	if err := loadMMDB(); err != nil {
+		slog.Error("Error loading mmdb", "error", err)
 	}
 	if err := loadDivisionData(); err != nil {
 		slog.Error("Error reloading division data", "error", err)
@@ -659,7 +578,9 @@ func reloadAll() {
 }
 
 func Init(ghproxy string) {
-
+	// 先用本地文件全量加载；有缺失不再同步阻塞下载（原实现会把节点启动拖住几分钟，
+	// 下载 450MB 全程不对外服务）——SearchIP 的结果结构天然支持 "not loaded" 降级，
+	// 立即起服务，缺的库后台补齐后换指针上线。
 	localOK := true
 	if err := loadIp2Region(); err != nil {
 		slog.Warn("Local ip2region not available", "error", err)
@@ -689,13 +610,18 @@ func Init(ghproxy string) {
 	if localOK {
 		slog.Info("All databases loaded from local files")
 	} else {
-		slog.Info("Downloading databases...")
-		if pullErr := PullDatabase(ghproxy); pullErr != nil {
-			slog.Error("Some databases failed to download", "error", pullErr)
-		}
-		reloadAll()
+		slog.Info("Some databases missing, downloading in background (serving degraded results meanwhile)")
+		go func() {
+			if err := PullDatabase(ghproxy); err != nil {
+				slog.Error("Background database download failed", "error", err)
+			}
+			reloadAll()
+			slog.Info("Background database initialization completed")
+		}()
 	}
 
+	// 每日同步：PullDatabase 内部带条件请求（ETag/Last-Modified），文件没变的
+	// 节点只花 12 个小请求，不再全量重拉 450MB。
 	go func() {
 		for {
 			jitter := time.Duration(rand.Int63n(int64(time.Hour)))
@@ -706,7 +632,6 @@ func Init(ghproxy string) {
 				slog.Error("Database sync failed", "error", err)
 				continue
 			}
-			closeAllDBs()
 			reloadAll()
 			slog.Info("Database sync completed, waiting for next sync...")
 		}
@@ -722,8 +647,27 @@ func SearchIP(ip string, databases ...string) map[string]interface{} {
 
 	result := map[string]interface{}{"ip": ip}
 
+	// bilibili 是 10 个源里唯一的远程调用（实测 80~440ms，超时 10s），其余 9 个本地
+	// 库合计 <5ms：把它并行出去，不让整个接口陪它等；本地库保持串行
+	// （微秒级操作，并行反而净增调度开销）。结果写进独立变量，Wait 后合并——
+	// Go 的 map 并发写（哪怕 key 不同）是不安全的。
+	var wg sync.WaitGroup
+	var bili any
+
 	for _, name := range databases {
 		switch name {
+		case "bilibili":
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				res, err := searchBilibili(ip)
+				if err != nil {
+					bili = "error: " + err.Error()
+				} else {
+					bili = res
+				}
+			}()
+
 		case "ip2region":
 			ip2regionMu.RLock()
 			if ip2region != nil {
@@ -859,17 +803,14 @@ func SearchIP(ip string, databases ...string) map[string]interface{} {
 				result["dbip_city"] = dbip
 			}
 
-		case "bilibili":
-			bilibili, err := searchBilibili(ip)
-			if err != nil {
-				result["bilibili"] = "error: " + err.Error()
-			} else {
-				result["bilibili"] = bilibili
-			}
-
 		default:
 			result[name] = "unknown database"
 		}
+	}
+
+	wg.Wait()
+	if bili != nil {
+		result["bilibili"] = bili
 	}
 
 	return result

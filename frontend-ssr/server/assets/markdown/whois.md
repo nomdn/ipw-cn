@@ -14,7 +14,7 @@
 
 ### 域名生命周期流程图
 
-![流程](/domain-lifecycle-cloudfabric.svg)
+![流程](/domain-lifecycle-openai.svg)
 ### 域名状态详解
 
 | 状态 | 描述 | 特征/影响 |

@@ -261,6 +261,7 @@ var (
 	speedCache           sync.Map
 	whoisCache           sync.Map
 	asnWhoisCache        sync.Map
+	locationCache        sync.Map // /v1/location 的 IP → 归属地结果缓存（SearchIP 含 bilibili 远程调用）
 	sfGroup              singleflight.Group
 	V6Client             *resty.Client
 	V4Client             *resty.Client
@@ -669,16 +670,55 @@ func sslCheckHandler(c fiber.Ctx) error {
 	return c.Status(200).JSON(rawResult.(*SSLCheckResult))
 }
 
+type locationCacheEntry struct {
+	result    map[string]any
+	timestamp time.Time
+	failed    bool // 结果里有 "error:"/"not loaded"（源库缺失、bilibili 失败等），按失败 TTL 缓存
+}
+
 func locateIP(c fiber.Ctx) error {
 	ip := c.Params("ip")
 	slog.Debug("Locating IP", "ip", ip)
-	return c.Status(http.StatusOK).JSON(ipdb.SearchIP(ip))
+	result, _ := locateIPCached(ip)
+	return c.Status(http.StatusOK).JSON(result)
 }
 func locateUserIP(c fiber.Ctx) error {
 	ip := c.IP()
 	// 可能会有误报，因为某些环境下 IP() 可能返回代理服务器的 IP 地址，而不是用户的真实 IP 地址
 	slog.Debug("Locating user IP", "ip", ip)
-	return c.Status(http.StatusOK).JSON(ipdb.SearchIP(ip))
+	result, _ := locateIPCached(ip)
+	return c.Status(http.StatusOK).JSON(result)
+}
+
+// locateIPCached 带缓存与 singleflight 的归属地查询。
+// 原实现裸调 ipdb.SearchIP：10 个源里有 9 个本地内存查找（合计 <5ms），
+// 唯一的远程源 bilibili 实测 80~440ms、超时 10s——同 IP 洪峰会原样穿透到 B 站 API。
+// 这里用与其他 handler 相同的「缓存 + sfGroup」组合吸收；结果里带 error/not loaded
+// 视为失败，按失败 TTL 缩短缓存（IPDB 降级期、上游抖动时不至于把坏结果钉满 5 分钟）。
+func locateIPCached(ip string) (map[string]any, bool) {
+	cacheKey := "location:" + ip
+	if cached, ok := locationCache.Load(cacheKey); ok {
+		entry := cached.(locationCacheEntry)
+		if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
+			return entry.result, true
+		}
+		locationCache.Delete(cacheKey)
+	}
+
+	raw, _, _ := sfGroup.Do(cacheKey, func() (any, error) {
+		return ipdb.SearchIP(ip), nil
+	})
+	result := raw.(map[string]any)
+
+	failed := false
+	for _, v := range result {
+		if s, ok := v.(string); ok && (strings.HasPrefix(s, "error:") || s == "not loaded") {
+			failed = true
+			break
+		}
+	}
+	locationCache.Store(cacheKey, locationCacheEntry{result: result, timestamp: time.Now(), failed: failed})
+	return result, failed
 }
 
 // normalizeASN 把各数据源的 ASN 字符串统一成 "AS"+数字。
@@ -818,12 +858,8 @@ func whoisHandler(c fiber.Ctx) error {
 		})
 	}
 
-	req, err := webtest.ParseReqResolve(func(k string) string { return c.Query(k) })
-	if err != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
-	}
-	// 缓存键带上请求级 DNS 覆盖（结果取决于所用服务器，参数不同不能共用）
-	cacheKey := domain + req.CacheKey()
+	// whois 不走请求级 DNS 覆盖（见 webtest.QueryWhois 注释），缓存键就是域名本身
+	cacheKey := domain
 
 	if cached, ok := whoisCache.Load(cacheKey); ok {
 		entry := cached.(whoisCacheEntry)
@@ -833,7 +869,7 @@ func whoisHandler(c fiber.Ctx) error {
 		whoisCache.Delete(cacheKey)
 	}
 
-	result, err := webtest.QueryWhois(domain, req.Servers("ipv4"), req.Servers("ipv6"))
+	result, err := webtest.QueryWhois(domain)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
@@ -1513,7 +1549,10 @@ func readConfig() {
 	// 响应体上限不在这里应用 —— 出站客户端还没创建，交 initHTTPClients（main 里紧随其后）。
 	applyMemoryLimit()
 	var SYSTEM_DNS string
-	if DNS_SERVER == "" || DNSSEC_DNS_SERVER == "" {
+	if DNS_SERVER == "" {
+		// 只为普通 dns-server 自动补系统 DNS；dnssec-server 不补——系统/运营商 DNS
+		// 普遍不支持 DNSSEC（DO=1 也不返回 RRSIG），补进来会让验签永远失败，
+		// dnssec 缺省走 webtest 内置的境外 DO 友好列表（见 dnssec.go）。
 		sysDNS, err := sysresolv.NewSystemResolvers(nil, 53)
 		if err != nil {
 			// 失败时 sysDNS 为 nil，绝不能再调用 Refresh()，否则启动即 panic；
@@ -1523,9 +1562,6 @@ func readConfig() {
 			sysDNS.Refresh()
 			SYSTEM_DNS = webtest.AddrPortsToCSV(sysDNS.Addrs())
 		}
-	}
-	if DNSSEC_DNS_SERVER == "" {
-		DNSSEC_DNS_SERVER = SYSTEM_DNS
 	}
 	if DNS_SERVER == "" {
 		DNS_SERVER = SYSTEM_DNS
@@ -1567,6 +1603,8 @@ func sweepExpiredCaches() {
 				ts = e.timestamp
 			case asnWhoisCacheEntry:
 				ts = e.timestamp
+			case locationCacheEntry:
+				ts = e.timestamp
 			default:
 				return true
 			}
@@ -1582,6 +1620,7 @@ func sweepExpiredCaches() {
 	sweep(&speedCache)
 	sweep(&whoisCache)
 	sweep(&asnWhoisCache)
+	sweep(&locationCache)
 	ipdb.SweepBilibiliCache()
 }
 

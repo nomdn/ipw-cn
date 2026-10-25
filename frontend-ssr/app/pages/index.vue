@@ -5,14 +5,13 @@ import { config } from '../../config/index';
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue';
 import { isIPv4 } from '../../utils/tools';
 const route = useRoute();
-const canonicalUrl = computed(() => new URL(route.path, config.siteUrl).toString());
+// canonical 由 app.vue 全局下发（见下方 useHead 注释）。
 
 useHead({
   title: `${config.siteName} | IP查询工具 | IPv4/IPv6地址查询与网络测试平台`,
   titleTemplate: '%s',
-  link: [
-    { rel: 'canonical', href: canonicalUrl.value }
-  ],
+  // canonical / og:url / twitter:card 由 app.vue 全局下发（按纯路径去 query），
+  // 这里不再重复声明，避免 head 里出现两条 canonical。
   meta: [
     { name: 'description', content: `${config.siteName}提供专业的IP查询服务,支持IPv4和IPv6地址在线查询、归属地定位、网络测速、DNS解析、SSL证书检测、TCPing测试等多种网络工具,致力于推进IPv6规模部署和应用,打造去中心化的IP查询平台` },
     { name: 'keywords', content: 'ipv6,ipv4,ip查询,ipv6查询,ipv4查询,ipv6地址查询,ipv4地址查询,网络测速,DNS查询,SSL检测,TCPing,IP归属地,IPv6优先' },
@@ -20,8 +19,6 @@ useHead({
     { property: 'og:description', content: '提供IPv4/IPv6地址查询、网络测速、DNS解析、SSL检测等全方位网络诊断工具,助力IPv6普及与部署' },
     { property: 'og:image', content: `${config.siteUrl}favicon.svg` },
     { property: 'og:type', content: 'website' },
-    { property: 'og:url', content: canonicalUrl.value },
-    { name: 'twitter:card', content: 'summary_large_image' },
   ],
   script: [
     {
@@ -57,7 +54,7 @@ useHead({
         '@type': 'WebApplication',
         name: config.siteName,
         description: `${config.siteName}提供专业的IP查询服务,支持IPv4和IPv6地址在线查询、归属地定位、网络测速、DNS解析、SSL证书检测、TCPing测试等多种网络工具,致力于推进IPv6规模部署和应用,打造去中心化的IP查询平台`,
-        url: canonicalUrl.value,
+        url: new URL(route.path, config.siteUrl).toString(),
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Any',
         offers: {

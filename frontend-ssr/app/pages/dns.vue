@@ -301,6 +301,24 @@ const doc = page.value;
 @import "../style.css";
 @import "../../assets/css/tool-common.css";
 
+/* 本页行内容比通用行宽（input 420 + select 150 + button 165 + 间距 ≈ 765px），
+   换行点更高：容器低于 780px（≈自然换行点）时换行元素铺满整行，
+   消除 615~780px 之间「换行但仍固定宽」的夹缝（tool-common 的通用阈值只覆盖到 615px）。
+   select 的 width 是行内 style，需 !important 才能覆盖。 */
+@container (max-width: 780px) {
+  .el-input,
+  .el-select,
+  .el-button {
+    width: 100% !important;
+    margin-right: 0 !important;
+  }
+
+  .el-input,
+  .el-select {
+    margin-bottom: 10px;
+  }
+}
+
 .el-menu--horizontal > .el-menu-item:nth-child(1) {
   margin-right: auto;
 }

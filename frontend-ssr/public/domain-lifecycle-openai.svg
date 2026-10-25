@@ -1,0 +1,198 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 880" width="1240" height="880" data-generator="fireworks-tech-graph" data-schema-version="1" data-text-metrics="heuristic-v1" data-style-id="7" data-visual-theme="OpenAI" data-diagram-type="architecture" data-motion-scene="" data-semantic-profile="generic" data-semantic-valid="true" data-quality-profile="standard" data-max-bends-per-edge="4" data-max-total-bends="30" data-max-route-stretch="5.0" data-max-bridged-crossings="14" data-min-node-gap="0.0" data-min-container-gutter="0.0" data-min-label-clearance="2.0" data-min-segment-length="0.0">
+  <defs>
+    <marker id="arrowA" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#10a37f"/>
+    </marker>
+    <marker id="arrowB" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#0f766e"/>
+    </marker>
+    <marker id="arrowC" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#0891b2"/>
+    </marker>
+    <marker id="arrowE" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrowF" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <marker id="arrowG" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#475569"/>
+    </marker>
+    <marker id="arrowH" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
+    </marker>
+    <style>
+    text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
+    .title { font-size: 24px; font-weight: 700; fill: #0f172a; }
+    .subtitle { font-size: 13px; font-weight: 500; fill: #64748b; }
+    .section { font-size: 13px; font-weight: 700; fill: #087f5b; letter-spacing: 1.4px; }
+    .section-sub { font-size: 12px; font-weight: 500; fill: #64748b; }
+    .node-title { font-weight: 700; fill: #0f172a; }
+    .node-sub { font-weight: 500; fill: #475569; }
+    .node-type { font-size: 11px; font-weight: 700; fill: #64748b; letter-spacing: 0.08em; }
+    .arrow-label { font-size: 12px; font-weight: 600; fill: #475569; }
+    .legend { font-size: 12px; font-weight: 500; fill: #475569; }
+    .footnote { font-size: 12px; font-weight: 500; fill: #64748b; }
+    .metric-label { font-size: 8.5px; font-weight: 700; fill: #64748b; text-transform: uppercase; }
+    .metric-value { font-size: 9.5px; font-weight: 700; fill: #0f172a; }
+    </style>
+  </defs>
+  <rect data-graph-role="background" width="1240.0" height="880.0" fill="#ffffff"/>
+  <text x="48.0" y="48" text-anchor="start" class="title">域名生命周期状态机</text>
+  <text x="48.0" y="72" text-anchor="start" class="subtitle">从可注册到释放的完整 EPP 状态流转（REGISTRY / REGISTRAR 管理方标注）</text>
+  <line x1="48" y1="100" x2="1192.0" y2="100" stroke="#e2e8f0" stroke-width="1"/>
+  <g id="reg" data-graph-role="container" data-container-id="reg" data-semantic-role="boundary" data-graph-bounds="40,70,1200,290">
+  <rect data-graph-role="container" x="40.0" y="70.0" width="1160.0" height="220.0" rx="16.0" fill="none" stroke="#e2e8f0" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="58.0" y="94.0" class="section">注册与活跃</text>
+    <rect id="reg-header" data-graph-role="reserved" data-reserved-kind="container-header" x="48" y="76" width="95" height="30" fill="none" stroke="none"/>
+  </g>
+  <g id="grace" data-graph-role="container" data-container-id="grace" data-semantic-role="boundary" data-graph-bounds="40,330,1200,470">
+  <rect data-graph-role="container" x="40.0" y="330.0" width="1160.0" height="140.0" rx="16.0" fill="none" stroke="#e2e8f0" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="58.0" y="354.0" class="section">续费 · 到期 · 转移中</text>
+    <rect id="grace-header" data-graph-role="reserved" data-reserved-kind="container-header" x="48" y="336" width="154.8" height="30" fill="none" stroke="none"/>
+  </g>
+  <g id="end" data-graph-role="container" data-container-id="end" data-semantic-role="boundary" data-graph-bounds="40,510,1200,810">
+  <rect data-graph-role="container" x="40.0" y="510.0" width="1160.0" height="300.0" rx="16.0" fill="none" stroke="#e2e8f0" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="58.0" y="534.0" class="section">赎回 · 释放 · 转移完成</text>
+    <rect id="end-header" data-graph-role="reserved" data-reserved-kind="container-header" x="48" y="516" width="167.8" height="30" fill="none" stroke="none"/>
+  </g>
+  <path id="a-reg" data-graph-role="edge" data-edge-id="a-reg" data-source="available" data-target="addperiod" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 270,170 L 380,170" fill="none" stroke="#10a37f" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="a-ok" data-graph-role="edge" data-edge-id="a-ok" data-source="addperiod" data-target="active" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="2" data-route-stretch="1.0" data-bridges="" d="M 600,170 L 620.4,170 L 620.4,179 L 700,179" fill="none" stroke="#10a37f" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="a-hold-c" data-graph-role="edge" data-edge-id="a-hold-c" data-source="active" data-target="clienthold" data-edge-kind="flow" data-topic-id="" data-flow="feedback" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="2" data-route-stretch="1.0" data-bridges="" d="M 910,152 L 930.4,152 L 930.4,137 L 990,137" fill="none" stroke="#475569" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowG)"/>
+  <path id="a-hold-s" data-graph-role="edge" data-edge-id="a-hold-s" data-source="active" data-target="serverhold" data-edge-kind="flow" data-topic-id="" data-flow="feedback" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="2" data-route-stretch="1.0" data-bridges="" d="M 910,170 L 930.4,170 L 930.4,232 L 990,232" fill="none" stroke="#475569" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowG)"/>
+  <path id="a-renew" data-graph-role="edge" data-edge-id="a-renew" data-source="active" data-target="renewperiod" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="2" data-route-stretch="1.0" data-bridges="" d="M 787,200 L 787,220.4 L 796,220.4 L 796,380" fill="none" stroke="#10a37f" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="a-renew-back" data-graph-role="edge" data-edge-id="a-renew-back" data-source="renewperiod" data-target="active" data-edge-kind="flow" data-topic-id="" data-flow="feedback" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="4" data-route-stretch="1.032" data-bridges="" d="M 814,380 L 814,359.6 L 817,359.6 L 817,220.4 L 805,220.4 L 805,200" fill="none" stroke="#475569" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowG)"/>
+  <path id="a-expire-bridge-mask" data-graph-role="bridge-mask" data-owner="a-expire" d="M 700,161 L 692.86,161 L 692.86,174 A 5 5 0 0 1 692.86,184 L 692.86,224 L 510,224 L 510,380" fill="none" stroke="#ffffff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path id="a-expire" data-graph-role="edge" data-edge-id="a-expire" data-source="active" data-target="autorenew" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="3" data-route-stretch="1.0" data-bridges="692.86,179" d="M 700,161 L 692.86,161 L 692.86,174 A 5 5 0 0 1 692.86,184 L 692.86,224 L 510,224 L 510,380" fill="none" stroke="#10a37f" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="a-no-pay" data-graph-role="edge" data-edge-id="a-no-pay" data-source="autorenew" data-target="redemption" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 510,440 L 510,560" fill="none" stroke="#10a37f" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="a-redemption-end" data-graph-role="edge" data-edge-id="a-redemption-end" data-source="redemption" data-target="pendingdelete" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 380,590 L 310,590" fill="none" stroke="#10a37f" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="a-release" data-graph-role="edge" data-edge-id="a-release" data-source="pendingdelete" data-target="released" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="4" data-route-stretch="2.625" data-bridges="" d="M 190,620 L 190,640.4 L 305.6,640.4 L 305.6,732.86 L 200,732.86 L 200,740" fill="none" stroke="#10a37f" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="a-transfer" data-graph-role="edge" data-edge-id="a-transfer" data-source="active" data-target="pendingtransfer" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="4" data-route-stretch="1.0" data-bridges="" d="M 910,188 L 930,188 L 930,356 L 959.6,356 L 959.6,410 L 980,410" fill="none" stroke="#10a37f" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="a-transfer-done" data-graph-role="edge" data-edge-id="a-transfer-done" data-source="pendingtransfer" data-target="transferperiod" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="3" data-route-stretch="1.078" data-bridges="" d="M 1080,440 L 1080,464 L 679.6,464 L 679.6,581 L 700,581" fill="none" stroke="#10a37f" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="a-transfer-ok-bridge-mask" data-graph-role="bridge-mask" data-owner="a-transfer-ok" d="M 700,599 L 676,599 L 676,230.4 L 700,230.4 L 700,200 L 782,200 A 5 5 0 0 0 792,200 L 800,200 A 5 5 0 0 0 810,200 L 823,200 L 823,200" fill="none" stroke="#ffffff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path id="a-transfer-ok" data-graph-role="edge" data-edge-id="a-transfer-ok" data-source="transferperiod" data-target="active" data-edge-kind="flow" data-topic-id="" data-flow="feedback" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="4" data-route-stretch="1.092" data-bridges="787,200;805,200" d="M 700,599 L 676,599 L 676,230.4 L 700,230.4 L 700,200 L 782,200 A 5 5 0 0 0 792,200 L 800,200 A 5 5 0 0 0 810,200 L 823,200 L 823,200" fill="none" stroke="#475569" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowG)"/>
+  <g id="node-available" data-graph-role="node" data-node-id="available" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="70,140,270,200">
+  <rect x="70.0" y="140.0" width="200.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#dce5e3" stroke-width="1.8"/>
+  <text x="170.0" y="158.0" text-anchor="middle" class="node-type">REGISTRY</text>
+  <text data-text-role="title" data-full-text="Available · 域名可注册" data-text-max-width="176.0" x="170.0" y="176.0" text-anchor="middle" class="node-title" font-size="15.17">Available · 域名可注册</text>
+  </g>
+  <g id="node-addperiod" data-graph-role="node" data-node-id="addperiod" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="380,140,600,200">
+  <rect x="380.0" y="140.0" width="220.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#dce5e3" stroke-width="1.8"/>
+  <text x="490.0" y="158.0" text-anchor="middle" class="node-type">REGISTRY</text>
+  <text data-text-role="title" data-full-text="AddPeriod · 注册完成 5天" data-text-max-width="196.0" x="490.0" y="176.0" text-anchor="middle" class="node-title" font-size="14.87">AddPeriod · 注册完成 5天</text>
+  </g>
+  <g id="node-active" data-graph-role="node" data-node-id="active" data-semantic-role="double_rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="700,140,910,200">
+  <rect x="700.0" y="140.0" width="210.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#10a37f" stroke-width="2.0"/>
+  <rect x="706.0" y="146.0" width="198.0" height="48.0" rx="11.0" fill="none" stroke="#10a37f" stroke-width="1.2" opacity="0.65"/>
+  <text x="805.0" y="158.0" text-anchor="middle" class="node-type">REGISTRAR · Active</text>
+  <text data-text-role="title" data-full-text="Active (ok) · 正常解析" data-text-max-width="178.0" x="805.0" y="176.0" text-anchor="middle" class="node-title" font-size="14.71">Active (ok) · 正常解析</text>
+  </g>
+  <g id="node-clienthold" data-graph-role="node" data-node-id="clienthold" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="990,110,1190,164">
+  <rect x="990.0" y="110.0" width="200.0" height="54.0" rx="14.0" fill="#ffffff" stroke="#f97316" stroke-width="1.8"/>
+  <text x="1090.0" y="128.0" text-anchor="middle" class="node-type">REGISTRAR</text>
+  <text data-text-role="title" data-full-text="ClientHold · 客户暂停" data-text-max-width="176.0" x="1090.0" y="143.0" text-anchor="middle" class="node-title" font-size="15.79">ClientHold · 客户暂停</text>
+  </g>
+  <g id="node-serverhold" data-graph-role="node" data-node-id="serverhold" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="990,205,1190,259">
+  <rect x="990.0" y="205.0" width="200.0" height="54.0" rx="14.0" fill="#ffffff" stroke="#f97316" stroke-width="1.8"/>
+  <text x="1090.0" y="223.0" text-anchor="middle" class="node-type">REGISTRY</text>
+  <text data-text-role="title" data-full-text="ServerHold · 注册局暂停" data-text-max-width="176.0" x="1090.0" y="238.0" text-anchor="middle" class="node-title" font-size="13.76">ServerHold · 注册局暂停</text>
+  </g>
+  <g id="node-renewperiod" data-graph-role="node" data-node-id="renewperiod" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="700,380,910,440">
+  <rect x="700.0" y="380.0" width="210.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#dce5e3" stroke-width="1.8"/>
+  <text x="805.0" y="398.0" text-anchor="middle" class="node-type">REGISTRY</text>
+  <text data-text-role="title" data-full-text="RenewPeriod · 手动续费 5天" data-text-max-width="186.0" x="805.0" y="416.0" text-anchor="middle" class="node-title" font-size="12.89">RenewPeriod · 手动续费 5天</text>
+  </g>
+  <g id="node-autorenew" data-graph-role="node" data-node-id="autorenew" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="380,380,640,440">
+  <rect x="380.0" y="380.0" width="260.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#dce5e3" stroke-width="1.8"/>
+  <text x="510.0" y="398.0" text-anchor="middle" class="node-type">REGISTRY</text>
+  <text data-text-role="title" data-full-text="AutoRenewPeriod · 等待扣费" data-text-max-width="236.0" x="510.0" y="416.0" text-anchor="middle" class="node-title" font-size="15.9">AutoRenewPeriod · 等待扣费</text>
+  </g>
+  <g id="node-pendingtransfer" data-graph-role="node" data-node-id="pendingtransfer" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="980,380,1180,440">
+  <rect x="980.0" y="380.0" width="200.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#dce5e3" stroke-width="1.8"/>
+  <text x="1080.0" y="398.0" text-anchor="middle" class="node-type">REGISTRAR</text>
+  <text data-text-role="title" data-full-text="PendingTransfer · 转移中" data-text-max-width="176.0" x="1080.0" y="416.0" text-anchor="middle" class="node-title" font-size="12.79">PendingTransfer · 转移中</text>
+  </g>
+  <g id="node-transferperiod" data-graph-role="node" data-node-id="transferperiod" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="700,560,910,620">
+  <rect x="700.0" y="560.0" width="210.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#dce5e3" stroke-width="1.8"/>
+  <text x="805.0" y="578.0" text-anchor="middle" class="node-type">REGISTRAR</text>
+  <text data-text-role="title" data-full-text="TransferPeriod · 5天" data-text-max-width="186.0" x="805.0" y="596.0" text-anchor="middle" class="node-title" font-size="16.03">TransferPeriod · 5天</text>
+  </g>
+  <g id="node-redemption" data-graph-role="node" data-node-id="redemption" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="380,560,640,620">
+  <rect x="380.0" y="560.0" width="260.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#dce5e3" stroke-width="1.8"/>
+  <text x="510.0" y="578.0" text-anchor="middle" class="node-type">REGISTRY</text>
+  <text data-text-role="title" data-full-text="RedemptionPeriod · 赎回 30天" data-text-max-width="236.0" x="510.0" y="596.0" text-anchor="middle" class="node-title" font-size="14.98">RedemptionPeriod · 赎回 30天</text>
+  </g>
+  <g id="node-pendingdelete" data-graph-role="node" data-node-id="pendingdelete" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="70,560,310,620">
+  <rect x="70.0" y="560.0" width="240.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#dce5e3" stroke-width="1.8"/>
+  <text x="190.0" y="578.0" text-anchor="middle" class="node-type">REGISTRY</text>
+  <text data-text-role="title" data-full-text="PendingDelete · 删除 5天" data-text-max-width="216.0" x="190.0" y="596.0" text-anchor="middle" class="node-title" font-size="16.31">PendingDelete · 删除 5天</text>
+  </g>
+  <g id="node-released" data-graph-role="node" data-node-id="released" data-semantic-role="double_rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="70,740,330,800">
+  <rect x="70.0" y="740.0" width="260.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#1d4ed8" stroke-width="2.0"/>
+  <rect x="76.0" y="746.0" width="248.0" height="48.0" rx="11.0" fill="none" stroke="#1d4ed8" stroke-width="1.2" opacity="0.65"/>
+  <text x="200.0" y="758.0" text-anchor="middle" class="node-type">END</text>
+  <text data-text-role="title" data-full-text="已释放 · 重新开放注册" data-text-max-width="228.0" x="200.0" y="776.0" text-anchor="middle" class="node-title" font-size="18">已释放 · 重新开放注册</text>
+  </g>
+  <g id="a-reg-label" data-graph-role="label" data-owner="a-reg" data-graph-bounds="306,139,344,159">
+  <rect x="306.0" y="139.0" width="38.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="325.0" y="153.0" text-anchor="middle" class="arrow-label">注册</text>
+  </g>
+  <g id="a-ok-label" data-graph-role="label" data-owner="a-ok" data-graph-bounds="629.2,148,691.2,168">
+  <rect x="629.2" y="148.0" width="62.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="660.2" y="162.0" text-anchor="middle" class="arrow-label">注册完成</text>
+  </g>
+  <g id="a-hold-c-label" data-graph-role="label" data-owner="a-hold-c" data-graph-bounds="911.2,106,973.2,126">
+  <rect x="911.2" y="106.0" width="62.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="942.2" y="120.0" text-anchor="middle" class="arrow-label">暂停解析</text>
+  </g>
+  <g id="a-hold-s-label" data-graph-role="label" data-owner="a-hold-s" data-graph-bounds="865.4,205,927.4,225">
+  <rect x="865.4" y="205.0" width="62.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="896.4" y="219.0" text-anchor="middle" class="arrow-label">违规暂停</text>
+  </g>
+  <g id="a-renew-label" data-graph-role="label" data-owner="a-renew" data-graph-bounds="755,286.2,793,306.2">
+  <rect x="755.0" y="286.2" width="38.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="774.0" y="300.2" text-anchor="middle" class="arrow-label">续费</text>
+  </g>
+  <g id="a-renew-back-label" data-graph-role="label" data-owner="a-renew-back" data-graph-bounds="820,276,906,296">
+  <rect x="820.0" y="276.0" width="86.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="863.0" y="290.0" text-anchor="middle" class="arrow-label">期满回到正常</text>
+  </g>
+  <g id="a-expire-label" data-graph-role="label" data-owner="a-expire" data-graph-bounds="582.43,211,620.43,231">
+  <rect x="582.43" y="211.0" width="38.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="601.43" y="225.0" text-anchor="middle" class="arrow-label">到期</text>
+  </g>
+  <g id="a-no-pay-label" data-graph-role="label" data-owner="a-no-pay" data-graph-bounds="457,486,507,506">
+  <rect x="457.0" y="486.0" width="50.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="482.0" y="500.0" text-anchor="middle" class="arrow-label">未支付</text>
+  </g>
+  <g id="a-redemption-end-label" data-graph-role="label" data-owner="a-redemption-end" data-graph-bounds="314,559,376,579">
+  <rect x="314.0" y="559.0" width="62.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="345.0" y="573.0" text-anchor="middle" class="arrow-label">赎回期满</text>
+  </g>
+  <g id="a-release-label" data-graph-role="label" data-owner="a-release" data-graph-bounds="228.8,627.4,266.8,647.4">
+  <rect x="228.8" y="627.4" width="38.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="247.8" y="641.4" text-anchor="middle" class="arrow-label">释放</text>
+  </g>
+  <g id="a-transfer-label" data-graph-role="label" data-owner="a-transfer" data-graph-bounds="889,248,927,268">
+  <rect x="889.0" y="248.0" width="38.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="908.0" y="262.0" text-anchor="middle" class="arrow-label">转移</text>
+  </g>
+  <g id="a-transfer-done-label" data-graph-role="label" data-owner="a-transfer-done" data-graph-bounds="848.8,451,910.8,471">
+  <rect x="848.8" y="451.0" width="62.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="879.8" y="465.0" text-anchor="middle" class="arrow-label">转移完成</text>
+  </g>
+  <g id="a-transfer-ok-label" data-graph-role="label" data-owner="a-transfer-ok" data-graph-bounds="611,474.42,673,494.42">
+  <rect x="611.0" y="474.42" width="62.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="642.0" y="488.42" text-anchor="middle" class="arrow-label">转移生效</text>
+  </g>
+  <g id="legend" data-graph-role="legend">
+    <rect id="legend-zone" data-graph-role="reserved" data-reserved-kind="legend" x="32" y="684" width="273.6" height="46" rx="10" fill="none" stroke="none"/>
+    <line data-graph-role="decoration" x1="42.0" y1="698.0" x2="72.0" y2="698.0" stroke="#10a37f" stroke-width="2.0" marker-end="url(#arrowA)"/>
+    <text data-graph-role="decoration" x="82.0" y="702.0" class="legend">状态流转</text>
+    <line data-graph-role="decoration" x1="158.0" y1="698.0" x2="188.0" y2="698.0" stroke="#475569" stroke-width="2.0" marker-end="url(#arrowG)"/>
+    <text data-graph-role="decoration" x="198.0" y="702.0" class="legend">回到活跃 / 暂停</text>
+  </g>
+  <g id="footer" data-graph-role="reserved" data-graph-bounds="48,833,433,849">
+  <text x="48.0" y="845.0" class="footnote">Style 7 · OpenAI Official · EPP domain lifecycle states</text>
+  </g>
+</svg>

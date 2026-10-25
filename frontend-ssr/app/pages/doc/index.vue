@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { getDocMeta } from '../../../config/doc'
+import { config } from '../../../config/index'
 
 // 窄屏（≤768px）下这条侧栏被 CSS 整个隐藏，导航改由顶栏抽屉承载。
 // 但「只是藏起来」不等于不花钱：Vue 依旧会把整棵 40 项的 el-menu 水合一遍
@@ -14,10 +15,32 @@ const { data: page } = await useAsyncData('doc-index', () =>
 const doc = page.value;
 
 const meta = getDocMeta('/doc')
+// <title>/meta 优先取 seoXxx 加长版（Bing 审计判文档页标题与描述过短）；
+// 侧栏菜单与卡片仍读原字段展示，不受影响。
+const seoTitle = meta.seoTitle ?? meta.title
+const seoDescription = meta.seoDescription ?? meta.description
 useHead({
-  title: meta.title,
+  title: seoTitle,
+  titleTemplate: `%s | ${config.siteName}`,
   meta: [
-    { name: 'description', content: meta.description }
+    { name: 'description', content: seoDescription },
+    { property: 'og:title', content: `${seoTitle} | ${config.siteName}` },
+    { property: 'og:description', content: seoDescription },
+    { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
+    { property: 'og:type', content: 'website' },
+  ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: '首页', item: config.siteUrl },
+          { '@type': 'ListItem', position: 2, name: meta.title, item: new URL('/doc', config.siteUrl).href }
+        ]
+      })
+    }
   ]
 })
 </script>

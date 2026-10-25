@@ -264,6 +264,20 @@ onMounted(() => {
 @import "../style.css";
 @import "../../assets/css/tool-common.css";
 
+/* 本页行是双输入框（420×2 + 按钮 165 + 间距 ≈ 1035px），换行点远高于通用阈值的
+   615px：容器低于 1050px（≈自然换行点）时换行元素铺满整行，消除中间的夹缝区。 */
+@container (max-width: 1050px) {
+  .el-input,
+  .el-button {
+    width: 100% !important;
+    margin-right: 0 !important;
+  }
+
+  .el-input {
+    margin-bottom: 10px;
+  }
+}
+
 .el-menu--horizontal > .el-menu-item:nth-child(1) {
   margin-right: auto;
 }

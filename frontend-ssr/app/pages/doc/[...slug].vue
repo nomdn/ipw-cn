@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { getDocMeta } from '../../../config/doc'
+import { config } from '../../../config/index'
 
 // 窄屏下这条侧栏被 CSS 隐藏（导航在顶栏抽屉里），但照样要花钱水合 ——
 // 详见 app/pages/doc/index.vue 的同名注释。
@@ -11,10 +12,34 @@ const path = computed(() => route.path)
 const { data: page } = await useFetch(() => `/api/markdown${path.value}`)
 
 const meta = computed(() => getDocMeta(route.path))
+// <title>/meta 优先取 seoXxx 加长版（Bing 审计判文档页标题与描述过短）；
+// 侧栏菜单与卡片仍读原字段展示，不受影响。
+const seoTitle = computed(() => meta.value.seoTitle ?? meta.value.title)
+const seoDescription = computed(() => meta.value.seoDescription ?? meta.value.description)
+const docUrl = computed(() => new URL(route.path, config.siteUrl).href)
 useHead({
-  title: computed(() => meta.value.title),
+  title: seoTitle,
+  titleTemplate: computed(() => `%s | ${config.siteName}`),
   meta: [
-    { name: 'description', content: computed(() => meta.value.description) }
+    { name: 'description', content: seoDescription },
+    { property: 'og:title', content: computed(() => `${seoTitle.value} | ${config.siteName}`) },
+    { property: 'og:description', content: seoDescription },
+    { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
+    { property: 'og:type', content: 'article' },
+  ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: computed(() => JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: '首页', item: config.siteUrl },
+          { '@type': 'ListItem', position: 2, name: '文档', item: new URL('/doc', config.siteUrl).href },
+          { '@type': 'ListItem', position: 3, name: meta.value.title, item: docUrl.value }
+        ]
+      }))
+    }
   ]
 })
 </script>

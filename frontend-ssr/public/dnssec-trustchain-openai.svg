@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 640" width="1240" height="640" data-generator="fireworks-tech-graph" data-schema-version="1" data-text-metrics="heuristic-v1" data-style-id="7" data-visual-theme="OpenAI" data-diagram-type="architecture" data-motion-scene="" data-semantic-profile="generic" data-semantic-valid="true" data-quality-profile="standard" data-max-bends-per-edge="12" data-max-total-bends="100" data-max-route-stretch="5.0" data-max-bridged-crossings="8" data-min-node-gap="0.0" data-min-container-gutter="0.0" data-min-label-clearance="2.0" data-min-segment-length="0.0">
+  <defs>
+    <marker id="arrowA" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#10a37f"/>
+    </marker>
+    <marker id="arrowB" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#0f766e"/>
+    </marker>
+    <marker id="arrowC" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#0891b2"/>
+    </marker>
+    <marker id="arrowE" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrowF" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <marker id="arrowG" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#475569"/>
+    </marker>
+    <marker id="arrowH" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
+    </marker>
+    <style>
+    text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
+    .title { font-size: 24px; font-weight: 700; fill: #0f172a; }
+    .subtitle { font-size: 13px; font-weight: 500; fill: #64748b; }
+    .section { font-size: 13px; font-weight: 700; fill: #087f5b; letter-spacing: 1.4px; }
+    .section-sub { font-size: 12px; font-weight: 500; fill: #64748b; }
+    .node-title { font-weight: 700; fill: #0f172a; }
+    .node-sub { font-weight: 500; fill: #475569; }
+    .node-type { font-size: 11px; font-weight: 700; fill: #64748b; letter-spacing: 0.08em; }
+    .arrow-label { font-size: 12px; font-weight: 600; fill: #475569; }
+    .legend { font-size: 12px; font-weight: 500; fill: #475569; }
+    .footnote { font-size: 12px; font-weight: 500; fill: #64748b; }
+    .metric-label { font-size: 8.5px; font-weight: 700; fill: #64748b; text-transform: uppercase; }
+    .metric-value { font-size: 9.5px; font-weight: 700; fill: #0f172a; }
+    </style>
+  </defs>
+  <rect data-graph-role="background" width="1240.0" height="640.0" fill="#ffffff"/>
+  <text x="48.0" y="48" text-anchor="start" class="title">DNSSEC 验证链与本地验签</text>
+  <text x="48.0" y="72" text-anchor="start" class="subtitle">DS 信任链自根向下逐级建立，递归侧以 DNSKEY 验证 RRset 签名</text>
+  <line x1="48" y1="100" x2="1192.0" y2="100" stroke="#e2e8f0" stroke-width="1"/>
+  <g id="trust" data-graph-role="container" data-container-id="trust" data-semantic-role="boundary" data-graph-bounds="40,110,1200,260">
+  <rect data-graph-role="container" x="40.0" y="110.0" width="1160.0" height="150.0" rx="16.0" fill="none" stroke="#e2e8f0" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="58.0" y="134.0" class="section">信任链 · 由根向下逐级签发</text>
+    <rect id="trust-header" data-graph-role="reserved" data-reserved-kind="container-header" x="48" y="116" width="189.9" height="30" fill="none" stroke="none"/>
+  </g>
+  <g id="verify" data-graph-role="container" data-container-id="verify" data-semantic-role="boundary" data-graph-bounds="40,310,1200,560">
+  <rect data-graph-role="container" x="40.0" y="310.0" width="1160.0" height="250.0" rx="16.0" fill="none" stroke="#e2e8f0" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <text x="58.0" y="334.0" class="section">递归解析侧 · 本地验签</text>
+    <rect id="verify-header" data-graph-role="reserved" data-reserved-kind="container-header" x="48" y="316" width="163.9" height="30" fill="none" stroke="none"/>
+  </g>
+  <path id="ds-tld" data-graph-role="edge" data-edge-id="ds-tld" data-source="root" data-target="tld" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 330,195 L 495,195" fill="none" stroke="#10a37f" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="ds-auth" data-graph-role="edge" data-edge-id="ds-auth" data-source="tld" data-target="auth" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 745,195 L 905,195" fill="none" stroke="#10a37f" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="pub-key" data-graph-role="edge" data-edge-id="pub-key" data-source="auth" data-target="dnskey" data-edge-kind="flow" data-topic-id="" data-flow="write" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="2" data-route-stretch="1.0" data-bridges="" d="M 1023.5,225 L 1023.5,346 L 205,346 L 205,370" fill="none" stroke="#0f766e" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowB)"/>
+  <path id="sign" data-graph-role="edge" data-edge-id="sign" data-source="auth" data-target="rrset" data-edge-kind="flow" data-topic-id="" data-flow="write" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="6" data-route-stretch="1.872" data-bridges="" d="M 1041.5,225 L 1041.5,245.4 L 1184,245.4 L 1184,454 L 745,454 L 745,349.6 L 620,349.6 L 620,370" fill="none" stroke="#0f766e" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowB)"/>
+  <path id="fetch-key-bridge-mask" data-graph-role="bridge-mask" data-owner="fetch-key" d="M 330,400 L 350.4,400 L 350.4,461 L 884.6,461 L 884.6,391 L 905,391" fill="none" stroke="#ffffff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path id="fetch-key" data-graph-role="edge" data-edge-id="fetch-key" data-source="dnskey" data-target="resolver" data-edge-kind="flow" data-topic-id="" data-flow="read" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="4" data-route-stretch="1.209" data-bridges="884.6,454" d="M 330,400 L 350.4,400 L 350.4,461 L 884.6,461 L 884.6,391 L 905,391" fill="none" stroke="#0891b2" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowC)"/>
+  <path id="fetch-rr-bridge-mask" data-graph-role="bridge-mask" data-owner="fetch-rr" d="M 745,400 L 748.28,400 L 748.28,409 L 879.6,409 A 5 5 0 0 0 889.6,409 L 905,409" fill="none" stroke="#ffffff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path id="fetch-rr" data-graph-role="edge" data-edge-id="fetch-rr" data-source="rrset" data-target="resolver" data-edge-kind="flow" data-topic-id="" data-flow="read" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="2" data-route-stretch="1.0" data-bridges="745,400;884.6,409" d="M 745,400 L 748.28,400 L 748.28,409 L 879.6,409 A 5 5 0 0 0 889.6,409 L 905,409" fill="none" stroke="#0891b2" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowC)"/>
+  <path id="a-check-bridge-mask" data-graph-role="bridge-mask" data-owner="a-check" d="M 1032.5,430 L 1032.5,450.4 L 1044,450.4 L 1044,565 L 590,565 L 590,485 L 445,485 L 445,485" fill="none" stroke="#ffffff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path id="a-check" data-graph-role="edge" data-edge-id="a-check" data-source="resolver" data-target="check" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="5" data-route-stretch="1.285" data-bridges="1044,454" d="M 1032.5,430 L 1032.5,450.4 L 1044,450.4 L 1044,565 L 590,565 L 590,485 L 445,485 L 445,485" fill="none" stroke="#10a37f" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="a-pass-bridge-mask" data-graph-role="bridge-mask" data-owner="a-pass" d="M 590,513 L 730,513" fill="none" stroke="#ffffff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path id="a-pass" data-graph-role="edge" data-edge-id="a-pass" data-source="check" data-target="pass" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="590,513" d="M 590,513 L 730,513" fill="none" stroke="#10a37f" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <g id="node-root" data-graph-role="node" data-node-id="root" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="80,165,330,225">
+  <rect x="80.0" y="165.0" width="250.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#dce5e3" stroke-width="1.8"/>
+  <text x="205.0" y="183.0" text-anchor="middle" class="node-type">ROOT · 信任锚</text>
+  <text data-text-role="title" data-full-text="根 DNS（内置信任锚）" data-text-max-width="226.0" x="205.0" y="201.0" text-anchor="middle" class="node-title" font-size="18">根 DNS（内置信任锚）</text>
+  </g>
+  <g id="node-tld" data-graph-role="node" data-node-id="tld" data-semantic-role="double_rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="495,165,745,225">
+  <rect x="495.0" y="165.0" width="250.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#10a37f" stroke-width="2.0"/>
+  <rect x="501.0" y="171.0" width="238.0" height="48.0" rx="11.0" fill="none" stroke="#10a37f" stroke-width="1.2" opacity="0.65"/>
+  <text x="620.0" y="183.0" text-anchor="middle" class="node-type">TLD · .top</text>
+  <text data-text-role="title" data-full-text="顶级 DNS（发布 DS）" data-text-max-width="218.0" x="620.0" y="201.0" text-anchor="middle" class="node-title" font-size="18">顶级 DNS（发布 DS）</text>
+  </g>
+  <g id="node-auth" data-graph-role="node" data-node-id="auth" data-semantic-role="double_rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="905,165,1160,225">
+  <rect x="905.0" y="165.0" width="255.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#10a37f" stroke-width="2.0"/>
+  <rect x="911.0" y="171.0" width="243.0" height="48.0" rx="11.0" fill="none" stroke="#10a37f" stroke-width="1.2" opacity="0.65"/>
+  <text x="1032.5" y="183.0" text-anchor="middle" class="node-type">AUTHORITATIVE</text>
+  <text data-text-role="title" data-full-text="权威 DNS（发布 DNSKEY）" data-text-max-width="223.0" x="1032.5" y="201.0" text-anchor="middle" class="node-title" font-size="17.29">权威 DNS（发布 DNSKEY）</text>
+  </g>
+  <g id="node-dnskey" data-graph-role="node" data-node-id="dnskey" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="80,370,330,430">
+  <rect x="80.0" y="370.0" width="250.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#dce5e3" stroke-width="1.8"/>
+  <text x="205.0" y="388.0" text-anchor="middle" class="node-type">DNSKEY</text>
+  <text data-text-role="title" data-full-text="KSK / ZSK 密钥" data-text-max-width="226.0" x="205.0" y="406.0" text-anchor="middle" class="node-title" font-size="18">KSK / ZSK 密钥</text>
+  </g>
+  <g id="node-rrset" data-graph-role="node" data-node-id="rrset" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="495,370,745,430">
+  <rect x="495.0" y="370.0" width="250.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#dce5e3" stroke-width="1.8"/>
+  <text x="620.0" y="388.0" text-anchor="middle" class="node-type">RRSET + RRSIG</text>
+  <text data-text-role="title" data-full-text="记录数据与签名" data-text-max-width="226.0" x="620.0" y="406.0" text-anchor="middle" class="node-title" font-size="18">记录数据与签名</text>
+  </g>
+  <g id="node-resolver" data-graph-role="node" data-node-id="resolver" data-semantic-role="double_rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="905,370,1160,430">
+  <rect x="905.0" y="370.0" width="255.0" height="60.0" rx="14.0" fill="#ffffff" stroke="#1d4ed8" stroke-width="2.0"/>
+  <rect x="911.0" y="376.0" width="243.0" height="48.0" rx="11.0" fill="none" stroke="#1d4ed8" stroke-width="1.2" opacity="0.65"/>
+  <text x="1032.5" y="388.0" text-anchor="middle" class="node-type">RECURSIVE · DO=1</text>
+  <text data-text-role="title" data-full-text="递归解析器（带 DO 查询）" data-text-max-width="223.0" x="1032.5" y="406.0" text-anchor="middle" class="node-title" font-size="17.38">递归解析器（带 DO 查询）</text>
+  </g>
+  <g id="node-check" data-graph-role="node" data-node-id="check" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="300,485,590,541">
+  <rect x="300.0" y="485.0" width="290.0" height="56.0" rx="14.0" fill="#ffffff" stroke="#dce5e3" stroke-width="1.8"/>
+  <text x="445.0" y="503.0" text-anchor="middle" class="node-type">VERIFY</text>
+  <text data-text-role="title" data-full-text="RRSIG.Verify 本地验签" data-text-max-width="266.0" x="445.0" y="519.0" text-anchor="middle" class="node-title" font-size="18">RRSIG.Verify 本地验签</text>
+  </g>
+  <g id="node-pass" data-graph-role="node" data-node-id="pass" data-semantic-role="double_rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="730,485,1020,541">
+  <rect x="730.0" y="485.0" width="290.0" height="56.0" rx="14.0" fill="#ffffff" stroke="#10a37f" stroke-width="2.0"/>
+  <rect x="736.0" y="491.0" width="278.0" height="44.0" rx="11.0" fill="none" stroke="#10a37f" stroke-width="1.2" opacity="0.65"/>
+  <text x="875.0" y="503.0" text-anchor="middle" class="node-type">RESULT</text>
+  <text data-text-role="title" data-full-text="验证通过 · 数据完整可信" data-text-max-width="258.0" x="875.0" y="519.0" text-anchor="middle" class="node-title" font-size="18">验证通过 · 数据完整可信</text>
+  </g>
+  <g id="ds-tld-label" data-graph-role="label" data-owner="ds-tld" data-graph-bounds="384.38,164,440.62,184">
+  <rect x="384.38" y="164.0" width="56.24" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="412.5" y="178.0" text-anchor="middle" class="arrow-label">DS 签发</text>
+  </g>
+  <g id="ds-auth-label" data-graph-role="label" data-owner="ds-auth" data-graph-bounds="772.28,164,877.72,184">
+  <rect x="772.28" y="164.0" width="105.44" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="825.0" y="178.0" text-anchor="middle" class="arrow-label">DS 指向下级 KEY</text>
+  </g>
+  <g id="pub-key-label" data-graph-role="label" data-owner="pub-key" data-graph-bounds="583.25,315,645.25,335">
+  <rect x="583.25" y="315.0" width="62.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="614.25" y="329.0" text-anchor="middle" class="arrow-label">发布密钥</text>
+  </g>
+  <g id="sign-label" data-graph-role="label" data-owner="sign" data-graph-bounds="933.5,441,995.5,461">
+  <rect x="933.5" y="441.0" width="62.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="964.5" y="455.0" text-anchor="middle" class="arrow-label">私钥签名</text>
+  </g>
+  <g id="fetch-key-label" data-graph-role="label" data-owner="fetch-key" data-graph-bounds="575.46,434,659.54,454">
+  <rect x="575.46" y="434.0" width="84.08" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="617.5" y="448.0" text-anchor="middle" class="arrow-label">取回 DNSKEY</text>
+  </g>
+  <g id="fetch-rr-label" data-graph-role="label" data-owner="fetch-rr" data-graph-bounds="789.64,378,863.64,398">
+  <rect x="789.64" y="378.0" width="74.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="826.64" y="392.0" text-anchor="middle" class="arrow-label">带签名应答</text>
+  </g>
+  <g id="a-check-label" data-graph-role="label" data-owner="a-check" data-graph-bounds="772.92,552,861.08,572">
+  <rect x="772.92" y="552.0" width="88.16" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="817.0" y="566.0" text-anchor="middle" class="arrow-label">RRSIG.Verify</text>
+  </g>
+  <g id="a-pass-label" data-graph-role="label" data-owner="a-pass" data-graph-bounds="629,482,691,502">
+  <rect x="629.0" y="482.0" width="62.0" height="20" rx="6" fill="#ffffff" opacity="0.96"/>
+  <text x="660.0" y="496.0" text-anchor="middle" class="arrow-label">验签通过</text>
+  </g>
+  <g id="legend" data-graph-role="legend">
+    <rect id="legend-zone" data-graph-role="reserved" data-reserved-kind="legend" x="32" y="516" width="183.6" height="90" rx="10" fill="none" stroke="none"/>
+    <line data-graph-role="decoration" x1="42.0" y1="530.0" x2="72.0" y2="530.0" stroke="#10a37f" stroke-width="2.0" marker-end="url(#arrowA)"/>
+    <text data-graph-role="decoration" x="82.0" y="534.0" class="legend">信任链 / 主验证路径</text>
+    <line data-graph-role="decoration" x1="42.0" y1="552.0" x2="72.0" y2="552.0" stroke="#0891b2" stroke-width="2.0" marker-end="url(#arrowC)"/>
+    <text data-graph-role="decoration" x="82.0" y="556.0" class="legend">数据获取</text>
+    <line data-graph-role="decoration" x1="42.0" y1="574.0" x2="72.0" y2="574.0" stroke="#0f766e" stroke-width="2.0" marker-end="url(#arrowB)"/>
+    <text data-graph-role="decoration" x="82.0" y="578.0" class="legend">权威侧写操作</text>
+  </g>
+  <g id="footer" data-graph-role="reserved" data-graph-bounds="48,613,391,629">
+  <text x="48.0" y="625.0" class="footnote">Style 7 · OpenAI Official · DNSSEC chain of trust</text>
+  </g>
+</svg>

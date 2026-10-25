@@ -1,0 +1,226 @@
+{
+  "schema_version": 1,
+  "mode": "architecture",
+  "template_type": "architecture",
+  "style": 7,
+  "quality_profile": "standard",
+  "width": 1240,
+  "height": 640,
+  "title": "DNSSEC 验证链与本地验签",
+  "subtitle": "DS 信任链自根向下逐级建立，递归侧以 DNSKEY 验证 RRset 签名",
+  "containers": [
+    {
+      "id": "trust",
+      "x": 40,
+      "y": 110,
+      "width": 1160,
+      "height": 150,
+      "label": "信任链 · 由根向下逐级签发",
+      "stroke": "#e2e8f0",
+      "fill": "none"
+    },
+    {
+      "id": "verify",
+      "x": 40,
+      "y": 310,
+      "width": 1160,
+      "height": 250,
+      "label": "递归解析侧 · 本地验签",
+      "stroke": "#e2e8f0",
+      "fill": "none"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "root",
+      "kind": "rect",
+      "x": 80,
+      "y": 165,
+      "width": 250,
+      "height": 60,
+      "type_label": "ROOT · 信任锚",
+      "label": "根 DNS（内置信任锚）",
+      "fill": "#ffffff",
+      "stroke": "#dce5e3",
+      "flat": true
+    },
+    {
+      "id": "tld",
+      "kind": "double_rect",
+      "x": 495,
+      "y": 165,
+      "width": 250,
+      "height": 60,
+      "type_label": "TLD · .top",
+      "label": "顶级 DNS（发布 DS）",
+      "fill": "#ffffff",
+      "stroke": "#10a37f"
+    },
+    {
+      "id": "auth",
+      "kind": "double_rect",
+      "x": 905,
+      "y": 165,
+      "width": 255,
+      "height": 60,
+      "type_label": "AUTHORITATIVE",
+      "label": "权威 DNS（发布 DNSKEY）",
+      "fill": "#ffffff",
+      "stroke": "#10a37f"
+    },
+    {
+      "id": "dnskey",
+      "kind": "rect",
+      "x": 80,
+      "y": 370,
+      "width": 250,
+      "height": 60,
+      "type_label": "DNSKEY",
+      "label": "KSK / ZSK 密钥",
+      "fill": "#ffffff",
+      "stroke": "#dce5e3",
+      "flat": true
+    },
+    {
+      "id": "rrset",
+      "kind": "rect",
+      "x": 495,
+      "y": 370,
+      "width": 250,
+      "height": 60,
+      "type_label": "RRSET + RRSIG",
+      "label": "记录数据与签名",
+      "fill": "#ffffff",
+      "stroke": "#dce5e3",
+      "flat": true
+    },
+    {
+      "id": "resolver",
+      "kind": "double_rect",
+      "x": 905,
+      "y": 370,
+      "width": 255,
+      "height": 60,
+      "type_label": "RECURSIVE · DO=1",
+      "label": "递归解析器（带 DO 查询）",
+      "fill": "#ffffff",
+      "stroke": "#1d4ed8"
+    },
+    {
+      "id": "check",
+      "kind": "rect",
+      "x": 300,
+      "y": 485,
+      "width": 290,
+      "height": 56,
+      "type_label": "VERIFY",
+      "label": "RRSIG.Verify 本地验签",
+      "fill": "#ffffff",
+      "stroke": "#dce5e3",
+      "flat": true
+    },
+    {
+      "id": "pass",
+      "kind": "double_rect",
+      "x": 730,
+      "y": 485,
+      "width": 290,
+      "height": 56,
+      "type_label": "RESULT",
+      "label": "验证通过 · 数据完整可信",
+      "fill": "#ffffff",
+      "stroke": "#10a37f"
+    }
+  ],
+  "arrows": [
+    {
+      "id": "ds-tld",
+      "source": "root",
+      "target": "tld",
+      "source_port": "right",
+      "target_port": "left",
+      "flow": "control",
+      "label": "DS 签发"
+    },
+    {
+      "id": "ds-auth",
+      "source": "tld",
+      "target": "auth",
+      "source_port": "right",
+      "target_port": "left",
+      "flow": "control",
+      "label": "DS 指向下级 KEY"
+    },
+    {
+      "id": "pub-key",
+      "source": "auth",
+      "target": "dnskey",
+      "source_port": "bottom",
+      "target_port": "top",
+      "flow": "write",
+      "label": "发布密钥"
+    },
+    {
+      "id": "sign",
+      "source": "auth",
+      "target": "rrset",
+      "source_port": "bottom",
+      "target_port": "top",
+      "flow": "write",
+      "label": "私钥签名"
+    },
+    {
+      "id": "fetch-key",
+      "source": "dnskey",
+      "target": "resolver",
+      "source_port": "right",
+      "target_port": "left",
+      "flow": "read",
+      "label": "取回 DNSKEY"
+    },
+    {
+      "id": "fetch-rr",
+      "source": "rrset",
+      "target": "resolver",
+      "source_port": "right",
+      "target_port": "left",
+      "flow": "read",
+      "label": "带签名应答"
+    },
+    {
+      "id": "a-check",
+      "source": "resolver",
+      "target": "check",
+      "source_port": "bottom",
+      "target_port": "top",
+      "flow": "control",
+      "label": "RRSIG.Verify"
+    },
+    {
+      "id": "a-pass",
+      "source": "check",
+      "target": "pass",
+      "source_port": "right",
+      "target_port": "left",
+      "flow": "control",
+      "label": "验签通过"
+    }
+  ],
+  "legend": [
+    {
+      "flow": "control",
+      "label": "信任链 / 主验证路径"
+    },
+    {
+      "flow": "read",
+      "label": "数据获取"
+    },
+    {
+      "flow": "write",
+      "label": "权威侧写操作"
+    }
+  ],
+  "footer": "Style 7 · OpenAI Official · DNSSEC chain of trust",
+  "footer_x": 48,
+  "footer_y": 625
+}

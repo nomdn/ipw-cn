@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index'
 import { Loading } from '@element-plus/icons-vue'
@@ -10,14 +10,40 @@ const route = useRoute()
 const url = ref('')
 
 useHead({
-  title: '网站截图工具 - '+(route.query.site || config.siteName),
+  // 原标题「网站截图工具 - 站名」默认态过短；描述不足 50 字被审计判过短，一并加长。
+  title: route.query.site
+    ? `网站截图工具 - ${route.query.site} 的网页快照 | ${config.siteName}`
+    : `网站截图工具 - 在线网页快照生成 | ${config.siteName}`,
   meta: [
-    { name: 'description', content: '在线网站截图工具，输入网址即可获取网页快照，支持所有公开网站的实时截图，方便查看网站布局和设计效果' },
-    { name: 'keywords', content: '网站截图,网页快照,在线截图,网页预览,网站布局查看,截图工具' },
-    { property: 'og:title', content: '网站截图工具 - 在线网页快照' },
-    { property: 'og:description', content: '输入网址即可获取网页快照，查看网站布局和设计效果' },
+    { name: 'description', content: '在线网站截图工具：输入网址即可获取网页实时快照，支持任意公开网站的整页截图与预览，查看网页布局、设计效果与渲染状态，可用于页面监控、设计走查与内容存档比对，免费无需注册' },
+    { name: 'keywords', content: '网站截图,网页快照,在线截图,网页预览,网站布局查看,截图工具,整页截图,网页快照生成' },
+    { property: 'og:title', content: '网站截图工具 - 在线网页快照生成' },
+    { property: 'og:description', content: '输入网址即可获取网页实时快照，查看网页布局与设计效果，支持任意公开网站，免费无需注册' },
     { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
     { property: 'og:type', content: 'website' },
+  ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebApplication',
+        name: '网站截图工具',
+        description: '在线网站截图工具，输入网址即可获取网页实时快照，支持任意公开网站的整页截图与预览。',
+        url: new URL('/screenshot', config.siteUrl).href,
+        applicationCategory: 'UtilitiesApplication',
+        operatingSystem: 'Web',
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'CNY'
+        },
+        provider: {
+          '@type': 'Organization',
+          name: config.siteName
+        }
+      })
+    }
   ]
 })
 
@@ -26,6 +52,8 @@ const loading = ref(false)
 const error = ref('')
 const screenshotUrl = ref('')
 const imgLoaded = ref(false)
+// 主通道（thum.io）经 fetch 下载后以 blob URL 喂给 <img>；换新截图前要 revoke 旧的
+const blobUrl = ref('')
 
 
 let detectionImg: HTMLImageElement | null = null
@@ -37,6 +65,45 @@ const userIP = ref('')
 const DEFAULT_MSHOTS_WIDTH = 1200
 const DEFAULT_MSHOTS_HEIGHT = 900
 const LOADING_TIMEOUT = 15000 // 15 seconds
+
+// —— 主通道：thum.io（同步出图、CORS 全开）——
+// content-type 即结果信号：image/png|jpeg = 成品；image/gif = thum.io 的
+// 「生成中/目标不可达」动画（对没缓存且生成慢的站首访可能出现）→ 等片刻重试一次，
+// 仍 GIF 就放弃。网络层失败（被墙/CSP/超时）→ 立即回退 mshots。
+const THUM_TIMEOUT = 10_000
+const THUM_RETRY_DELAY = 4_000
+
+async function takeThumio(target: string, requestId: number): Promise<string | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (requestId !== currentRequestId) return null
+    try {
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), THUM_TIMEOUT)
+      const res = await fetch(`${config.screenshotAPI}/get/width/1280/${target}`, { signal: ctrl.signal })
+      clearTimeout(timer)
+      if (requestId !== currentRequestId) return null
+      const type = res.headers.get('content-type') || ''
+      if (res.ok && /^image\/(png|jpe?g)\b/.test(type)) {
+        return URL.createObjectURL(await res.blob())
+      }
+      if (attempt === 0) {
+        await new Promise(r => setTimeout(r, THUM_RETRY_DELAY))
+        continue
+      }
+      return null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function releaseBlob() {
+  if (blobUrl.value) {
+    URL.revokeObjectURL(blobUrl.value)
+    blobUrl.value = ''
+  }
+}
 
 async function getUserIP(){
   try {
@@ -82,14 +149,31 @@ function takeScreenshot() {
   imgLoaded.value = false
   loading.value = true
   screenshotUrl.value = ''
+  releaseBlob()
 
   const requestId = ++currentRequestId
 
   // Set the screenshot URL on next tick so Vue can update the displayed <img>
-  nextTick(() => {
+  nextTick(async () => {
     // Check if this request was superseded
     if (requestId !== currentRequestId) return
 
+    // —— 主通道 thum.io：fetch 下载成 blob 直接展示（同步出图，无「请稍后」体验）——
+    const blob = await takeThumio(url.value, requestId)
+    if (requestId !== currentRequestId) {
+      if (blob) URL.revokeObjectURL(blob)
+      return
+    }
+    if (blob) {
+      blobUrl.value = blob
+      screenshotUrl.value = blob
+      // blob 已完整在手，无需等 <img> 的 load 事件再揭开
+      imgLoaded.value = true
+      loading.value = false
+      return
+    }
+
+    // —— 回退 mshots：异步生成，先重定向到占位图，需要隐藏 <img> 探测真伪 ——
     screenshotUrl.value = `https://s0.wp.com/mshots/v1/${encodeURIComponent(url.value)}`
 
     // Create a hidden detection image to check for default WordPress error image
@@ -152,6 +236,11 @@ function onImageLoad() {
 function onImageError() {
   showError('截图加载失败，请检查网址是否正确')
 }
+
+onBeforeUnmount(() => {
+  cleanupDetection()
+  releaseBlob()
+})
 
 onMounted(() => {
   const urlParam = route.query.site as string

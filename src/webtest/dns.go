@@ -21,8 +21,10 @@ import (
 var (
 	// dnsServers 普通 DNS 查询服务器列表（主从：第一个为主，主失败自动切换后续从服务器）
 	dnsServers = []string{"119.28.28.28:53"}
-	// dnssecServers DNSSEC 专用服务器列表（未配置时沿用 dnsServers）
-	dnssecServers []string
+	// dnssecServers DNSSEC 专用服务器列表：默认内置实测支持 DO 位的境外解析器
+	//（国内公共 DNS 带 DO 也不返回 RRSIG，普通解析回退会让验签永远失败，见 dnssec.go）。
+	// 网络屏蔽/劫持这些 UDP 53 时请配置 dnssec-server 指向可达的解析器。
+	dnssecServers = defaultDOCapableServers
 )
 
 // SetDNSServer 设置DNS服务器地址（逗号分隔多地址：第一个为主，主失败自动切换后续从服务器）。
@@ -328,14 +330,6 @@ func ReqResolveFromContext(ctx context.Context) ReqResolve {
 // queryDNS 普通 DNS 查询：使用配置的 dns-server（主从 failover，见 queryWithServers）。
 // resolveTyped 未收到请求级 servers 时走这里。
 func queryDNS(msg *dns.Msg) (*dns.Msg, error) {
-	return queryWithServers(msg, dnsServers)
-}
-
-// queryDNSSEC DNSSEC 查询：优先使用专用服务器（dnssec-server），未配置则沿用普通 dns-server
-func queryDNSSEC(msg *dns.Msg) (*dns.Msg, error) {
-	if len(dnssecServers) > 0 {
-		return queryWithServers(msg, dnssecServers)
-	}
 	return queryWithServers(msg, dnsServers)
 }
 

@@ -7,7 +7,6 @@ import (
 	"net"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"lemon-ipw/ssrf"
@@ -102,22 +101,24 @@ const whoisReferralTimeout = 3 * time.Second
 // QueryWhois 执行 WHOIS 查询并解析结构化数据
 // 主路径：likexian/whois 走「IANA → 注册局」两跳，**不追注册商转介**（转介由 chaseReferral 单独限时补），
 // 这样即便转介服务器不可达也只在 ~1s 内拿到注册局记录，不会干等满库的 30s 超时。
-// 兜底：主路径拿不到内容时才 fallback（内置 TLD 映射 → IANA 查服务器 → 自定义 DNS 解析 IP →
+// 兜底：主路径拿不到内容时才 fallback（内置 TLD 映射 → IANA 查服务器 → 系统解析器解析 IP →
 // Happy Eyeballs 双栈竞争拨号）。
-func QueryWhois(domain string, v4Servers, v6Servers []string) (*WhoisResult, error) {
-	raw, err := queryWhoisRegistry(domain, v4Servers, v6Servers)
+// whois 不走自定义 DNS（dns-server / 请求级 dns=）：whois 服务器是稳定的公共基础设施，
+// 解析结果只用于建立连接、不作为拨测结论，没必要让 DNS 配置的故障面波及 whois。
+func QueryWhois(domain string) (*WhoisResult, error) {
+	raw, err := queryWhoisRegistry(domain)
 
 	// 库在「连接成功但读失败」等场景会同时返回部分数据与错误，此时数据不能丢；
 	// 因此只在「内容为空」或「带错误」时让 fallback 再兜一次，并取内容更长的一方。
 	if err != nil || raw == "" {
-		if fb, fbErr := whoisRetryWithFallback(domain, err, v4Servers, v6Servers); len(fb) > len(raw) {
+		if fb, fbErr := whoisRetryWithFallback(domain, err); len(fb) > len(raw) {
 			raw, err = fb, fbErr
 		}
 	}
 
 	// 仅当注册局响应干净（err == nil）时才补查注册商转介
 	if err == nil && raw != "" {
-		if extra := chaseReferral(domain, raw, v4Servers, v6Servers); extra != "" {
+		if extra := chaseReferral(domain, raw); extra != "" {
 			raw += extra
 		}
 	}
@@ -129,63 +130,16 @@ func QueryWhois(domain string, v4Servers, v6Servers []string) (*WhoisResult, err
 
 // queryWhoisRegistry 走 IANA → 注册局两跳取注册局记录，关闭库的转介链
 // （转介改由 chaseReferral 限时补查，避免被不可达的转介服务器拖满 30s）
-func queryWhoisRegistry(domain string, v4Servers, v6Servers []string) (string, error) {
+func queryWhoisRegistry(domain string) (string, error) {
 	client := whois.NewClient().
 		SetDisableReferral(true).
 		SetTimeout(whoisLibTimeout)
-	// 请求级 DNS 覆盖：库默认走系统解析器，注入自定义拨号器改成走我们的 DNS
-	if len(v4Servers) > 0 || len(v6Servers) > 0 {
-		client.SetDialer(whoisResolveDialer{v4Servers: v4Servers, v6Servers: v6Servers})
-	}
 	return client.Whois(domain)
-}
-
-// whoisResolveDialer 实现 x/net/proxy.Dialer（结构体天然满足接口）：
-// likexian/whois 内部需要拨 whois 服务器时，先按请求级 DNS 解析成 IP 再拨，
-// 避免库退回系统解析器、绕过 dns=/dns4=/dns6= 覆盖。
-type whoisResolveDialer struct {
-	v4Servers, v6Servers []string
-}
-
-// Dial 优先 A（v4），失败再 AAAA（v6）——whois 服务器绝大多数只有 v4。
-func (d whoisResolveDialer) Dial(network, addr string) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, err
-	}
-	dialer := &net.Dialer{Timeout: whoisConnectTimeout}
-	if ip := net.ParseIP(host); ip != nil {
-		return dialer.Dial(network, addr)
-	}
-
-	var lastErr error
-	if aRes, aErr := ResolveARecord(host, d.v4Servers); aErr == nil && len(aRes.Record) > 0 {
-		if conn, err := dialer.Dial("tcp", net.JoinHostPort(aRes.Record[0], port)); err == nil {
-			return conn, nil
-		} else {
-			lastErr = err
-		}
-	} else if aErr != nil {
-		lastErr = aErr
-	}
-	if aaaaRes, aaaaErr := ResolveAAAARecord(host, d.v6Servers); aaaaErr == nil && len(aaaaRes.Record) > 0 {
-		if conn, err := dialer.Dial("tcp", net.JoinHostPort(aaaaRes.Record[0], port)); err == nil {
-			return conn, nil
-		} else if lastErr == nil {
-			lastErr = err
-		}
-	} else if aaaaErr != nil && lastErr == nil {
-		lastErr = aaaaErr
-	}
-	if lastErr == nil {
-		lastErr = fmt.Errorf("no IP found for whois server %s", host)
-	}
-	return nil, lastErr
 }
 
 // chaseReferral 从注册局响应里取出注册商转介服务器，限时补查一次
 // 任何失败（无转介 / 不可达 / 超时）都返回空串，绝不影响已到手的注册局数据
-func chaseReferral(domain, raw string, v4Servers, v6Servers []string) string {
+func chaseReferral(domain, raw string) string {
 	server, port := extractReferralServer(raw)
 	if server == "" {
 		return ""
@@ -195,7 +149,7 @@ func chaseReferral(domain, raw string, v4Servers, v6Servers []string) string {
 		return ""
 	}
 
-	v4IPs, v6IPs, err := resolveWhoisServerIPs(server, v4Servers, v6Servers)
+	v4IPs, v6IPs, err := resolveWhoisServerIPs(server)
 	if err != nil {
 		return ""
 	}
@@ -313,33 +267,29 @@ func filterPublicIPs(ips []string) []string {
 	return filtered
 }
 
-// resolveWhoisServerIPs 使用 webtest/dns 的统一解析接口
-// 并行查询 A + AAAA（走自定义 DNS 服务器，不受系统 resolver 策略影响）
-func resolveWhoisServerIPs(server string, v4Servers, v6Servers []string) (v4IPs, v6IPs []string, err error) {
-	var (
-		aResult   DNSResult
-		aaaaResult DNSResult
-		wg        sync.WaitGroup
-		aErr      error
-		aaaaErr   error
-	)
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		aResult, aErr = ResolveARecord(server, v4Servers)
-	}()
-	go func() {
-		defer wg.Done()
-		aaaaResult, aaaaErr = ResolveAAAARecord(server, v6Servers)
-	}()
-	wg.Wait()
-
-	if aErr != nil && aaaaErr != nil {
-		return nil, nil, fmt.Errorf("both A and AAAA DNS lookup failed for %s: A=%w, AAAA=%w", server, aErr, aaaaErr)
+// resolveWhoisServerIPs 用系统解析器（net.LookupIP）取 whois 服务器的 v4/v6 地址。
+// whois 不走自定义 DNS（dns-server / 请求级 dns=）：whois 服务器是稳定的公共基础设施，
+// 解析结果只用于建立连接、不作为拨测结论，没必要让 DNS 配置的故障面波及 whois。
+func resolveWhoisServerIPs(server string) (v4IPs, v6IPs []string, err error) {
+	ips, err := net.LookupIP(server)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	v4IPs = filterPublicIPs(aResult.Record)
-	v6IPs = filterPublicIPs(aaaaResult.Record)
+	var v4, v6 []string
+	for _, ip := range ips {
+		if ip == nil {
+			continue
+		}
+		if ip.To4() != nil {
+			v4 = append(v4, ip.String())
+		} else {
+			v6 = append(v6, ip.String())
+		}
+	}
+
+	v4IPs = filterPublicIPs(v4)
+	v6IPs = filterPublicIPs(v6)
 
 	if len(v4IPs) == 0 && len(v6IPs) == 0 {
 		return nil, nil, fmt.Errorf("no reachable public IPs for %s after SSRF filter", server)
@@ -419,7 +369,7 @@ func happyEyeballsWhoisQuery(parent context.Context, domain string, v4IPs, v6IPs
 }
 
 // whoisRetryWithFallback 在 whois.Whois 失败后，手动解析 WHOIS 服务器所有 IP 逐个尝试
-func whoisRetryWithFallback(domain string, firstErr error, v4Servers, v6Servers []string) (string, error) {
+func whoisRetryWithFallback(domain string, firstErr error) (string, error) {
 	ext := getExtension(domain)
 
 	// 解析 WHOIS 服务器地址（内置映射 + IANA fallback）
@@ -428,8 +378,8 @@ func whoisRetryWithFallback(domain string, firstErr error, v4Servers, v6Servers 
 		return "", firstErr
 	}
 
-	// 使用 ResolveA/AAAA（自定义 DNS）并行解析 v4/v6
-	v4IPs, v6IPs, err := resolveWhoisServerIPs(server, v4Servers, v6Servers)
+	// 系统解析器并行拿 v4/v6（whois 不走自定义 DNS）
+	v4IPs, v6IPs, err := resolveWhoisServerIPs(server)
 	if err != nil {
 		return "", firstErr
 	}

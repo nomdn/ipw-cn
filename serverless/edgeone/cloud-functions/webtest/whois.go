@@ -7,7 +7,6 @@ import (
 	"net"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"edgeone-cloud-functions/ssrf"
@@ -147,33 +146,29 @@ func filterPublicIPs(ips []string) []string {
 	return filtered
 }
 
-// resolveWhoisServerIPs 使用 webtest/dns 的统一解析接口
-// 并行查询 A + AAAA（走自定义 DNS 服务器，不受系统 resolver 策略影响）
+// resolveWhoisServerIPs 用系统解析器（net.LookupIP）取 whois 服务器的 v4/v6 地址。
+// whois 不走自定义 DNS（dns-server / 请求级 dns=）：whois 服务器是稳定的公共基础设施，
+// 解析结果只用于建立连接、不作为拨测结论，没必要让 DNS 配置的故障面波及 whois。
 func resolveWhoisServerIPs(server string) (v4IPs, v6IPs []string, err error) {
-	var (
-		aResult   DNSResult
-		aaaaResult DNSResult
-		wg        sync.WaitGroup
-		aErr      error
-		aaaaErr   error
-	)
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		aResult, aErr = ResolveARecord(server)
-	}()
-	go func() {
-		defer wg.Done()
-		aaaaResult, aaaaErr = ResolveAAAARecord(server)
-	}()
-	wg.Wait()
-
-	if aErr != nil && aaaaErr != nil {
-		return nil, nil, fmt.Errorf("both A and AAAA DNS lookup failed for %s: A=%w, AAAA=%w", server, aErr, aaaaErr)
+	ips, err := net.LookupIP(server)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	v4IPs = filterPublicIPs(aResult.Record)
-	v6IPs = filterPublicIPs(aaaaResult.Record)
+	var v4, v6 []string
+	for _, ip := range ips {
+		if ip == nil {
+			continue
+		}
+		if ip.To4() != nil {
+			v4 = append(v4, ip.String())
+		} else {
+			v6 = append(v6, ip.String())
+		}
+	}
+
+	v4IPs = filterPublicIPs(v4)
+	v6IPs = filterPublicIPs(v6)
 
 	if len(v4IPs) == 0 && len(v6IPs) == 0 {
 		return nil, nil, fmt.Errorf("no IPs resolved for %s", server)

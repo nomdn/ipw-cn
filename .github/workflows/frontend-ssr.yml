@@ -36,3 +36,12 @@ jobs:
           cd frontend-ssr
           pnpm install
           pnpm run deploy --keep-vars
+
+      # 部署成功后把 sitemap 全量提交给 IndexNow（Bing/Yandex/Seznam 等共用端点），
+      # 新页面/新文档以天级收录代替等爬虫回访。
+      # key 是公开所有权凭证（对应 frontend-ssr/public/<key>.txt，IndexNow 靠抓取它验证）。
+      - name: Submit sitemap to IndexNow
+        if: success()
+        run: |
+          cd frontend-ssr
+          node scripts/indexnow-submit.mjs --site https://nipw.cn --key d49c90fb2fb160cdd2cd4b09532bc380

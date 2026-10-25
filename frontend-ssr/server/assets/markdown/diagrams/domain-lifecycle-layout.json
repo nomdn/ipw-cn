@@ -1,0 +1,648 @@
+{
+  "canvas": {
+    "height": 880.0,
+    "width": 1240.0
+  },
+  "composition": {
+    "limits": {
+      "max_bends_per_edge": 4,
+      "max_bridged_crossings": 14,
+      "max_route_stretch": 5.0,
+      "max_total_bends": 30,
+      "min_container_gutter": 0.0,
+      "min_label_clearance": 2.0,
+      "min_node_gap": 0.0,
+      "min_segment_length": 0.0,
+      "profile": "standard"
+    },
+    "metrics": {
+      "bridged_crossings": 3,
+      "max_route_stretch": 2.625,
+      "minimum_container_gutter": 10.0,
+      "minimum_node_gap": 41.0,
+      "shortest_segment": 3.0,
+      "total_bends": 30
+    },
+    "ok": true,
+    "profile": "standard",
+    "score": 42,
+    "violations": []
+  },
+  "edges": [
+    {
+      "bends": 0,
+      "bridges": [],
+      "crossings": [],
+      "id": "a-reg",
+      "length": 110.0,
+      "route": [
+        [
+          270.0,
+          170.0
+        ],
+        [
+          380.0,
+          170.0
+        ]
+      ],
+      "route_stretch": 1.0,
+      "source": "available",
+      "source_port": [
+        270.0,
+        170.0
+      ],
+      "target": "addperiod",
+      "target_port": [
+        380.0,
+        170.0
+      ],
+      "waypoints": []
+    },
+    {
+      "bends": 2,
+      "bridges": [],
+      "crossings": [],
+      "id": "a-ok",
+      "length": 109.0,
+      "route": [
+        [
+          600.0,
+          170.0
+        ],
+        [
+          620.4,
+          170.0
+        ],
+        [
+          620.4,
+          179.0
+        ],
+        [
+          700.0,
+          179.0
+        ]
+      ],
+      "route_stretch": 1.0,
+      "source": "addperiod",
+      "source_port": [
+        600.0,
+        170.0
+      ],
+      "target": "active",
+      "target_port": [
+        700.0,
+        179.0
+      ],
+      "waypoints": []
+    },
+    {
+      "bends": 2,
+      "bridges": [],
+      "crossings": [],
+      "id": "a-hold-c",
+      "length": 95.0,
+      "route": [
+        [
+          910.0,
+          152.0
+        ],
+        [
+          930.4,
+          152.0
+        ],
+        [
+          930.4,
+          137.0
+        ],
+        [
+          990.0,
+          137.0
+        ]
+      ],
+      "route_stretch": 1.0,
+      "source": "active",
+      "source_port": [
+        910.0,
+        152.0
+      ],
+      "target": "clienthold",
+      "target_port": [
+        990.0,
+        137.0
+      ],
+      "waypoints": []
+    },
+    {
+      "bends": 2,
+      "bridges": [],
+      "crossings": [],
+      "id": "a-hold-s",
+      "length": 142.0,
+      "route": [
+        [
+          910.0,
+          170.0
+        ],
+        [
+          930.4,
+          170.0
+        ],
+        [
+          930.4,
+          232.0
+        ],
+        [
+          990.0,
+          232.0
+        ]
+      ],
+      "route_stretch": 1.0,
+      "source": "active",
+      "source_port": [
+        910.0,
+        170.0
+      ],
+      "target": "serverhold",
+      "target_port": [
+        990.0,
+        232.0
+      ],
+      "waypoints": []
+    },
+    {
+      "bends": 2,
+      "bridges": [],
+      "crossings": [],
+      "id": "a-renew",
+      "length": 189.0,
+      "route": [
+        [
+          787.0,
+          200.0
+        ],
+        [
+          787.0,
+          220.4
+        ],
+        [
+          796.0,
+          220.4
+        ],
+        [
+          796.0,
+          380.0
+        ]
+      ],
+      "route_stretch": 1.0,
+      "source": "active",
+      "source_port": [
+        787.0,
+        200.0
+      ],
+      "target": "renewperiod",
+      "target_port": [
+        796.0,
+        380.0
+      ],
+      "waypoints": []
+    },
+    {
+      "bends": 4,
+      "bridges": [],
+      "crossings": [],
+      "id": "a-renew-back",
+      "length": 195.0,
+      "route": [
+        [
+          814.0,
+          380.0
+        ],
+        [
+          814.0,
+          359.6
+        ],
+        [
+          817.0,
+          359.6
+        ],
+        [
+          817.0,
+          220.4
+        ],
+        [
+          805.0,
+          220.4
+        ],
+        [
+          805.0,
+          200.0
+        ]
+      ],
+      "route_stretch": 1.032,
+      "source": "renewperiod",
+      "source_port": [
+        814.0,
+        380.0
+      ],
+      "target": "active",
+      "target_port": [
+        805.0,
+        200.0
+      ],
+      "waypoints": []
+    },
+    {
+      "bends": 3,
+      "bridges": [
+        [
+          692.86,
+          179.0
+        ]
+      ],
+      "crossings": [
+        [
+          692.86,
+          179.0
+        ]
+      ],
+      "id": "a-expire",
+      "length": 409.0,
+      "route": [
+        [
+          700.0,
+          161.0
+        ],
+        [
+          692.86,
+          161.0
+        ],
+        [
+          692.86,
+          224.0
+        ],
+        [
+          510.0,
+          224.0
+        ],
+        [
+          510.0,
+          380.0
+        ]
+      ],
+      "route_stretch": 1.0,
+      "source": "active",
+      "source_port": [
+        700.0,
+        161.0
+      ],
+      "target": "autorenew",
+      "target_port": [
+        510.0,
+        380.0
+      ],
+      "waypoints": []
+    },
+    {
+      "bends": 0,
+      "bridges": [],
+      "crossings": [],
+      "id": "a-no-pay",
+      "length": 120.0,
+      "route": [
+        [
+          510.0,
+          440.0
+        ],
+        [
+          510.0,
+          560.0
+        ]
+      ],
+      "route_stretch": 1.0,
+      "source": "autorenew",
+      "source_port": [
+        510.0,
+        440.0
+      ],
+      "target": "redemption",
+      "target_port": [
+        510.0,
+        560.0
+      ],
+      "waypoints": []
+    },
+    {
+      "bends": 0,
+      "bridges": [],
+      "crossings": [],
+      "id": "a-redemption-end",
+      "length": 70.0,
+      "route": [
+        [
+          380.0,
+          590.0
+        ],
+        [
+          310.0,
+          590.0
+        ]
+      ],
+      "route_stretch": 1.0,
+      "source": "redemption",
+      "source_port": [
+        380.0,
+        590.0
+      ],
+      "target": "pendingdelete",
+      "target_port": [
+        310.0,
+        590.0
+      ],
+      "waypoints": []
+    },
+    {
+      "bends": 4,
+      "bridges": [],
+      "crossings": [],
+      "id": "a-release",
+      "length": 341.2,
+      "route": [
+        [
+          190.0,
+          620.0
+        ],
+        [
+          190.0,
+          640.4
+        ],
+        [
+          305.6,
+          640.4
+        ],
+        [
+          305.6,
+          732.86
+        ],
+        [
+          200.0,
+          732.86
+        ],
+        [
+          200.0,
+          740.0
+        ]
+      ],
+      "route_stretch": 2.625,
+      "source": "pendingdelete",
+      "source_port": [
+        190.0,
+        620.0
+      ],
+      "target": "released",
+      "target_port": [
+        200.0,
+        740.0
+      ],
+      "waypoints": []
+    },
+    {
+      "bends": 4,
+      "bridges": [],
+      "crossings": [],
+      "id": "a-transfer",
+      "length": 292.0,
+      "route": [
+        [
+          910.0,
+          188.0
+        ],
+        [
+          930.0,
+          188.0
+        ],
+        [
+          930.0,
+          356.0
+        ],
+        [
+          959.6,
+          356.0
+        ],
+        [
+          959.6,
+          410.0
+        ],
+        [
+          980.0,
+          410.0
+        ]
+      ],
+      "route_stretch": 1.0,
+      "source": "active",
+      "source_port": [
+        910.0,
+        188.0
+      ],
+      "target": "pendingtransfer",
+      "target_port": [
+        980.0,
+        410.0
+      ],
+      "waypoints": []
+    },
+    {
+      "bends": 3,
+      "bridges": [],
+      "crossings": [],
+      "id": "a-transfer-done",
+      "length": 561.8,
+      "route": [
+        [
+          1080.0,
+          440.0
+        ],
+        [
+          1080.0,
+          464.0
+        ],
+        [
+          679.6,
+          464.0
+        ],
+        [
+          679.6,
+          581.0
+        ],
+        [
+          700.0,
+          581.0
+        ]
+      ],
+      "route_stretch": 1.078,
+      "source": "pendingtransfer",
+      "source_port": [
+        1080.0,
+        440.0
+      ],
+      "target": "transferperiod",
+      "target_port": [
+        700.0,
+        581.0
+      ],
+      "waypoints": []
+    },
+    {
+      "bends": 4,
+      "bridges": [
+        [
+          787.0,
+          200.0
+        ],
+        [
+          805.0,
+          200.0
+        ]
+      ],
+      "crossings": [
+        [
+          787.0,
+          200.0
+        ],
+        [
+          805.0,
+          200.0
+        ]
+      ],
+      "id": "a-transfer-ok",
+      "length": 570.0,
+      "route": [
+        [
+          700.0,
+          599.0
+        ],
+        [
+          676.0,
+          599.0
+        ],
+        [
+          676.0,
+          230.4
+        ],
+        [
+          700.0,
+          230.4
+        ],
+        [
+          700.0,
+          200.0
+        ],
+        [
+          823.0,
+          200.0
+        ],
+        [
+          823.0,
+          200.0
+        ]
+      ],
+      "route_stretch": 1.092,
+      "source": "transferperiod",
+      "source_port": [
+        700.0,
+        599.0
+      ],
+      "target": "active",
+      "target_port": [
+        823.0,
+        200.0
+      ],
+      "waypoints": []
+    }
+  ],
+  "input_schema": "v1",
+  "issues": [
+    {
+      "code": "EDGE_CROSSING_BRIDGED",
+      "coordinates": [
+        [
+          692.86,
+          179.0
+        ]
+      ],
+      "element": "a-expire",
+      "severity": "info"
+    },
+    {
+      "code": "EDGE_CROSSING_BRIDGED",
+      "coordinates": [
+        [
+          787.0,
+          200.0
+        ],
+        [
+          805.0,
+          200.0
+        ]
+      ],
+      "element": "a-transfer-ok",
+      "severity": "info"
+    }
+  ],
+  "mode": "architecture",
+  "ok": true,
+  "palette": {
+    "below_target": [],
+    "minimum_target": 4.5,
+    "ratios": {
+      "section_sub_fill": 4.76,
+      "text_muted": 4.76,
+      "text_primary": 17.85,
+      "text_secondary": 7.58
+    },
+    "scope": "default opaque canvas text tokens; not a full rendered accessibility audit",
+    "unsupported_tokens": []
+  },
+  "placements": {
+    "legend": {
+      "actual": [
+        42.0,
+        698.0
+      ],
+      "bounds": [
+        32.0,
+        684.0,
+        305.6,
+        730.0
+      ],
+      "moved": true,
+      "requested": [
+        42.0,
+        798.0
+      ]
+    }
+  },
+  "schema_version": 1,
+  "semantics": {
+    "details": {},
+    "ok": true,
+    "profile": "generic",
+    "style": 7,
+    "visual_theme": "OpenAI"
+  },
+  "style": {
+    "id": 7,
+    "name": "OpenAI"
+  },
+  "summary": {
+    "bridged_crossings": 3,
+    "edges": 13,
+    "nodes": 12
+  },
+  "text_metrics": "heuristic-v1",
+  "typography": {
+    "complete_text": true,
+    "hint": null,
+    "metrics": "heuristic widths; inspect the actual rendered font",
+    "truncated": []
+  }
+}

@@ -3,9 +3,11 @@ package ipdb
 import (
 	"archive/zip"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,7 +22,63 @@ type downloadTask struct {
 	name string
 }
 
+// dbValidator 条件请求凭证（ETag / Last-Modified）：日更同步时只有真变了的文件
+// 才会重新下载，没变的 304 直接跳过——原实现每 24h 无条件全量重拉 450MB。
+// 凭证与「已解压到工作目录的最终文件」绑定，持久化在 ipdb-etags.json。
+type dbValidator struct {
+	ETag         string `json:"etag,omitempty"`
+	LastModified string `json:"last_modified,omitempty"`
+}
+
+const validatorsFile = "ipdb-etags.json"
+
+// pullMu 串行化下载（后台首次补齐与每日同步理论上不重叠，但配置面手动触发
+// 之类的新入口将来出现时，这里保证不会两个 PullDatabase 互踩同一个 tmp 目录）
+var pullMu sync.Mutex
+
+func loadValidators() map[string]dbValidator {
+	m := make(map[string]dbValidator)
+	data, err := os.ReadFile(validatorsFile)
+	if err != nil {
+		return m
+	}
+	_ = json.Unmarshal(data, &m)
+	return m
+}
+
+func saveValidators(m map[string]dbValidator) {
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		slog.Warn("failed to marshal db validators", "error", err)
+		return
+	}
+	if err := os.WriteFile(validatorsFile, data, 0o644); err != nil {
+		slog.Warn("failed to write db validators", "error", err)
+	}
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+// finalFileName 计算下载产物的最终文件名（.gz / .zip 会被解掉，后缀大小写不敏感——
+// IP2LOCATION 的资产名是大写 .ZIP）
+func finalFileName(name string) string {
+	lower := strings.ToLower(name)
+	if strings.HasSuffix(lower, ".gz") {
+		return name[:len(name)-3]
+	}
+	if strings.HasSuffix(lower, ".zip") {
+		return name[:len(name)-4]
+	}
+	return name
+}
+
 func PullDatabase(ghproxy string) error {
+	pullMu.Lock()
+	defer pullMu.Unlock()
+
 	tasks := []downloadTask{
 		{"https://cdn.jsdelivr.net/gh/ljxi/GeoCN@main/data/full.txt", "full.txt"},
 		{"https://cdn.jsdelivr.net/gh/ljxi/GeoCN@main/data/short.txt", "short.txt"},
@@ -43,15 +101,34 @@ func PullDatabase(ghproxy string) error {
 		return err
 	}
 
+	// 条件请求凭证：只在「最终文件还在本地」时才有意义——304 的语义是
+	// 「服务器上和你手里这份一样」，本地文件没了就必须整份重下。
+	validators := loadValidators()
+	newValidators := make(map[string]dbValidator, len(tasks))
+	for k, v := range validators {
+		newValidators[k] = v
+	}
+
 	slog.Info("Starting parallel downloads...", "count", len(tasks))
 
 	var wg sync.WaitGroup
 	errs := make([]error, len(tasks))
+	notModified := make([]bool, len(tasks))
 	for i, t := range tasks {
 		wg.Add(1)
 		go func(i int, t downloadTask) {
 			defer wg.Done()
-			errs[i] = downloadWithRetry(t.url, t.name)
+			val := validators[t.name]
+			if !fileExists("./" + finalFileName(t.name)) {
+				val = dbValidator{}
+			}
+			nv, skip, err := downloadWithRetry(t, val)
+			errs[i] = err
+			notModified[i] = skip
+			if err == nil {
+				newValidators[t.name] = nv
+			}
+			// 失败的文件保留旧凭证：本地旧版本文件仍在，下次可继续走条件请求
 		}(i, t)
 	}
 	wg.Wait()
@@ -69,6 +146,11 @@ func PullDatabase(ghproxy string) error {
 		if errs[i] != nil {
 			// 下载失败（含传输中断留下的残缺文件）不覆盖现有数据库
 			slog.Warn("Skipping failed download, keep existing file", "file", t.name)
+			continue
+		}
+		if notModified[i] {
+			// 304：本地文件就是最新版，无需覆盖也不必解压
+			slog.Info("Unchanged since last sync, skipped", "file", t.name)
 			continue
 		}
 		src := filepath.Join(tmpDir, t.name)
@@ -103,6 +185,7 @@ func PullDatabase(ghproxy string) error {
 	}
 
 	os.RemoveAll(tmpDir)
+	saveValidators(newValidators)
 
 	if failCount > 0 {
 		slog.Error("Some downloads failed", "failed", failCount)
@@ -113,36 +196,57 @@ func PullDatabase(ghproxy string) error {
 	return nil
 }
 
-func downloadWithRetry(url, name string) error {
+// downloadWithRetry 带重试的条件下载。返回 (新凭证, 是否 304 跳过, 错误)。
+//
+// 超时 10 分钟：这是**整个请求**（含响应体下载）的超时，GeoLite2-City 这类几十 MB
+// 的大文件需要持续 ~1Mbps 以上才能在 10 分钟内完成；原实现的 60s 在慢链路上
+// 会让大文件 3 次重试全部超时失败。
+func downloadWithRetry(t downloadTask, val dbValidator) (dbValidator, bool, error) {
 	const maxRetries = 3
-	client := resty.New().SetTimeout(60 * time.Second).SetOutputDirectory("./tmp")
+	client := resty.New().SetTimeout(10 * time.Minute).SetOutputDirectory("./tmp")
 	defer client.Close()
 
 	var lastErr error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		slog.Info("Downloading...", "file", name, "attempt", attempt)
+		slog.Info("Downloading...", "file", t.name, "attempt", attempt)
 
-		resp, err := client.R().SetOutputFileName(name).SetSaveResponse(true).Get(url)
+		req := client.R().SetOutputFileName(t.name).SetSaveResponse(true)
+		if val.ETag != "" {
+			req.SetHeader("If-None-Match", val.ETag)
+		}
+		if val.LastModified != "" {
+			req.SetHeader("If-Modified-Since", val.LastModified)
+		}
+
+		resp, err := req.Get(t.url)
 		if err != nil {
 			lastErr = fmt.Errorf("request failed: %w", err)
-			slog.Warn("Download attempt failed", "file", name, "attempt", attempt, "error", err)
+			slog.Warn("Download attempt failed", "file", t.name, "attempt", attempt, "error", err)
 			// 传输中断会在输出文件里留下残缺内容，删掉避免被当作下载成功覆盖现有数据库
-			os.Remove(filepath.Join("./tmp", name))
+			os.Remove(filepath.Join("./tmp", t.name))
 			time.Sleep(time.Duration(attempt) * time.Second)
 			continue
+		}
+		if resp.StatusCode() == http.StatusNotModified {
+			slog.Info("Not modified since last sync", "file", t.name)
+			return val, true, nil
 		}
 		if resp.IsError() {
 			lastErr = fmt.Errorf("HTTP %d", resp.StatusCode())
-			slog.Warn("Download attempt failed", "file", name, "attempt", attempt, "status", resp.StatusCode())
-			os.Remove(filepath.Join("./tmp", name))
+			slog.Warn("Download attempt failed", "file", t.name, "attempt", attempt, "status", resp.StatusCode())
+			os.Remove(filepath.Join("./tmp", t.name))
 			time.Sleep(time.Duration(attempt) * time.Second)
 			continue
 		}
 
-		slog.Info("Downloaded", "file", name)
-		return nil
+		nv := dbValidator{
+			ETag:         resp.Header().Get("ETag"),
+			LastModified: resp.Header().Get("Last-Modified"),
+		}
+		slog.Info("Downloaded", "file", t.name)
+		return nv, false, nil
 	}
-	return lastErr
+	return val, false, lastErr
 }
 
 func copyFile(src, dst string) error {

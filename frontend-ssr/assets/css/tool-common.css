@@ -236,6 +236,30 @@ html.dark pre code {
   max-width: 200px;
 }
 
+/* —— 行内换行自适应（容器查询）——
+   .one-line 里的输入框/按钮是固定宽度，容器放不下时 flex 只换行不改宽，
+   出现「换行了却不铺满」的夹缝态：换行点 ~605px（input 420 + 按钮 165 + 间距）、
+   铺满点 768px（下方媒体查询断点），手机视口直接落在断点内看不出来，
+   桌面缩窗在 768~换行点之间全是夹缝。容器查询补齐：容器低于行内容的
+   自然换行点 ⇒ 换行的元素铺满整行。阈值略高于换行点保证无缝衔接；
+   行内容更宽的页面（tcping 双输入框 1035px、dns 带 select 765px）
+   在各自 scoped 样式里用同名容器再写一条更高阈值的规则。 */
+.one-line {
+  container-type: inline-size;
+}
+
+@container (max-width: 615px) {
+  .el-input,
+  .el-button {
+    width: 100% !important;
+    margin-right: 0 !important;
+  }
+
+  .el-input {
+    margin-bottom: 10px;
+  }
+}
+
 /* 窄屏响应式：所有组件缩小 */
 @media (max-width: 768px) {
   .el-input,

@@ -226,12 +226,8 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 		if raw == "" {
 			return 400, map[string]string{"error": "Domain parameter is required"}
 		}
-		req, err := webtest.ParseReqResolve(func(k string) string { return query[k] })
-		if err != nil {
-			return 400, map[string]string{"error": err.Error()}
-		}
-		// 缓存键带上请求级 DNS 覆盖（结果取决于所用服务器，参数不同不能共用）
-		cacheKey := raw + req.CacheKey()
+		// whois 不走请求级 DNS 覆盖（见 webtest.QueryWhois 注释），缓存键就是域名本身
+		cacheKey := raw
 		if cached, ok := whoisCache.Load(cacheKey); ok {
 			entry := cached.(whoisCacheEntry)
 			if time.Since(entry.timestamp) < cacheTTL(entry.failed) {
@@ -239,7 +235,7 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 			}
 			whoisCache.Delete(cacheKey)
 		}
-		result, err := webtest.QueryWhois(raw, req.Servers("ipv4"), req.Servers("ipv6"))
+		result, err := webtest.QueryWhois(raw)
 		if err != nil {
 			return 500, map[string]string{"error": err.Error()}
 		}

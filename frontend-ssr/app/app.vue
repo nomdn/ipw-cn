@@ -124,15 +124,70 @@ function updateViewport() {
   nextTick(fixDividerTabindex)
 }
 let umamiScript: HTMLScriptElement | null = null
+
+// ==================== 全站级 SEO 兜底 ====================
+// 以下标签对每一页生效，页面级 useHead 不必再重复声明（index/whois 原有的
+// canonical / og:url / twitter:card 已上收到这里，避免 head 出现两条 canonical）。
+//
+// canonical 按纯路径（不含 query）：工具页普遍接受 ?ip= / ?site= 等参数，
+// 同一内容会以无限多组 query 变体出现，SEO 审计由此判定「sitemap 缺少重要页面」；
+// 统一收敛到裸路径，爬虫就不会把 ?ip=x 当独立页面收录。
+const siteOrigin = config.siteUrl.endsWith('/') ? config.siteUrl : config.siteUrl + '/'
+const canonicalUrl = computed(() => new URL(route.path, siteOrigin).href)
+// 站点级结构化数据（WebSite + Organization）：给搜索引擎的实体锚点，
+// 各工具页的 WebApplication 与文档页的 BreadcrumbList 通过 url 与之关联。
+const siteJsonLd = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebSite',
+      '@id': siteOrigin + '#website',
+      name: config.siteName,
+      alternateName: 'Lemon IPW',
+      url: siteOrigin,
+      inLanguage: 'zh-CN',
+      description: '专业IP查询与网络测试工具平台：IPv4/IPv6地址查询、归属地定位、网站测速、DNS解析、SSL证书检测、TCPing、Whois查询。'
+    },
+    {
+      '@type': 'Organization',
+      '@id': siteOrigin + '#organization',
+      name: config.siteName,
+      url: siteOrigin,
+      logo: siteOrigin + 'favicon.svg',
+      sameAs: ['https://github.com/nomdn/ipw-cn']
+    }
+  ]
+})
 useHead({
+  // 页面没写 title 时的兜底（正常页面各自已带完整标题）
+  titleTemplate: (title?: string) => title || config.siteName,
+  link: [
+    { rel: 'canonical', href: canonicalUrl },
+  ],
   meta: config.noindex
     ? [
         { name: 'robots', content: 'noindex, nofollow' },
         { name: 'googlebot', content: 'noindex, nofollow' },
         { name: 'bingbot', content: 'noindex, nofollow' },
-        { name:'baidu-site-verification', content: 'codeva-xzdbvF8gQu'}
+        { name:'baidu-site-verification', content: 'codeva-xzdbvF8gQu'},
+        { property: 'og:url', content: canonicalUrl },
+        { property: 'og:site_name', content: config.siteName },
+        { property: 'og:locale', content: 'zh_CN' },
+        { name: 'twitter:card', content: 'summary_large_image' },
       ]
-    : [{ name:'baidu-site-verification', content: 'codeva-xzdbvF8gQu'}],
+    : [
+        { name:'baidu-site-verification', content: 'codeva-xzdbvF8gQu'},
+        { property: 'og:url', content: canonicalUrl },
+        { property: 'og:site_name', content: config.siteName },
+        { property: 'og:locale', content: 'zh_CN' },
+        { name: 'twitter:card', content: 'summary_large_image' },
+      ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: siteJsonLd,
+    }
+  ]
 });
 onMounted(() => {
   mediaQueryList = window.matchMedia('(max-width: 768px)');
@@ -318,6 +373,8 @@ onMounted(() => {
   </div>
   </footer>
 
+  <!-- 全站文档图片灯箱：委托拦截 .markdown / .markdown-body 内的图片点击 -->
+  <ImageLightbox />
 </template>
 <style scoped>
 @import "~/style.css";

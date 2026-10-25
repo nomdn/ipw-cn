@@ -28,3 +28,8 @@ setting.json
 
 # 本地调试脚本与实测产物（不入库，与 ipw-boce 的约定一致）
 tmp-smoke/
+
+# Agent 工具产物（本机技能安装/会话状态，不入库）
+.agents/
+.zcode/
+skills-lock.json

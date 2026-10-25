@@ -63,6 +63,7 @@ interface SSLCheckItem {
   issuer_organization: string[] | null
   issuer_common_name: string
   subject_common_name: string
+  san: string[] | null
   is_expired: boolean
   is_reachable: boolean
 }
@@ -76,6 +77,13 @@ const testDomain = ref('')
 const loading = ref(false)
 const error = ref('')
 const result = ref<SSLCheckResponse | null>(null)
+// SAN 行只在「至少一个栈拿到非空 SAN」时渲染：两栈都空（节点未升级返回无 san 字段、
+// 或证书本就没有 SAN）时整行隐藏，而不是渲染一行「- -」
+const showSanRow = computed(() => {
+  const r = result.value
+  if (!r) return false
+  return !!((r.ipv4?.is_reachable && r.ipv4.san?.length) || (r.ipv6?.is_reachable && r.ipv6.san?.length))
+})
 // 高级选项（dns4/dns6 + resolve/resolve4/resolve6）：本页一次探测两栈
 const adv = ref<InstanceType<typeof AdvancedOptions> | null>(null)
 const sslUrl = computed(() => withQuery("/middleware/" + backendID.value + "/ssl/" + encodeURIComponent(testDomain.value), adv.value?.query() ?? {}));
@@ -206,6 +214,17 @@ onMounted(() => {
             </td>
             <td class="table-value">
               <template v-if="result.ipv6 && result.ipv6.is_reachable">{{ result.ipv6.subject_common_name || '-' }}</template>
+              <span v-else>-</span>
+            </td>
+          </tr>
+          <tr v-if="showSanRow">
+            <td class="table-label">SAN（备用域名）</td>
+            <td class="table-value">
+              <template v-if="result.ipv4!.is_reachable && result.ipv4!.san?.length">{{ result.ipv4!.san.join(', ') }}</template>
+              <span v-else>-</span>
+            </td>
+            <td class="table-value">
+              <template v-if="result.ipv6 && result.ipv6.is_reachable && result.ipv6.san?.length">{{ result.ipv6.san.join(', ') }}</template>
               <span v-else>-</span>
             </td>
           </tr>

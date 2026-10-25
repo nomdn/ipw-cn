@@ -10,20 +10,19 @@ import { isIPv6 } from 'is-ip'
 const route = useRoute()
 
 useHead({
-  title: 'Whois查询 | ' + (route.query.site || config.siteName),
+  // 原标题「Whois查询 | 站名」只有十几个字符，被 SEO 审计判为过短；
+  // 带查询参数时展示的是具体域名，单独给一个含关键词的标题。
+  title: route.query.site
+    ? `Whois查询结果 - ${route.query.site} 的域名注册信息 | ${config.siteName}`
+    : `Whois域名查询工具 | 域名注册信息与到期时间查询 | ${config.siteName}`,
   titleTemplate: '%s',
-  link: [
-    { rel: 'canonical', href: computed(() => new URL(route.path, config.siteUrl).toString()).value }
-  ],
   meta: [
-    { name: 'description', content: '专业的Whois域名查询工具,支持.com、.net等国内外域名WHOIS信息查询,提供域名注册商、注册时间、到期时间、DNS服务器等详细信息,助力域名管理和交易决策' },
+    { name: 'description', content: '专业的Whois域名查询工具,支持.com、.net、.cn等国内外域名WHOIS信息在线查询,提供域名注册商、注册时间、到期时间、DNS服务器、域名状态等详细信息,支持IPv4/IPv6多节点检测,助力域名管理与交易决策' },
     { name: 'keywords', content: 'whois查询,域名whois,whois信息查询,域名注册信息,域名到期时间,域名注册商,dns服务器查询,域名whois工具' },
     { property: 'og:title', content: 'Whois域名查询工具 - 域名注册信息在线查询' },
     { property: 'og:description', content: '专业的Whois域名查询工具,支持国内外域名WHOIS信息查询,提供域名注册商、注册时间、到期时间等详细信息' },
     { property: 'og:image', content: `${config.siteUrl}favicon.svg` },
     { property: 'og:type', content: 'website' },
-    { property: 'og:url', content: computed(() => new URL(route.path, config.siteUrl).toString()).value },
-    { name: 'twitter:card', content: 'summary_large_image' },
   ],
   script: [
     {
@@ -293,6 +292,11 @@ function getStatusClass(status: string): string {
   color: #299764 !important;
   font-size: 1.3em;
   text-decoration: none
+}
+/* 1240px 宽的生命周期图需缩进内容列，桌面端也要约束 */
+.markdown :deep(img) {
+  height: auto;
+  max-width: 100%;
 }
 @media (max-width: 768px) {
   .markdown :deep(a) {
