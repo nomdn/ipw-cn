@@ -647,9 +647,9 @@ func Init(ghproxy string) {
 		localOK = false
 	}
 
-	if localOK {
-		slog.Info("All databases loaded from local files")
-	} else {
+	// localOK 只代表「可加载的库」齐了；坐标表这类增强文件缺失不降级 SearchIP，
+	// 但也不该等 24h 后的日同步——任务清单里任何目标文件缺了都立即补齐
+	if !localOK || missingTaskFiles() {
 		slog.Info("Some databases missing, downloading in background (serving degraded results meanwhile)")
 		go func() {
 			if err := PullDatabase(ghproxy); err != nil {
@@ -658,6 +658,8 @@ func Init(ghproxy string) {
 			reloadAll()
 			slog.Info("Background database initialization completed")
 		}()
+	} else {
+		slog.Info("All databases loaded from local files")
 	}
 
 	// 每日同步：PullDatabase 内部带条件请求（ETag/Last-Modified），文件没变的

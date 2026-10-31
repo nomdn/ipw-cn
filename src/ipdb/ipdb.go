@@ -78,11 +78,10 @@ func finalFileName(name string) string {
 	return name
 }
 
-func PullDatabase(ghproxy string) error {
-	pullMu.Lock()
-	defer pullMu.Unlock()
-
-	tasks := []downloadTask{
+// downloadTasks 节点要拉取的全部文件及其镜像链（PullDatabase 的任务清单，
+// Init 的缺文件检查也用它——两处必须看到同一份清单）。
+func downloadTasks(ghproxy string) []downloadTask {
+	return []downloadTask{
 		// full/short.txt（GeoCN 行政区划）：主通道与其他文件统一走 ghproxy+raw
 		// 加速（注意 raw 的分支是路径段，不带 @；jsdelivr 的 @main 写法在 raw 上是 404）。
 		// jsdelivr 系（含 fastly/gcore 镜像）降为兜底——国内移动网络下会被 RST，
@@ -117,6 +116,25 @@ func PullDatabase(ghproxy string) error {
 		{[]string{ghproxy + "https://github.com/nomdn/ip2location/releases/latest/download/IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP"}, "IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP"},
 		{[]string{ghproxy + "https://github.com/nomdn/ip2location/releases/latest/download/IP2LOCATION-LITE-ASN.IPV6.BIN.zip"}, "IP2LOCATION-LITE-ASN.IPV6.BIN.zip"},
 	}
+}
+
+// missingTaskFiles 检查下载任务的目标文件是否在工作目录齐全。
+// Init 的 localOK 只看「可加载的库」，坐标表这类增强文件缺失不影响加载成功——
+// 只看 localOK 会把补齐拖到 24h 后的日同步，这里按任务清单逐一核对。
+func missingTaskFiles() bool {
+	for _, t := range downloadTasks("") {
+		if !fileExists("./" + finalFileName(t.name)) {
+			return true
+		}
+	}
+	return false
+}
+
+func PullDatabase(ghproxy string) error {
+	pullMu.Lock()
+	defer pullMu.Unlock()
+
+	tasks := downloadTasks(ghproxy)
 
 	tmpDir := "./tmp"
 	os.RemoveAll(tmpDir)
