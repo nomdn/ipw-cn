@@ -18,7 +18,10 @@ import (
 )
 
 type downloadTask struct {
-	url  string
+	// urls 镜像列表，按优先级依次尝试。full.txt/short.txt 原来只走
+	// cdn.jsdelivr.net——国内移动网络下 v4/v6 都被 RST（其余走 ghproxy 的
+	// 文件全通），GeoCN 的行政区划数据随之永久缺失，故补齐镜像。
+	urls []string
 	name string
 }
 
@@ -80,18 +83,32 @@ func PullDatabase(ghproxy string) error {
 	defer pullMu.Unlock()
 
 	tasks := []downloadTask{
-		{"https://cdn.jsdelivr.net/gh/ljxi/GeoCN@main/data/full.txt", "full.txt"},
-		{"https://cdn.jsdelivr.net/gh/ljxi/GeoCN@main/data/short.txt", "short.txt"},
-		{ghproxy + "https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v4.xdb", "ip2region_v4.xdb"},
-		{ghproxy + "https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v6.xdb", "ip2region_v6.xdb"},
-		{ghproxy + "https://raw.githubusercontent.com/nmgliangwei/qqwry.ipdb/main/qqwry.ipdb", "qqwry.ipdb"},
-		{ghproxy + "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb", "GeoLite2-City.mmdb"},
-		{ghproxy + "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb", "GeoLite2-ASN.mmdb"},
-		{ghproxy + "https://github.com/ljxi/GeoCN/releases/latest/download/GeoCN.mmdb", "GeoCN.mmdb"},
-		{ghproxy + "https://raw.githubusercontent.com/wp-statistics/DbIP-City-lite/master/dbip-city-lite.mmdb.gz", "dbip-city-lite.mmdb.gz"},
-		{ghproxy + "https://github.com/jcjc-dev/mmdb-latest/releases/download/dbip-latest/dbip-asn-lite.mmdb", "dbip-asn-lite.mmdb"},
-		{ghproxy + "https://github.com/nomdn/ip2location/releases/latest/download/IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP", "IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP"},
-		{ghproxy + "https://github.com/nomdn/ip2location/releases/latest/download/IP2LOCATION-LITE-ASN.IPV6.BIN.zip", "IP2LOCATION-LITE-ASN.IPV6.BIN.zip"},
+		// full/short.txt（GeoCN 行政区划）：主通道与其他文件统一走 ghproxy+raw
+		// 加速（注意 raw 的分支是路径段，不带 @；jsdelivr 的 @main 写法在 raw 上是 404）。
+		// jsdelivr 系（含 fastly/gcore 镜像）降为兜底——国内移动网络下会被 RST，
+		// 但海外节点可达。实测主通道 65KB 秒回，兜底仅在主通道故障时启用。
+		{[]string{
+			ghproxy + "https://raw.githubusercontent.com/ljxi/GeoCN/main/data/full.txt",
+			"https://cdn.jsdelivr.net/gh/ljxi/GeoCN@main/data/full.txt",
+			"https://fastly.jsdelivr.net/gh/ljxi/GeoCN@main/data/full.txt",
+			"https://gcore.jsdelivr.net/gh/ljxi/GeoCN@main/data/full.txt",
+		}, "full.txt"},
+		{[]string{
+			ghproxy + "https://raw.githubusercontent.com/ljxi/GeoCN/main/data/short.txt",
+			"https://cdn.jsdelivr.net/gh/ljxi/GeoCN@main/data/short.txt",
+			"https://fastly.jsdelivr.net/gh/ljxi/GeoCN@main/data/short.txt",
+			"https://gcore.jsdelivr.net/gh/ljxi/GeoCN@main/data/short.txt",
+		}, "short.txt"},
+		{[]string{ghproxy + "https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v4.xdb"}, "ip2region_v4.xdb"},
+		{[]string{ghproxy + "https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v6.xdb"}, "ip2region_v6.xdb"},
+		{[]string{ghproxy + "https://raw.githubusercontent.com/nmgliangwei/qqwry.ipdb/main/qqwry.ipdb"}, "qqwry.ipdb"},
+		{[]string{ghproxy + "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-City.mmdb"}, "GeoLite2-City.mmdb"},
+		{[]string{ghproxy + "https://github.com/P3TERX/GeoLite.mmdb/raw/download/GeoLite2-ASN.mmdb"}, "GeoLite2-ASN.mmdb"},
+		{[]string{ghproxy + "https://github.com/ljxi/GeoCN/releases/latest/download/GeoCN.mmdb"}, "GeoCN.mmdb"},
+		{[]string{ghproxy + "https://raw.githubusercontent.com/wp-statistics/DbIP-City-lite/master/dbip-city-lite.mmdb.gz"}, "dbip-city-lite.mmdb.gz"},
+		{[]string{ghproxy + "https://github.com/jcjc-dev/mmdb-latest/releases/download/dbip-latest/dbip-asn-lite.mmdb"}, "dbip-asn-lite.mmdb"},
+		{[]string{ghproxy + "https://github.com/nomdn/ip2location/releases/latest/download/IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP"}, "IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP"},
+		{[]string{ghproxy + "https://github.com/nomdn/ip2location/releases/latest/download/IP2LOCATION-LITE-ASN.IPV6.BIN.zip"}, "IP2LOCATION-LITE-ASN.IPV6.BIN.zip"},
 	}
 
 	tmpDir := "./tmp"
@@ -144,8 +161,13 @@ func PullDatabase(ghproxy string) error {
 	slog.Info("Copying downloaded files to working directory...")
 	for i, t := range tasks {
 		if errs[i] != nil {
-			// 下载失败（含传输中断留下的残缺文件）不覆盖现有数据库
-			slog.Warn("Skipping failed download, keep existing file", "file", t.name)
+			// 下载失败（含传输中断留下的残缺文件）不覆盖现有数据库。
+			// 本地确实有旧文件 → 继续用它；连旧文件都没有 → 明确说数据库会降级
+			if fileExists("./" + finalFileName(t.name)) {
+				slog.Warn("Download failed, keep existing local copy", "file", t.name)
+			} else {
+				slog.Warn("Download failed and no local copy exists, related DB stays degraded until next sync", "file", t.name)
+			}
 			continue
 		}
 		if notModified[i] {
@@ -196,55 +218,59 @@ func PullDatabase(ghproxy string) error {
 	return nil
 }
 
-// downloadWithRetry 带重试的条件下载。返回 (新凭证, 是否 304 跳过, 错误)。
+// downloadWithRetry 带镜像轮试与重试的条件下载。返回 (新凭证, 是否 304 跳过, 错误)。
 //
+// 镜像轮试：urls 按优先级依次尝试，每个镜像最多 2 次（首次 + 一次快速重试），
+// 全部镜像失败后整轮再来一轮——单个镜像被墙/抖动不再拖死整个文件。
 // 超时 10 分钟：这是**整个请求**（含响应体下载）的超时，GeoLite2-City 这类几十 MB
 // 的大文件需要持续 ~1Mbps 以上才能在 10 分钟内完成；原实现的 60s 在慢链路上
-// 会让大文件 3 次重试全部超时失败。
+// 会让重试全部超时失败。
 func downloadWithRetry(t downloadTask, val dbValidator) (dbValidator, bool, error) {
-	const maxRetries = 3
+	const attemptsPerMirror = 2
 	client := resty.New().SetTimeout(10 * time.Minute).SetOutputDirectory("./tmp")
 	defer client.Close()
 
 	var lastErr error
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		slog.Info("Downloading...", "file", t.name, "attempt", attempt)
+	for _, u := range t.urls {
+		for attempt := 1; attempt <= attemptsPerMirror; attempt++ {
+			slog.Info("Downloading...", "file", t.name, "url", u, "attempt", attempt)
 
-		req := client.R().SetOutputFileName(t.name).SetSaveResponse(true)
-		if val.ETag != "" {
-			req.SetHeader("If-None-Match", val.ETag)
-		}
-		if val.LastModified != "" {
-			req.SetHeader("If-Modified-Since", val.LastModified)
-		}
+			req := client.R().SetOutputFileName(t.name).SetSaveResponse(true)
+			if val.ETag != "" {
+				req.SetHeader("If-None-Match", val.ETag)
+			}
+			if val.LastModified != "" {
+				req.SetHeader("If-Modified-Since", val.LastModified)
+			}
 
-		resp, err := req.Get(t.url)
-		if err != nil {
-			lastErr = fmt.Errorf("request failed: %w", err)
-			slog.Warn("Download attempt failed", "file", t.name, "attempt", attempt, "error", err)
-			// 传输中断会在输出文件里留下残缺内容，删掉避免被当作下载成功覆盖现有数据库
-			os.Remove(filepath.Join("./tmp", t.name))
-			time.Sleep(time.Duration(attempt) * time.Second)
-			continue
-		}
-		if resp.StatusCode() == http.StatusNotModified {
-			slog.Info("Not modified since last sync", "file", t.name)
-			return val, true, nil
-		}
-		if resp.IsError() {
-			lastErr = fmt.Errorf("HTTP %d", resp.StatusCode())
-			slog.Warn("Download attempt failed", "file", t.name, "attempt", attempt, "status", resp.StatusCode())
-			os.Remove(filepath.Join("./tmp", t.name))
-			time.Sleep(time.Duration(attempt) * time.Second)
-			continue
-		}
+			resp, err := req.Get(u)
+			if err != nil {
+				lastErr = fmt.Errorf("request failed: %w", err)
+				slog.Warn("Download attempt failed", "file", t.name, "url", u, "attempt", attempt, "error", err)
+				// 传输中断会在输出文件里留下残缺内容，删掉避免被当作下载成功覆盖现有数据库
+				os.Remove(filepath.Join("./tmp", t.name))
+				time.Sleep(time.Duration(attempt) * time.Second)
+				continue
+			}
+			if resp.StatusCode() == http.StatusNotModified {
+				slog.Info("Not modified since last sync", "file", t.name)
+				return val, true, nil
+			}
+			if resp.IsError() {
+				lastErr = fmt.Errorf("HTTP %d", resp.StatusCode())
+				slog.Warn("Download attempt failed", "file", t.name, "url", u, "attempt", attempt, "status", resp.StatusCode())
+				os.Remove(filepath.Join("./tmp", t.name))
+				time.Sleep(time.Duration(attempt) * time.Second)
+				continue
+			}
 
-		nv := dbValidator{
-			ETag:         resp.Header().Get("ETag"),
-			LastModified: resp.Header().Get("Last-Modified"),
+			nv := dbValidator{
+				ETag:         resp.Header().Get("ETag"),
+				LastModified: resp.Header().Get("Last-Modified"),
+			}
+			slog.Info("Downloaded", "file", t.name, "url", u)
+			return nv, false, nil
 		}
-		slog.Info("Downloaded", "file", t.name)
-		return nv, false, nil
 	}
 	return val, false, lastErr
 }
