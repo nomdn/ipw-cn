@@ -93,8 +93,8 @@ const UserIP = ref('');
 const error = ref('')
 
 // —— 归属地地图：高德瓦片（GCJ-02）+ Leaflet，免 key ——
-// 每个有坐标的来源各画一个点（bilibili 坐标已是 GCJ-02 直接用；
-// maxmind / ip2location 为 WGS84 → 转 GCJ-02 与底图对齐），
+// 每个有坐标的来源各画一个点（bilibili / geocn 坐标已是 GCJ-02 直接用；
+// maxmind / ip2location / dbip 为 WGS84 → 转 GCJ-02 与底图对齐），
 // 多点同时展示可直观看出各库定位的差异与离散度。
 const mapContainer = ref<HTMLElement | null>(null)
 let mapInstance: any = null
@@ -105,6 +105,7 @@ const SOURCE_DEFS = [
   { key: 'maxmind_city', lat: 'latitude', lng: 'longitude', gcj: false, label: 'MaxMind', color: '#1d4ed8' },
   { key: 'ip2location', lat: 'latitude', lng: 'longitude', gcj: false, label: 'IP2Location', color: '#f97316' },
   { key: 'dbip_city', lat: 'latitude', lng: 'longitude', gcj: false, label: 'DB-IP', color: '#8b5cf6' },
+  { key: 'geocn', lat: 'latitude', lng: 'longitude', gcj: true, label: 'GeoCN', color: '#0ea5e9' },
 ]
 
 const mapPoints = computed(() => {

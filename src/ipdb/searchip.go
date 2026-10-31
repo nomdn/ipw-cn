@@ -2,6 +2,8 @@ package ipdb
 
 import (
 	"bufio"
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math/rand"
@@ -20,6 +22,23 @@ import (
 	"golang.org/x/sync/singleflight"
 	"resty.dev/v3"
 )
+
+// division-coords.json：GB/T 2260 六位区划代码 → 政府驻地 [lng, lat]（GCJ-02），
+// 数据来自 AreaCity-JsSpider-StatsGov（高德采集，随版本更新可重新生成）。
+// 供 GeoCN 按区划代码打出"政府驻地"坐标点。
+//
+//go:embed division-coords.json
+var divisionCoordsRaw string
+
+// divisionCoords 编译期内建，避免运行时读盘
+var divisionCoords = func() map[string][2]float64 {
+	m := make(map[string][2]float64)
+	if err := json.Unmarshal([]byte(divisionCoordsRaw), &m); err != nil {
+		slog.Error("failed to parse division-coords.json", "error", err)
+		return make(map[string][2]float64)
+	}
+	return m
+}()
 
 var (
 	ip2region     *service.Ip2Region
@@ -88,6 +107,10 @@ type GeoCNResult struct {
 	Region       string `json:"administrative_area,omitempty"`
 	City         string `json:"city,omitempty"`
 	District     string `json:"district,omitempty"`
+	// 政府驻地坐标（GCJ-02，按 division_code 查内置对照表）；
+	// 缺表/新设区划查不到时不输出坐标字段
+	Latitude  float64 `json:"latitude,omitempty"`
+	Longitude float64 `json:"longitude,omitempty"`
 }
 
 type BilibiliIPQueryResponse struct {
@@ -477,6 +500,11 @@ func searchGeoCN(ip string) (*GeoCNResult, error) {
 		result.Region = province
 		result.City = city
 		result.District = district
+		// 政府驻地打点：按区划代码查内置对照表（GCJ-02），供前端地图与 GeoCN 打点
+		if c, ok := divisionCoords[strconv.Itoa(code)]; ok {
+			result.Longitude = c[0]
+			result.Latitude = c[1]
+		}
 	}
 
 	return result, nil
