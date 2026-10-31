@@ -54,6 +54,8 @@ interface IPLocationType {
   maxmind_asn?: any;
   maxmind_city?: any;
   qqwry?: any;
+  ipwhois?: any;
+  ipapi?: any;
   [key: string]: any;
 }
 const code = `
@@ -94,7 +96,7 @@ const error = ref('')
 
 // —— 归属地地图：高德瓦片（GCJ-02）+ Leaflet，免 key ——
 // 每个有坐标的来源各画一个点（bilibili / geocn 坐标已是 GCJ-02 直接用；
-// maxmind / ip2location / dbip 为 WGS84 → 转 GCJ-02 与底图对齐），
+// maxmind / ip2location / dbip / ipwhois / ipapi 为 WGS84 → 转 GCJ-02 与底图对齐），
 // 多点同时展示可直观看出各库定位的差异与离散度。
 const mapContainer = ref<HTMLElement | null>(null)
 let mapInstance: any = null
@@ -106,6 +108,8 @@ const SOURCE_DEFS = [
   { key: 'ip2location', lat: 'latitude', lng: 'longitude', gcj: false, label: 'IP2Location', color: '#f97316' },
   { key: 'dbip_city', lat: 'latitude', lng: 'longitude', gcj: false, label: 'DB-IP', color: '#8b5cf6' },
   { key: 'geocn', lat: 'latitude', lng: 'longitude', gcj: true, label: 'GeoCN', color: '#0ea5e9' },
+  { key: 'ipwhois', lat: 'latitude', lng: 'longitude', gcj: false, label: 'IpWho.is', color: '#d946ef' },
+  { key: 'ipapi', lat: 'latitude', lng: 'longitude', gcj: false, label: 'ip-api', color: '#eab308' },
 ]
 
 const mapPoints = computed(() => {
@@ -309,6 +313,16 @@ onMounted(async () => {
                 <td class="table-value">{{ IPLocation.dbip_city?.country }}&nbsp;{{ IPLocation.dbip_city?.administrative_area }}&nbsp;{{ IPLocation.dbip_city?.city }}</td>
                 <td class="table-value">{{IPLocation.dbip_asn?.org}}</td>
               </tr>
+              <tr v-if="IPLocation.ipwhois && (IPLocation.ipwhois.administrative_area || IPLocation.ipwhois.city)">
+                <td class="table-label">IpWho.is</td>
+                <td class="table-value">{{ IPLocation.ipwhois?.country }}&nbsp;{{ IPLocation.ipwhois?.administrative_area }}&nbsp;{{ IPLocation.ipwhois?.city }}</td>
+                <td class="table-value">{{ IPLocation.ipwhois?.isp }}&nbsp;{{ IPLocation.ipwhois?.asn }}</td>
+              </tr>
+              <tr v-if="IPLocation.ipapi && (IPLocation.ipapi.administrative_area || IPLocation.ipapi.city)">
+                <td class="table-label">ip-api</td>
+                <td class="table-value">{{ IPLocation.ipapi?.country }}&nbsp;{{ IPLocation.ipapi?.administrative_area }}&nbsp;{{ IPLocation.ipapi?.city }}</td>
+                <td class="table-value">{{ IPLocation.ipapi?.isp }}&nbsp;{{ IPLocation.ipapi?.asn }}</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -324,7 +338,8 @@ onMounted(async () => {
       中国大陆:BiliBili Live > GeoCN > IP2Region > 纯真社区库 > Maxmind GEOLite2 City ≈ DB-IP<br>
       中国大陆 IPv6 地址: BiliBili Live > GeoCN > IP2Region > Maxmind GEOLite2 City ≈ DB-IP > 纯真社区库<br>
       境外及港澳台地址: Maxmind GEOLite2 City ≈ DB-IP > BiliBili Live >  > IP2Region > 纯真社区库<br>
-      
+      补充参考: IpWho.is ≈ ip-api（MaxMind 系数据，中国大陆地址省级参考，境外可到市级）<br>
+
       手机默认开启 IPv6，宽带开启 IPv6 请自行搜索<br>
       访客IP: {{UserIP}}，<span v-if="isIPv4(UserIP)">您的网络IPv4优先</span><span v-else-if="isIPv6(UserIP)">您的网络IPv6优先</span>
     </blockquote>

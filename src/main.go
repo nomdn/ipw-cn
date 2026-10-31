@@ -1622,6 +1622,7 @@ func sweepExpiredCaches() {
 	sweep(&asnWhoisCache)
 	sweep(&locationCache)
 	ipdb.SweepBilibiliCache()
+	ipdb.SweepRemoteGeoCache()
 }
 
 // buildFiberConfig 组装 Fiber 应用配置。
