@@ -133,6 +133,10 @@ async function renderLocationMap() {
     L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
       subdomains: ['1', '2', '3', '4'],
       maxZoom: 18,
+      // 高德栅格瓦片原生层级上限约 17：部分区域（尤其县乡）z=18 会返回纯米色
+      // "无数据"空瓦片。声明 maxNativeZoom 后，Leaflet 对更高缩放自动放大
+      // 17 级瓦片（轻度模糊但绝不变空白）。
+      maxNativeZoom: 17,
       attribution: '&copy; <a href="https://www.amap.com/" target="_blank" rel="noreferrer">高德地图</a>',
     }).addTo(mapInstance)
   }
