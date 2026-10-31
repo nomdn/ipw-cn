@@ -99,6 +99,13 @@ func PullDatabase(ghproxy string) error {
 			"https://fastly.jsdelivr.net/gh/ljxi/GeoCN@main/data/short.txt",
 			"https://gcore.jsdelivr.net/gh/ljxi/GeoCN@main/data/short.txt",
 		}, "short.txt"},
+		// division-coords.json（区划代码→政府驻地坐标，GCJ-02）：自有数据仓的
+		// release 资产，tag 跟随 AreaCity 数据版本，releases/latest 恒指最新。
+		// releases/download 本身直连可用，ghproxy 作为国内兜底。
+		{[]string{
+			"https://github.com/nomdn/division-coords/releases/latest/download/division-coords.json",
+			ghproxy + "https://github.com/nomdn/division-coords/releases/latest/download/division-coords.json",
+		}, "division-coords.json"},
 		{[]string{ghproxy + "https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v4.xdb"}, "ip2region_v4.xdb"},
 		{[]string{ghproxy + "https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v6.xdb"}, "ip2region_v6.xdb"},
 		{[]string{ghproxy + "https://raw.githubusercontent.com/nmgliangwei/qqwry.ipdb/main/qqwry.ipdb"}, "qqwry.ipdb"},

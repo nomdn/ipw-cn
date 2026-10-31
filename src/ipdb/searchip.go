@@ -2,7 +2,6 @@ package ipdb
 
 import (
 	"bufio"
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -15,46 +14,45 @@ import (
 	"sync"
 	"time"
 
-	ipdbgo "github.com/ipipdotnet/ipdb-go"
 	"github.com/ip2location/ip2location-go/v9"
+	ipdbgo "github.com/ipipdotnet/ipdb-go"
 	"github.com/lionsoul2014/ip2region/binding/golang/service"
 	maxminddb "github.com/oschwald/maxminddb-golang/v2"
 	"golang.org/x/sync/singleflight"
 	"resty.dev/v3"
 )
 
-// division-coords.json：GB/T 2260 六位区划代码 → 政府驻地 [lng, lat]（GCJ-02），
-// 数据来自 AreaCity-JsSpider-StatsGov（高德采集，随版本更新可重新生成）。
-// 供 GeoCN 按区划代码打出"政府驻地"坐标点。
-//
-//go:embed division-coords.json
-var divisionCoordsRaw string
-
-// divisionCoords 编译期内建，避免运行时读盘
-var divisionCoords = func() map[string][2]float64 {
-	m := make(map[string][2]float64)
-	if err := json.Unmarshal([]byte(divisionCoordsRaw), &m); err != nil {
-		slog.Error("failed to parse division-coords.json", "error", err)
-		return make(map[string][2]float64)
+// loadDivisionCoords 读区划代码→政府驻地坐标表（GB/T 2260 六位 → [lng, lat]，
+// GCJ-02）。数据来自 nomdn/division-coords 仓的 release（源：AreaCity 的
+// ok_geo.csv，tag 跟随其数据版本），随节点下载任务落到工作目录，与 full.txt 同批重载。
+func loadDivisionCoords(path string) (map[string][2]float64, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
 	}
-	return m
-}()
+	m := make(map[string][2]float64)
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
 
 var (
-	ip2region     *service.Ip2Region
-	ip2regionMu   sync.RWMutex
-	ip2locDB      *ip2location.DB
-	ip2locMu      sync.RWMutex
-	ip2locASNDB   *ip2location.DB
-	ip2locASNMu   sync.RWMutex
-	qqwryDB       *ipdbgo.City
-	qqwryMu       sync.RWMutex
-	mmdbDBs       map[string]*maxminddb.Reader
-	mmdbMu        sync.RWMutex
-	divisionFull  map[int]string
-	divisionShort map[int]string
-	divisionMu    sync.RWMutex
-	bilibiliCache sync.Map
+	ip2region      *service.Ip2Region
+	ip2regionMu    sync.RWMutex
+	ip2locDB       *ip2location.DB
+	ip2locMu       sync.RWMutex
+	ip2locASNDB    *ip2location.DB
+	ip2locASNMu    sync.RWMutex
+	qqwryDB        *ipdbgo.City
+	qqwryMu        sync.RWMutex
+	mmdbDBs        map[string]*maxminddb.Reader
+	mmdbMu         sync.RWMutex
+	divisionFull   map[int]string
+	divisionShort  map[int]string
+	divisionCoords map[string][2]float64
+	divisionMu     sync.RWMutex
+	bilibiliCache  sync.Map
 	// bilibiliGroup 同一 IP 的并发未命中合并为一次上游调用（SearchIP 之外
 	// 定时任务/多 handler 并发触达同一 IP 时，避免重复打 B 站 API）
 	bilibiliGroup singleflight.Group
@@ -203,7 +201,18 @@ func loadDivisionData() error {
 	divisionShort = newShort
 	divisionMu.Unlock()
 
-	slog.Info("division data loaded", "full", len(newFull), "short", len(newShort))
+	// 坐标表是 GeoCN 打点的增强数据：缺文件/坏 JSON 只少坐标，不影响区划名解析，
+	// 故不随 full/short 一起 return err
+	newCoords, err := loadDivisionCoords("division-coords.json")
+	if err != nil {
+		slog.Warn("failed to load division-coords.json", "error", err)
+	} else {
+		divisionMu.Lock()
+		divisionCoords = newCoords
+		divisionMu.Unlock()
+	}
+
+	slog.Info("division data loaded", "full", len(newFull), "short", len(newShort), "coords", len(newCoords))
 	return nil
 }
 
@@ -500,8 +509,11 @@ func searchGeoCN(ip string) (*GeoCNResult, error) {
 		result.Region = province
 		result.City = city
 		result.District = district
-		// 政府驻地打点：按区划代码查内置对照表（GCJ-02），供前端地图与 GeoCN 打点
-		if c, ok := divisionCoords[strconv.Itoa(code)]; ok {
+		// 政府驻地打点：按区划代码查坐标表（GCJ-02），缺表/新设区划查不到时省略坐标
+		divisionMu.RLock()
+		c, ok := divisionCoords[strconv.Itoa(code)]
+		divisionMu.RUnlock()
+		if ok {
 			result.Longitude = c[0]
 			result.Latitude = c[1]
 		}
