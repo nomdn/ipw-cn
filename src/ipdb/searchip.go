@@ -595,230 +595,6 @@ func SweepBilibiliCache() {
 	})
 }
 
-// ============ 免费远程归属地源：ipwho.is / ip-api.com ============
-// 进货标准（2026-10 实测，江苏宿迁移动双栈出口）：免费、免 key、IPv6 可查、省份不判错。
-// 两家同为 MaxMind 系数据：ipwho.is 实测 v4 可精确到宿迁市级并附带 ASN/ISP/邮编
-// （字段为英文，无中文本地化）；ip-api.com 免费版支持 zh-CN 但仅 HTTP、限 45 次/分钟
-// （每 IP），作可用性互备——同源数据不指望结果互补，只求一家故障时另一家顶上。
-// 未进货的候选：百度 opendata 6006（v6 返回空数据）、pconline ipJson（v6 静默回落
-// 调用方 IP，报错都算它良心）、新浪 iplookup（停服）、cip.cc（v6 404）、
-// api.ip.sb / freeipapi（v6 无响应）。国内免费接口对 IPv6 的支持普遍不达标。
-
-// RemoteGeoResult 输出字段与 bilibili / maxmind_city 对齐；asn/org 供展示，
-// 正式 ASN 段仍以 maxmind_asn / dbip_asn 为准。
-type RemoteGeoResult struct {
-	Country     string  `json:"country"`
-	CountryCode string  `json:"country_code,omitempty"`
-	Region      string  `json:"administrative_area"`
-	City        string  `json:"city"`
-	ISP         string  `json:"isp"`
-	ASN         string  `json:"asn,omitempty"`
-	Org         string  `json:"org,omitempty"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
-	Postal      string  `json:"postal,omitempty"`
-}
-
-var (
-	remoteGeoCache sync.Map // "ipwhois:<ip>" / "ipapi:<ip>" → remoteGeoCacheEntry
-	remoteGeoGroup singleflight.Group
-	// remoteGeoClient 两源共享一个客户端，连接池跨查询复用（理由同 bilibiliClient）
-	remoteGeoClient = resty.New().SetTimeout(10 * time.Second)
-)
-
-type remoteGeoCacheEntry struct {
-	result    *RemoteGeoResult
-	errMsg    string // 非空 = 负缓存（上游失败），TTL 远短于正缓存
-	timestamp time.Time
-}
-
-func (e remoteGeoCacheEntry) ttl() time.Duration {
-	if e.errMsg != "" {
-		return time.Minute
-	}
-	return 24 * time.Hour
-}
-
-func (e remoteGeoCacheEntry) err() error {
-	if e.errMsg == "" {
-		return nil
-	}
-	return fmt.Errorf("%s", e.errMsg)
-}
-
-func searchRemoteGeo(source, ip string) (*RemoteGeoResult, error) {
-	if net.ParseIP(ip) == nil {
-		// 非法 IP 是纯内存判断，不进缓存也不打上游
-		return nil, fmt.Errorf("invalid IP address: %s", ip)
-	}
-	key := source + ":" + ip
-	if e, ok := loadRemoteGeoEntry(key); ok {
-		return e.result, e.err()
-	}
-	v, _, _ := remoteGeoGroup.Do(key, func() (any, error) {
-		// singleflight 等待期间可能已被同 key 的前一个请求填进缓存
-		if e, ok := loadRemoteGeoEntry(key); ok {
-			return e, nil
-		}
-		var e remoteGeoCacheEntry
-		if source == "ipwhois" {
-			e = fetchIpWhoIs(ip)
-		} else {
-			e = fetchIpApi(ip)
-		}
-		remoteGeoCache.Store(key, e)
-		return e, nil
-	})
-	e := v.(remoteGeoCacheEntry)
-	return e.result, e.err()
-}
-
-func loadRemoteGeoEntry(key string) (remoteGeoCacheEntry, bool) {
-	if cached, ok := remoteGeoCache.Load(key); ok {
-		e := cached.(remoteGeoCacheEntry)
-		if time.Since(e.timestamp) < e.ttl() {
-			return e, true
-		}
-		remoteGeoCache.Delete(key)
-	}
-	return remoteGeoCacheEntry{}, false
-}
-
-func fetchIpWhoIs(ip string) remoteGeoCacheEntry {
-	var raw struct {
-		Success     bool    `json:"success"`
-		Message     string  `json:"message"`
-		Country     string  `json:"country"`
-		CountryCode string  `json:"country_code"`
-		Region      string  `json:"region"`
-		City        string  `json:"city"`
-		Postal      string  `json:"postal"`
-		Latitude    float64 `json:"latitude"`
-		Longitude   float64 `json:"longitude"`
-		Connection  struct {
-			ASN int64  `json:"asn"`
-			Org string `json:"org"`
-			ISP string `json:"isp"`
-		} `json:"connection"`
-	}
-	// 手动 Unmarshal 而非 resty SetResult：后者在本进程内出现过「HTTP 200 且
-	// body 正确但结构体未填充」的灵异现象，探针无法复现，不再依赖其自动解码
-	resp, err := remoteGeoClient.R().
-		Get("https://ipwho.is/" + ip)
-	if err != nil {
-		return remoteGeoCacheEntry{errMsg: err.Error(), timestamp: time.Now()}
-	}
-	if err := json.Unmarshal(resp.Bytes(), &raw); err != nil {
-		return remoteGeoCacheEntry{errMsg: fmt.Sprintf("HTTP %d, decode: %s", resp.StatusCode(), err), timestamp: time.Now()}
-	}
-	if resp.IsError() {
-		return remoteGeoCacheEntry{errMsg: fmt.Sprintf("HTTP %d", resp.StatusCode()), timestamp: time.Now()}
-	}
-	if !raw.Success {
-		msg := raw.Message
-		if msg == "" {
-			msg = fmt.Sprintf("unexpected response (HTTP %d, CT %s): %.200s",
-				resp.StatusCode(), resp.Header().Get("Content-Type"), resp.String())
-		}
-		return remoteGeoCacheEntry{errMsg: msg, timestamp: time.Now()}
-	}
-	return remoteGeoCacheEntry{
-		result: &RemoteGeoResult{
-			Country:     raw.Country,
-			CountryCode: raw.CountryCode,
-			Region:      raw.Region,
-			City:        raw.City,
-			ISP:         raw.Connection.ISP,
-			Org:         raw.Connection.Org,
-			Latitude:    raw.Latitude,
-			Longitude:   raw.Longitude,
-			Postal:      raw.Postal,
-		},
-		timestamp: time.Now(),
-	}.withASN(raw.Connection.ASN)
-}
-
-func fetchIpApi(ip string) remoteGeoCacheEntry {
-	var raw struct {
-		Status      string  `json:"status"`
-		Message     string  `json:"message"`
-		Country     string  `json:"country"`
-		CountryCode string  `json:"countryCode"`
-		RegionName  string  `json:"regionName"`
-		City        string  `json:"city"`
-		ISP         string  `json:"isp"`
-		AS          string  `json:"as"` // "AS56046 China Mobile ..."，空格后为 org
-		Lat         float64 `json:"lat"`
-		Lon         float64 `json:"lon"`
-	}
-	resp, err := remoteGeoClient.R().
-		SetQueryParams(map[string]string{
-			"lang":   "zh-CN",
-			"fields": "status,message,country,countryCode,regionName,city,isp,as,lat,lon",
-		}).
-		Get("http://ip-api.com/json/" + ip)
-	if err != nil {
-		return remoteGeoCacheEntry{errMsg: err.Error(), timestamp: time.Now()}
-	}
-	if err := json.Unmarshal(resp.Bytes(), &raw); err != nil {
-		return remoteGeoCacheEntry{errMsg: fmt.Sprintf("HTTP %d, decode: %s", resp.StatusCode(), err), timestamp: time.Now()}
-	}
-	if resp.IsError() {
-		return remoteGeoCacheEntry{errMsg: fmt.Sprintf("HTTP %d", resp.StatusCode()), timestamp: time.Now()}
-	}
-	if raw.Status != "success" {
-		// 200 但业务失败：带上原始响应摘要。ip-api 的 fail 理应带 message，
-		// message 为空说明收到的根本不是预期 JSON（如被透明代理劫持/风控页），
-		// 此时只有原始 body 能定位
-		msg := raw.Message
-		if msg == "" {
-			msg = fmt.Sprintf("unexpected response (HTTP %d, CT %s): %.200s",
-				resp.StatusCode(), resp.Header().Get("Content-Type"), resp.String())
-		}
-		return remoteGeoCacheEntry{errMsg: msg, timestamp: time.Now()}
-	}
-	asn, org := "", raw.AS
-	if parts := strings.SplitN(raw.AS, " ", 2); len(parts) == 2 {
-		asn, org = parts[0], parts[1]
-	} else if raw.AS != "" {
-		asn = raw.AS
-		org = raw.ISP
-	}
-	return remoteGeoCacheEntry{
-		result: &RemoteGeoResult{
-			Country:     raw.Country,
-			CountryCode: raw.CountryCode,
-			Region:      raw.RegionName,
-			City:        raw.City,
-			ISP:         raw.ISP,
-			ASN:         asn,
-			Org:         org,
-			Latitude:    raw.Lat,
-			Longitude:   raw.Lon,
-		},
-		timestamp: time.Now(),
-	}
-}
-
-// withASN 收尾链：ipwho.is 的 ASN 为 0（未命中）时不输出 asn 字段
-func (e remoteGeoCacheEntry) withASN(asn int64) remoteGeoCacheEntry {
-	if asn > 0 && e.result != nil {
-		e.result.ASN = fmt.Sprintf("AS%d", asn)
-	}
-	return e
-}
-
-// SweepRemoteGeoCache 清理过期的 ipwho.is / ip-api 归属地缓存（理由同 SweepBilibiliCache）
-func SweepRemoteGeoCache() {
-	now := time.Now()
-	remoteGeoCache.Range(func(k, v any) bool {
-		if e, ok := v.(remoteGeoCacheEntry); ok && now.Sub(e.timestamp) >= e.ttl() {
-			remoteGeoCache.Delete(k)
-		}
-		return true
-	})
-}
-
 // reloadAll 全量重载（各加载器自身即「先建新再换指针」，重载期间查询不中断）
 func reloadAll() {
 	if err := loadIp2Region(); err != nil {
@@ -904,7 +680,7 @@ func Init(ghproxy string) {
 	}()
 }
 
-var allDatabases = []string{"ip2region", "ip2location", "ip2location_asn", "qqwry", "maxmind_city", "maxmind_asn", "dbip_asn", "geocn", "dbip_city", "bilibili", "ipwhois", "ipapi"}
+var allDatabases = []string{"ip2region", "ip2location", "ip2location_asn", "qqwry", "maxmind_city", "maxmind_asn", "dbip_asn", "geocn", "dbip_city", "bilibili"}
 
 func SearchIP(ip string, databases ...string) map[string]interface{} {
 	if len(databases) == 0 {
@@ -913,38 +689,26 @@ func SearchIP(ip string, databases ...string) map[string]interface{} {
 
 	result := map[string]interface{}{"ip": ip}
 
-	// bilibili / ipwhois / ipapi 是远程调用（各 80~440ms，超时 10s），其余本地库
-	// 合计 <5ms：把远程源并行出去，不让整个接口陪它们等；本地库保持串行
-	// （微秒级操作，并行反而净增调度开销）。结果写进各源独立槽位，Wait 后合并——
+	// bilibili 是 10 个源里唯一的远程调用（实测 80~440ms，超时 10s），其余 9 个本地
+	// 库合计 <5ms：把它并行出去，不让整个接口陪它等；本地库保持串行
+	// （微秒级操作，并行反而净增调度开销）。结果写进独立变量，Wait 后合并——
 	// Go 的 map 并发写（哪怕 key 不同）是不安全的。
 	var wg sync.WaitGroup
-	remoteSlots := map[string]*any{"bilibili": new(any), "ipwhois": new(any), "ipapi": new(any)}
+	var bili any
 
 	for _, name := range databases {
 		switch name {
 		case "bilibili":
 			wg.Add(1)
-			go func(slot *any) {
+			go func() {
 				defer wg.Done()
 				res, err := searchBilibili(ip)
 				if err != nil {
-					*slot = "error: " + err.Error()
+					bili = "error: " + err.Error()
 				} else {
-					*slot = res
+					bili = res
 				}
-			}(remoteSlots["bilibili"])
-
-		case "ipwhois", "ipapi":
-			wg.Add(1)
-			go func(source string, slot *any) {
-				defer wg.Done()
-				res, err := searchRemoteGeo(source, ip)
-				if err != nil {
-					*slot = "error: " + err.Error()
-				} else {
-					*slot = res
-				}
-			}(name, remoteSlots[name])
+			}()
 
 		case "ip2region":
 			ip2regionMu.RLock()
@@ -1087,10 +851,8 @@ func SearchIP(ip string, databases ...string) map[string]interface{} {
 	}
 
 	wg.Wait()
-	for name, slot := range remoteSlots {
-		if *slot != nil {
-			result[name] = *slot
-		}
+	if bili != nil {
+		result["bilibili"] = bili
 	}
 
 	return result
