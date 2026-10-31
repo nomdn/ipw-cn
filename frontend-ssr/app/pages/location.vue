@@ -6,6 +6,7 @@ import { useMiddlewareFetch } from '../../utils/middleware';
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue';
 import { useRoute } from 'vue-router'
 import { isIPv4 } from '../../utils/tools';
+import { wgs84ToGcj02 } from '../../utils/gcj02';
 const route = useRoute();
 const loading = ref(false);
 
@@ -90,6 +91,67 @@ const ipAddress = ref('');
 const IPLocation = ref<IPLocationType>({});
 const UserIP = ref('');
 const error = ref('')
+
+// —— 归属地地图：高德瓦片（GCJ-02）+ Leaflet，免 key ——
+// 打点坐标优先级：bilibili（国内服务，坐标已是 GCJ-02 直接用）→
+// maxmind_city / ip2location（WGS84 → 转 GCJ-02 与底图对齐）。全部缺失则不渲染地图。
+const mapContainer = ref<HTMLElement | null>(null)
+let mapInstance: any = null
+let mapMarker: any = null
+
+const mapPoint = computed(() => {
+  const r = IPLocation.value
+  if (!r) return null
+  const sources = [
+    { lat: r.bilibili?.latitude, lng: r.bilibili?.longitude, gcj: true, label: 'bilibili Live' },
+    { lat: r.maxmind_city?.Latitude, lng: r.maxmind_city?.Longitude, gcj: false, label: 'MaxMind' },
+    { lat: r.ip2location?.latitude, lng: r.ip2location?.longitude, gcj: false, label: 'IP2Location' },
+  ]
+  for (const s of sources) {
+    const lat = parseFloat(s.lat)
+    const lng = parseFloat(s.lng)
+    if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+      const p = s.gcj ? { lat, lng } : wgs84ToGcj02(lat, lng)
+      return { ...p, label: s.label }
+    }
+  }
+  return null
+})
+
+let leafletModule: any = null
+async function renderLocationMap() {
+  if (!import.meta.client || !mapPoint.value || !mapContainer.value) return
+  const p = mapPoint.value
+  leafletModule = leafletModule || (await import('leaflet'))
+  const L = leafletModule.default ?? leafletModule
+  if (!mapInstance) {
+    mapInstance = L.map(mapContainer.value, { attributionControl: true }).setView([p.lat, p.lng], 10)
+    L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+      subdomains: ['1', '2', '3', '4'],
+      maxZoom: 18,
+      attribution: '&copy; <a href="https://www.amap.com/" target="_blank" rel="noreferrer">高德地图</a>',
+    }).addTo(mapInstance)
+  } else {
+    mapInstance.setView([p.lat, p.lng], Math.max(mapInstance.getZoom(), 10))
+  }
+  if (mapMarker) mapMarker.remove()
+  mapMarker = L.circleMarker([p.lat, p.lng], {
+    radius: 8,
+    color: '#299764',
+    fillColor: '#299764',
+    fillOpacity: 0.85,
+    weight: 2,
+  })
+    .addTo(mapInstance)
+    .bindPopup(`<b>${ipAddress.value || UserIP.value}</b><br>来源：${p.label}`)
+}
+
+watch(IPLocation, async () => {
+  if (mapPoint.value) {
+    await nextTick()
+    await renderLocationMap()
+  }
+})
 const locationUrl = computed(() => "/middleware/" + backendID.value + "/location/" + encodeURIComponent(ipAddress.value));
 
 const { data: locationData, error: locationError, execute: executeLocation } = useMiddlewareFetch<IPLocationType>(locationUrl, {
@@ -233,6 +295,8 @@ onMounted(async () => {
             </tbody>
           </table>
         </div>
+        <!-- 归属地地图：高德瓦片（GCJ-02）+ Leaflet，坐标按来源自动转换 -->
+        <div v-if="mapPoint" ref="mapContainer" class="location-map"></div>
     </div>
     <div style="font-size: 1.5em;">
       <h3 v-if="isIPv6(UserIP)"><el-icon><CircleCheckFilled style="color: lightgreen;"/></el-icon>您的网络IPv6优先</h3>
@@ -258,6 +322,17 @@ onMounted(async () => {
 <style scoped>
 @import "../style.css";
 @import "../../assets/css/tool-common.css";
+/* leaflet 基础样式必须非 scoped 引入（动态创建的窗格拿不到 data-v 属性） */
+</style>
+<style>
+@import "leaflet/dist/leaflet.css";
+.location-map {
+  height: 320px;
+  margin-top: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--el-border-color-lighter, #ebeef5);
+  z-index: 0; /* 压住 leaflet 内部窗格的层级，避免盖过下拉/弹窗 */
+}
 </style>
 <style>
 @import "../style.css";
