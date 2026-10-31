@@ -103,6 +103,18 @@ const config = {
                 id: "us-la",
                 url: "https://america-california-losangeles.ipwapi.zfap.wsmdn.top/"
             },
+            {
+                // 与 IPLocationAPI 池共享的节点：ASN 页取两池交集，
+                // 只有同时出现在两个池里的节点才会显示（cn-xian 仅双栈池故不显示）
+                label: "中国 四川 沙渠 电信[ZFC]",
+                id: "cn2-sichuan",
+                url: "https://cn2-sichuan.api-ipw.wsmdn.top/"
+            },
+            {
+                label: "中国 江苏 移动",
+                id: "cn-jiangsu",
+                url: "https://cn-jiangsu.api-ipw.wsmdn.top/"
+            },
             // IP 直连新节点：URL 留空，仅经独立中间件转发
             {
                 label: "香港 Cogent",

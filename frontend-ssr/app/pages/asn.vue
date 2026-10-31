@@ -56,7 +56,12 @@ const result = ref<ASNResult | null>(null)
 const error = ref('')
 const userIP = ref('')
 
-const apiList = config.IPLocationAPI
+// ASN 页节点池：DualStack ∩ IPLocationAPI 的交集（按 id 取两个池都有的节点）。
+// 交集保证：节点在 IPLocationAPI 里（中间件 asn 分支按它解析转发），
+// 同时也是双栈池在册的全功能节点；任一池单独加节点都不会进本页。
+const apiList = config.IPLocationAPI.filter((loc) =>
+  config.APIBaseURL.DualStack.some((d) => d.id === loc.id)
+)
 const currentApiIndex = ref(0)
 const backendID = computed(() => apiList[currentApiIndex.value]?.id || '')
 
