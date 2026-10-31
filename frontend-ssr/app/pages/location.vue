@@ -93,61 +93,72 @@ const UserIP = ref('');
 const error = ref('')
 
 // —— 归属地地图：高德瓦片（GCJ-02）+ Leaflet，免 key ——
-// 打点坐标优先级：bilibili（国内服务，坐标已是 GCJ-02 直接用）→
-// maxmind_city / ip2location（WGS84 → 转 GCJ-02 与底图对齐）。全部缺失则不渲染地图。
+// 每个有坐标的来源各画一个点（bilibili 坐标已是 GCJ-02 直接用；
+// maxmind / ip2location 为 WGS84 → 转 GCJ-02 与底图对齐），
+// 多点同时展示可直观看出各库定位的差异与离散度。
 const mapContainer = ref<HTMLElement | null>(null)
 let mapInstance: any = null
-let mapMarker: any = null
+let markerGroup: any = null
 
-const mapPoint = computed(() => {
+const SOURCE_DEFS = [
+  { key: 'bilibili', lat: 'latitude', lng: 'longitude', gcj: true, label: 'bilibili Live', color: '#299764' },
+  { key: 'maxmind_city', lat: 'Latitude', lng: 'Longitude', gcj: false, label: 'MaxMind', color: '#1d4ed8' },
+  { key: 'ip2location', lat: 'latitude', lng: 'longitude', gcj: false, label: 'IP2Location', color: '#f97316' },
+]
+
+const mapPoints = computed(() => {
   const r = IPLocation.value
-  if (!r) return null
-  const sources = [
-    { lat: r.bilibili?.latitude, lng: r.bilibili?.longitude, gcj: true, label: 'bilibili Live' },
-    { lat: r.maxmind_city?.Latitude, lng: r.maxmind_city?.Longitude, gcj: false, label: 'MaxMind' },
-    { lat: r.ip2location?.latitude, lng: r.ip2location?.longitude, gcj: false, label: 'IP2Location' },
-  ]
-  for (const s of sources) {
-    const lat = parseFloat(s.lat)
-    const lng = parseFloat(s.lng)
+  if (!r) return []
+  const pts: Array<{ lat: number; lng: number; label: string; color: string }> = []
+  for (const s of SOURCE_DEFS) {
+    const lat = parseFloat(r[s.key]?.[s.lat])
+    const lng = parseFloat(r[s.key]?.[s.lng])
     if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
       const p = s.gcj ? { lat, lng } : wgs84ToGcj02(lat, lng)
-      return { ...p, label: s.label }
+      pts.push({ ...p, label: s.label, color: s.color })
     }
   }
-  return null
+  return pts
 })
 
 let leafletModule: any = null
 async function renderLocationMap() {
-  if (!import.meta.client || !mapPoint.value || !mapContainer.value) return
-  const p = mapPoint.value
+  if (!import.meta.client || !mapPoints.value.length || !mapContainer.value) return
+  const pts = mapPoints.value
   leafletModule = leafletModule || (await import('leaflet'))
   const L = leafletModule.default ?? leafletModule
   if (!mapInstance) {
-    mapInstance = L.map(mapContainer.value, { attributionControl: true }).setView([p.lat, p.lng], 10)
+    mapInstance = L.map(mapContainer.value, { attributionControl: true })
     L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
       subdomains: ['1', '2', '3', '4'],
       maxZoom: 18,
       attribution: '&copy; <a href="https://www.amap.com/" target="_blank" rel="noreferrer">高德地图</a>',
     }).addTo(mapInstance)
-  } else {
-    mapInstance.setView([p.lat, p.lng], Math.max(mapInstance.getZoom(), 10))
   }
-  if (mapMarker) mapMarker.remove()
-  mapMarker = L.circleMarker([p.lat, p.lng], {
-    radius: 8,
-    color: '#299764',
-    fillColor: '#299764',
-    fillOpacity: 0.85,
-    weight: 2,
-  })
-    .addTo(mapInstance)
-    .bindPopup(`<b>${ipAddress.value || UserIP.value}</b><br>来源：${p.label}`)
+  if (markerGroup) markerGroup.remove()
+  markerGroup = L.featureGroup()
+  for (const p of pts) {
+    L.circleMarker([p.lat, p.lng], {
+      radius: 8,
+      color: p.color,
+      fillColor: p.color,
+      fillOpacity: 0.85,
+      weight: 2,
+    })
+      .bindPopup(`<b>${p.label}</b><br>${ipAddress.value || UserIP.value}<br>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`)
+      .addTo(markerGroup)
+  }
+  markerGroup.addTo(mapInstance)
+  // 多点：视野自适应包住全部点；单点：定位到 10 级
+  if (pts.length > 1) {
+    mapInstance.fitBounds(markerGroup.getBounds().pad(0.3))
+  } else {
+    mapInstance.setView([pts[0].lat, pts[0].lng], 10)
+  }
 }
 
 watch(IPLocation, async () => {
-  if (mapPoint.value) {
+  if (mapPoints.value.length) {
     await nextTick()
     await renderLocationMap()
   }
@@ -295,8 +306,8 @@ onMounted(async () => {
             </tbody>
           </table>
         </div>
-        <!-- 归属地地图：高德瓦片（GCJ-02）+ Leaflet，坐标按来源自动转换 -->
-        <div v-if="mapPoint" ref="mapContainer" class="location-map"></div>
+        <!-- 归属地地图：高德瓦片（GCJ-02）+ Leaflet，每个有坐标的来源各画一点 -->
+        <div v-if="mapPoints.length" ref="mapContainer" class="location-map"></div>
     </div>
     <div style="font-size: 1.5em;">
       <h3 v-if="isIPv6(UserIP)"><el-icon><CircleCheckFilled style="color: lightgreen;"/></el-icon>您的网络IPv6优先</h3>
