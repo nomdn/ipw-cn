@@ -9,7 +9,7 @@
 ### ✨ 新功能
 
 - **接入 LemonDB 作为定位与 ASN 源**：`/v1/location` 与 `/v1/asn` 全链路新增 `lemondb` / `lemondb_asn` 输出。LemonDB（nomdn/LemonDB 月度构建）为全球打底 + 中国省市县高精度层：中国段含省/市/区县 + 运营商 + 网络类型 + GB/T 2260 区划码，v6 部分段可到区县；坐标全库统一 WGS-84，`coord_system` 字段透传
-- **ASN 解析优先级重排**：`resolveASN` 改为 lemondb_asn → maxmind_asn → dbip_asn → ip2location_asn（中国段组织名更细），whois 段与 ws 同步
+- **ASN 解析优先级重排**：`resolveASN` 改为 maxmind_asn → lemondb_asn → dbip_asn → ip2location_asn（补齐未命中兜底），whois 段与 ws 同步
 - **LemonDB 自动下载**：`PullDatabase` 新增 `LEMON-LOCATION.mmdb` / `LEMON-ASN.mmdb` 任务，走 ghproxy 镜像链；启动即拉 + 每日 ETag 条件请求，节点中断后恢复可在一天内追平
 - **归属地地图**：location 页新增地图（高德瓦片直连 + Leaflet + 免 key），多源打点直观对比各库定位差异与离散度；坐标按源静态标记或 `coord_system` 动态判断（LemonDB），经 `wgs84ToGcj02` 统一转 GCJ-02 与底图对齐
 - **地图数据源补充**：DB-IP City、GeoCN（含区划政府驻地坐标打点）
@@ -26,7 +26,7 @@
 ### ⚠️ 行为变化
 
 - `/v1/location` 输出新增 `lemondb` 键（全源之首）；`/v1/asn` 与 ws 的 asn 分支新增 `lemondb_asn`
-- ASN whois 段的解析库优先级变化（见上），中国 IP 的组织名可能由 GeoLite2 值变为 LemonDB 值
+- ASN whois 段的解析库优先级变化（见上），maxmind 未命中的 IP 现在会依次落到 lemondb / dbip
 - ipdb 目录新增约 70MB 的 LemonDB 两库磁盘占用（首次启动后台自动拉取，不阻塞服务）
 
 ## [v4.2.0] - 2026-10-25

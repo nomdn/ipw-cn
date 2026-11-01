@@ -738,13 +738,13 @@ func normalizeASN(s string) string {
 	return "AS" + s
 }
 
-// resolveASN 从 SearchIP 结果中按优先级提取可用 ASN（lemondb → maxmind → dbip → ip2location），返回 "ASxxxx"。
+// resolveASN 从 SearchIP 结果中按优先级提取可用 ASN（maxmind → lemondb → dbip → ip2location），返回 "ASxxxx"。
 //
 // 之所以要兜底：此前 whois 段只认 maxmind_asn，某个 IP 一旦未命中该库，整段 ASN WHOIS 就凭空消失，
-// 哪怕 dbip_asn / ip2location_asn 明明有数据。lemondb_asn 打头：GeoLite2 底子 + APNIC CN 精修，
-// 覆盖面与 maxmind 相同、CN 组织名更准。
+// 哪怕 dbip_asn / ip2location_asn 明明有数据。maxmind_asn 打头（GeoLite2-ASN 是各家共认的基准），
+// lemondb_asn 跟在后面做未命中补位（GeoLite2 底子 + APNIC CN 精修）。
 func resolveASN(result map[string]interface{}) string {
-	for _, key := range []string{"lemondb_asn", "maxmind_asn", "dbip_asn"} {
+	for _, key := range []string{"maxmind_asn", "lemondb_asn", "dbip_asn"} {
 		if r, ok := result[key].(*ipdb.MMDBASNResult); ok {
 			if asn := normalizeASN(r.ASN); asn != "" {
 				return asn
