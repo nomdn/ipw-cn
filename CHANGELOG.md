@@ -2,6 +2,33 @@
 
 本文件记录面向用户/运维的版本变更。格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本（SemVer）。
 
+## [v4.3.0] - 2026-11-01
+
+> 接入自家 LemonDB 全球库（定位 + ASN 双源）、归属地可视化地图、GeoCN 镜像链修复。
+
+### ✨ 新功能
+
+- **接入 LemonDB 作为定位与 ASN 源**：`/v1/location` 与 `/v1/asn` 全链路新增 `lemondb` / `lemondb_asn` 输出。LemonDB（nomdn/LemonDB 月度构建）为全球打底 + 中国省市县高精度层：中国段含省/市/区县 + 运营商 + 网络类型 + GB/T 2260 区划码（v6 移动大段也能出县级，各免费源中唯一）；坐标全库统一 WGS-84，`coord_system` 字段透传
+- **ASN 解析优先级重排**：`resolveASN` 改为 lemondb_asn → maxmind_asn → dbip_asn → ip2location_asn（GeoLite2 同底子、中国组织名更准），whois 段与 ws 同步
+- **LemonDB 自动下载**：`PullDatabase` 新增 `LEMON-LOCATION.mmdb` / `LEMON-ASN.mmdb` 任务，走 ghproxy 镜像链；启动即拉 + 每日 ETag 条件请求，节点中断多久恢复后一天内追平
+- **归属地地图**：location 页新增地图（高德瓦片直连 + Leaflet + 免 key），多源打点直观对比各库定位差异与离散度；坐标按源静态标记或 `coord_system` 动态判断（LemonDB），经 `wgs84ToGcj02` 统一转 GCJ-02 与底图对齐
+- **地图数据源补充**：DB-IP City、GeoCN（含区划政府驻地坐标打点）
+- **ASN 页节点池**：改为「双栈 ∩ IPLocationAPI」节点交集，只展示两个接口都通的节点
+- **前端 LemonDB 展示**：location 表格首行 + asn 页 LemonDB ASN 行；locate.md 补字段说明
+
+### 🛠 修复
+
+- **GeoCN 行政区划下载单点依赖**：jsdelivr 被墙时数据永久缺失，补镜像列表兜底
+- **地图最大缩放瓦片空白**：高德栅格瓦片原生上限约 17 级，声明 `maxNativeZoom=17` 后更高缩放自动放大 17 级瓦片（轻度模糊但不再空白）
+- **MaxMind/DB-IP 地图打点无效**：字段名与实际 JSON 不符（小写 `latitude`/`longitude`），修正后打点恢复
+- 节点池恢复西安电信节点（cn-xian）
+
+### ⚠️ 行为变化
+
+- `/v1/location` 输出新增 `lemondb` 键（全源之首）；`/v1/asn` 与 ws 的 asn 分支新增 `lemondb_asn`
+- ASN whois 段的解析库优先级变化（见上），中国 IP 的组织名可能由 GeoLite2 值变为 LemonDB 值
+- ipdb 目录新增约 70MB 的 LemonDB 两库磁盘占用（首次启动后台自动拉取，不阻塞服务）
+
 ## [v4.2.0] - 2026-10-25
 
 > DNSSEC 从不可用变为可用、请求级解析能力同步 EO 特供、全站文档图灯箱、SEO 与部署链路整体升级。
