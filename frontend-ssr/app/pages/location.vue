@@ -273,7 +273,7 @@ onMounted(async () => {
           <table class="result-table">
             <tbody>
               <tr v-if="IPLocation.lemondb && (IPLocation.lemondb.country || IPLocation.lemondb.administrative_area || IPLocation.lemondb.city)">
-                <td class="table-label">LemonDB（自家全球库）</td>
+                <td class="table-label">LemonDB</td>
                 <td class="table-value">
                   {{ IPLocation.lemondb?.country }}&nbsp;{{ IPLocation.lemondb?.administrative_area }}&nbsp;{{ IPLocation.lemondb?.city }}&nbsp;{{ IPLocation.lemondb?.district }}
                 </td>
