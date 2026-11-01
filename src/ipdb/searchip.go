@@ -116,7 +116,8 @@ type GeoCNResult struct {
 // LemonDBResult LEMON-LOCATION.mmdb 的查询结果。记录是 GeoLite2 兼容骨架
 // （country/subdivisions/city/location）加中国层扩展（district / division_code /
 // isp / type），境外段无中国层字段时输出 omitempty 省略。
-// 坐标的 coord_system 要透传给前端：国内 GCJ-02、境外 WGS-84，混着画图会漂。
+// 坐标全库统一 WGS-84（国际标准），coord_system 恒为 wgs84；上高德等 GCJ 底图
+// 由读方自行转换（前端已有 wgs84ToGcj02）。
 type LemonDBResult struct {
 	Country      string `json:"country"`
 	CountryCode  string `json:"country_code,omitempty"`
@@ -533,7 +534,7 @@ func searchGeoCN(ip string) (*GeoCNResult, error) {
 }
 
 // searchLemonDB 查 LemonDB 全球定位库（记录结构见 LemonDBResult 注释）。
-// 与其它 mmdb 不同的一点：坐标自带 coord_system（gcj02/wgs84），不必猜。
+// 坐标统一 WGS-84，coord_system 仍透出（恒为 wgs84），读方按需自转 GCJ。
 func searchLemonDB(ip string) (*LemonDBResult, error) {
 	mmdbMu.RLock()
 	db, ok := mmdbDBs["lemondb_location"]

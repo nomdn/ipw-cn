@@ -96,7 +96,7 @@ const error = ref('')
 
 // —— 归属地地图：高德瓦片（GCJ-02）+ Leaflet，免 key ——
 // 每个有坐标的来源各画一个点（bilibili / geocn 坐标已是 GCJ-02 直接用；
-// maxmind / ip2location / dbip 为 WGS84 → 转 GCJ-02 与底图对齐），
+// maxmind / ip2location / dbip / lemondb 为 WGS84 → 转 GCJ-02 与底图对齐），
 // 多点同时展示可直观看出各库定位的差异与离散度。
 const mapContainer = ref<HTMLElement | null>(null)
 let mapInstance: any = null
@@ -119,8 +119,8 @@ const mapPoints = computed(() => {
     const lat = parseFloat(r[s.key]?.[s.lat])
     const lng = parseFloat(r[s.key]?.[s.lng])
     if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
-      // LemonDB 的坐标带 coord_system 标注（国内 gcj02、境外 wgs84），按记录本身判断；
-      // 其余源维持静态标记
+      // LemonDB 全库统一 WGS-84（coord_system 恒为 wgs84，这里留个动态判断作前向兼容，
+      // 若哪天源库换坐标系标注会自动跟随）；其余源维持静态标记
       const gcj = s.gcj || r[s.key]?.coord_system === 'gcj02'
       const p = gcj ? { lat, lng } : wgs84ToGcj02(lat, lng)
       pts.push({ ...p, label: s.label, color: s.color })
