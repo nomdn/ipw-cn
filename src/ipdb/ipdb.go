@@ -110,7 +110,9 @@ func PullDatabase(ghproxy string) error {
 		{[]string{ghproxy + "https://github.com/nomdn/ip2location/releases/latest/download/IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP"}, "IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP"},
 		{[]string{ghproxy + "https://github.com/nomdn/ip2location/releases/latest/download/IP2LOCATION-LITE-ASN.IPV6.BIN.zip"}, "IP2LOCATION-LITE-ASN.IPV6.BIN.zip"},
 		// 自家的 LemonDB（nomdn/LemonDB 月度构建）：全球打底 + 中国省市县高精度层，
-		// CN 段精度远高于上面所有免费源，放在最后当压轴
+		// CN 段精度远高于上面所有免费源，放在最后当压轴。
+		// 拉取节奏与其余库一致：启动缺文件即拉 + 每 24h 条件请求检查一次——
+		// release 月更，ETag 变了才真正下载，节点无论中断多久，恢复后一天内追平最新版。
 		{[]string{ghproxy + "https://github.com/nomdn/LemonDB/releases/latest/download/LEMON-LOCATION.mmdb"}, "LEMON-LOCATION.mmdb"},
 		{[]string{ghproxy + "https://github.com/nomdn/LemonDB/releases/latest/download/LEMON-ASN.mmdb"}, "LEMON-ASN.mmdb"},
 	}
