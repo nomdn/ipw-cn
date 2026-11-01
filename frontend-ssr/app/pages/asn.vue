@@ -44,6 +44,7 @@ useHead({
 
 interface ASNResult {
   ip: string
+  lemondb_asn?: { asn: string; org: string }
   geolite2_asn?: { asn: string; org: string }
   dbip_asn?: { asn: string; org: string }
   ip2location_asn?: { asn: string; as: string }
@@ -177,6 +178,13 @@ function getStatusClass(status: string): string {
           <tr>
             <td class="table-label">IP 地址</td>
             <td class="table-value">{{ result.ip }}</td>
+          </tr>
+          <tr v-if="result.lemondb_asn?.asn">
+            <td class="table-label">LemonDB ASN</td>
+            <td class="table-value">
+              {{ result.lemondb_asn.asn }}
+              <span v-if="result.lemondb_asn.org" style="color: #999; font-size: 0.9em;">{{ result.lemondb_asn.org }}</span>
+            </td>
           </tr>
           <tr v-if="result.geolite2_asn?.asn">
             <td class="table-label">Maxmind ASN</td>

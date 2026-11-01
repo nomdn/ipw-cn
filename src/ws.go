@@ -249,12 +249,17 @@ func wsProbe(apiType, raw string, query map[string]string) (int, any) {
 		if raw == "" {
 			return 400, map[string]string{"error": "IP parameter is required"}
 		}
-		result := ipdb.SearchIP(raw, "maxmind_asn", "dbip_asn", "ip2location_asn")
+		result := ipdb.SearchIP(raw, "lemondb_asn", "maxmind_asn", "dbip_asn", "ip2location_asn")
 		asnResult := map[string]any{"ip": raw}
 		if ip2locASN, ok := result["ip2location_asn"].(map[string]string); ok && ip2locASN["asn"] != "" {
 			asnResult["ip2location_asn"] = map[string]string{"asn": ip2locASN["asn"], "as": ip2locASN["as"]}
 		} else if errStr, ok := result["ip2location_asn"].(string); ok {
 			asnResult["ip2location_asn"] = map[string]string{"error": errStr}
+		}
+		if lemonASN, ok := result["lemondb_asn"].(*ipdb.MMDBASNResult); ok {
+			asnResult["lemondb_asn"] = map[string]string{"asn": lemonASN.ASN, "org": lemonASN.Org}
+		} else if errStr, ok := result["lemondb_asn"].(string); ok {
+			asnResult["lemondb_asn"] = map[string]string{"error": errStr}
 		}
 		if maxmindASN, ok := result["maxmind_asn"].(*ipdb.MMDBASNResult); ok {
 			asnResult["geolite2_asn"] = map[string]string{"asn": maxmindASN.ASN, "org": maxmindASN.Org}

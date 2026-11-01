@@ -109,6 +109,10 @@ func PullDatabase(ghproxy string) error {
 		{[]string{ghproxy + "https://github.com/jcjc-dev/mmdb-latest/releases/download/dbip-latest/dbip-asn-lite.mmdb"}, "dbip-asn-lite.mmdb"},
 		{[]string{ghproxy + "https://github.com/nomdn/ip2location/releases/latest/download/IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP"}, "IP2LOCATION-LITE-DB11.IPV6.BIN.ZIP"},
 		{[]string{ghproxy + "https://github.com/nomdn/ip2location/releases/latest/download/IP2LOCATION-LITE-ASN.IPV6.BIN.zip"}, "IP2LOCATION-LITE-ASN.IPV6.BIN.zip"},
+		// 自家的 LemonDB（nomdn/LemonDB 月度构建）：全球打底 + 中国省市县高精度层，
+		// CN 段精度远高于上面所有免费源，放在最后当压轴
+		{[]string{ghproxy + "https://github.com/nomdn/LemonDB/releases/latest/download/LEMON-LOCATION.mmdb"}, "LEMON-LOCATION.mmdb"},
+		{[]string{ghproxy + "https://github.com/nomdn/LemonDB/releases/latest/download/LEMON-ASN.mmdb"}, "LEMON-ASN.mmdb"},
 	}
 
 	tmpDir := "./tmp"

@@ -738,12 +738,13 @@ func normalizeASN(s string) string {
 	return "AS" + s
 }
 
-// resolveASN 从 SearchIP 结果中按优先级提取可用 ASN（maxmind → dbip → ip2location），返回 "ASxxxx"。
+// resolveASN 从 SearchIP 结果中按优先级提取可用 ASN（lemondb → maxmind → dbip → ip2location），返回 "ASxxxx"。
 //
 // 之所以要兜底：此前 whois 段只认 maxmind_asn，某个 IP 一旦未命中该库，整段 ASN WHOIS 就凭空消失，
-// 哪怕 dbip_asn / ip2location_asn 明明有数据。
+// 哪怕 dbip_asn / ip2location_asn 明明有数据。lemondb_asn 打头：GeoLite2 底子 + APNIC CN 精修，
+// 覆盖面与 maxmind 相同、CN 组织名更准。
 func resolveASN(result map[string]interface{}) string {
-	for _, key := range []string{"maxmind_asn", "dbip_asn"} {
+	for _, key := range []string{"lemondb_asn", "maxmind_asn", "dbip_asn"} {
 		if r, ok := result[key].(*ipdb.MMDBASNResult); ok {
 			if asn := normalizeASN(r.ASN); asn != "" {
 				return asn
@@ -801,7 +802,7 @@ func asnLookupHandler(c fiber.Ctx) error {
 		})
 	}
 
-	result := ipdb.SearchIP(ip, "maxmind_asn", "dbip_asn", "ip2location_asn")
+	result := ipdb.SearchIP(ip, "lemondb_asn", "maxmind_asn", "dbip_asn", "ip2location_asn")
 
 	asnResult := map[string]interface{}{
 		"ip": ip,
@@ -814,6 +815,17 @@ func asnLookupHandler(c fiber.Ctx) error {
 		}
 	} else if errStr, ok := result["ip2location_asn"].(string); ok {
 		asnResult["ip2location_asn"] = map[string]string{
+			"error": errStr,
+		}
+	}
+
+	if lemonASN, ok := result["lemondb_asn"].(*ipdb.MMDBASNResult); ok {
+		asnResult["lemondb_asn"] = map[string]string{
+			"asn": lemonASN.ASN,
+			"org": lemonASN.Org,
+		}
+	} else if errStr, ok := result["lemondb_asn"].(string); ok {
+		asnResult["lemondb_asn"] = map[string]string{
 			"error": errStr,
 		}
 	}

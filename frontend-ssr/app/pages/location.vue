@@ -48,6 +48,8 @@ interface IPLocationType {
   bilibili?: any;
   ip?: string;
   geocn?: any;
+  lemondb?: any;
+  lemondb_asn?: any;
   ip2region?: any;
   ip2location?: any;
   ip2location_asn?: any;
@@ -101,6 +103,7 @@ let mapInstance: any = null
 let markerGroup: any = null
 
 const SOURCE_DEFS = [
+  { key: 'lemondb', lat: 'latitude', lng: 'longitude', gcj: false, label: 'LemonDB', color: '#ffab00' },
   { key: 'bilibili', lat: 'latitude', lng: 'longitude', gcj: true, label: 'bilibili Live', color: '#299764' },
   { key: 'maxmind_city', lat: 'latitude', lng: 'longitude', gcj: false, label: 'MaxMind', color: '#1d4ed8' },
   { key: 'ip2location', lat: 'latitude', lng: 'longitude', gcj: false, label: 'IP2Location', color: '#f97316' },
@@ -116,7 +119,10 @@ const mapPoints = computed(() => {
     const lat = parseFloat(r[s.key]?.[s.lat])
     const lng = parseFloat(r[s.key]?.[s.lng])
     if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
-      const p = s.gcj ? { lat, lng } : wgs84ToGcj02(lat, lng)
+      // LemonDB 的坐标带 coord_system 标注（国内 gcj02、境外 wgs84），按记录本身判断；
+      // 其余源维持静态标记
+      const gcj = s.gcj || r[s.key]?.coord_system === 'gcj02'
+      const p = gcj ? { lat, lng } : wgs84ToGcj02(lat, lng)
       pts.push({ ...p, label: s.label, color: s.color })
     }
   }
@@ -266,6 +272,17 @@ onMounted(async () => {
       <div v-if="IPLocation" class="result-section">
           <table class="result-table">
             <tbody>
+              <tr v-if="IPLocation.lemondb && (IPLocation.lemondb.country || IPLocation.lemondb.administrative_area || IPLocation.lemondb.city)">
+                <td class="table-label">LemonDB（自家全球库）</td>
+                <td class="table-value">
+                  {{ IPLocation.lemondb?.country }}&nbsp;{{ IPLocation.lemondb?.administrative_area }}&nbsp;{{ IPLocation.lemondb?.city }}&nbsp;{{ IPLocation.lemondb?.district }}
+                </td>
+                <td class="table-value">
+                  <span>
+                    {{ IPLocation.lemondb?.isp }}&nbsp;{{ IPLocation.lemondb?.type }}
+                  </span>
+                </td>
+              </tr>
               <tr v-if="IPLocation.bilibili && (IPLocation.bilibili.administrative_area || IPLocation.bilibili.city)">
                 <td class="table-label">bilibili Live接口</td>
                 <td class="table-value">

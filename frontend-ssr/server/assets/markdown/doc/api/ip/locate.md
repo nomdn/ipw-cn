@@ -59,6 +59,8 @@
 | 字段 | 类型 | 描述 |
 | --- | --- | --- |
 | `ip` | String | 请求方公网 IP（本节点视角） |
+| `lemondb` | Object | `country`/`country_code`/`administrative_area`/`city`/`district`/`division_code`/`isp`/`type`/`latitude`/`longitude`/`coord_system`（自家 LemonDB 月更库：全球打底 + 中国省市县高精度层，坐标国内 GCJ-02、境外 WGS-84） |
+| `lemondb_asn` | Object | `asn`/`org`（GeoLite2-ASN 打底 + APNIC CN 精修） |
 | `ip2region` | Object | `country`/`administrative_area`/`city`（部分记录另带 `isp`） |
 | `ip2location` | Object | `country`/`country_code`/`administrative_area`/`city`/`district`/`zipcode`/`latitude`/`longitude`/`timezone`/`isp`/`asn`/`usagetype` |
 | `ip2location_asn` | Object | `asn`/`as` |

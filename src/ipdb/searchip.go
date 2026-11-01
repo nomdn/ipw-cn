@@ -113,6 +113,25 @@ type GeoCNResult struct {
 	Longitude float64 `json:"longitude,omitempty"`
 }
 
+// LemonDBResult LEMON-LOCATION.mmdb 的查询结果。记录是 GeoLite2 兼容骨架
+// （country/subdivisions/city/location）加中国层扩展（district / division_code /
+// isp / type），境外段无中国层字段时输出 omitempty 省略。
+// 坐标的 coord_system 要透传给前端：国内 GCJ-02、境外 WGS-84，混着画图会漂。
+type LemonDBResult struct {
+	Country      string `json:"country"`
+	CountryCode  string `json:"country_code,omitempty"`
+	Region       string `json:"administrative_area,omitempty"`
+	RegionISO    string `json:"administrative_area_iso,omitempty"`
+	City         string `json:"city,omitempty"`
+	District     string `json:"district,omitempty"`
+	ISP          string `json:"isp,omitempty"`
+	Type         string `json:"type,omitempty"`
+	DivisionCode string `json:"division_code,omitempty"`
+	Latitude     float64 `json:"latitude,omitempty"`
+	Longitude    float64 `json:"longitude,omitempty"`
+	CoordSystem  string  `json:"coord_system,omitempty"`
+}
+
 type BilibiliIPQueryResponse struct {
 	Code    int                 `json:"code"`
 	Msg     string              `json:"msg"`
@@ -308,6 +327,9 @@ var mmdbFiles = map[string]string{
 	"geocn":         "GeoCN.mmdb",
 	"dbip_city":     "dbip-city-lite.mmdb",
 	"dbip_asn":      "dbip-asn-lite.mmdb",
+	// LemonDB：全球定位 + 全球 ASN（月更，来自 nomdn/LemonDB release）
+	"lemondb_location": "LEMON-LOCATION.mmdb",
+	"lemondb_asn":      "LEMON-ASN.mmdb",
 }
 
 // loadMMDB 重建全部 mmdb 并原子换指针。个别文件加载失败时沿用旧库（数据旧一点
@@ -510,6 +532,90 @@ func searchGeoCN(ip string) (*GeoCNResult, error) {
 	return result, nil
 }
 
+// searchLemonDB 查 LemonDB 全球定位库（记录结构见 LemonDBResult 注释）。
+// 与其它 mmdb 不同的一点：坐标自带 coord_system（gcj02/wgs84），不必猜。
+func searchLemonDB(ip string) (*LemonDBResult, error) {
+	mmdbMu.RLock()
+	db, ok := mmdbDBs["lemondb_location"]
+	mmdbMu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("lemondb_location not loaded")
+	}
+
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return nil, err
+	}
+
+	var record struct {
+		Country struct {
+			ISOCode string            `maxminddb:"iso_code"`
+			Names   map[string]string `maxminddb:"names"`
+		} `maxminddb:"country"`
+		Subdivisions []struct {
+			ISOCode string            `maxminddb:"iso_code"`
+			Names   map[string]string `maxminddb:"names"`
+		} `maxminddb:"subdivisions"`
+		City struct {
+			Names map[string]string `maxminddb:"names"`
+		} `maxminddb:"city"`
+		District struct {
+			Names map[string]string `maxminddb:"names"`
+		} `maxminddb:"district"`
+		DivisionCode uint32 `maxminddb:"division_code"`
+		ISP          string `maxminddb:"isp"`
+		Type         string `maxminddb:"type"`
+		Location     struct {
+			Latitude    float64 `maxminddb:"latitude"`
+			Longitude   float64 `maxminddb:"longitude"`
+			CoordSystem string  `maxminddb:"coord_system"`
+		} `maxminddb:"location"`
+	}
+	if err := db.Lookup(addr).Decode(&record); err != nil {
+		return nil, err
+	}
+
+	// 取名统一 zh-CN 优先、en 兜底
+	zh := func(m map[string]string) string {
+		if v, ok := m["zh-CN"]; ok && v != "" {
+			return v
+		}
+		return m["en"]
+	}
+
+	result := &LemonDBResult{
+		CountryCode:  record.Country.ISOCode,
+		ISP:          record.ISP,
+		Type:         record.Type,
+		DivisionCode: fmt.Sprintf("%d", record.DivisionCode),
+		CoordSystem:  record.Location.CoordSystem,
+		Latitude:     record.Location.Latitude,
+		Longitude:    record.Location.Longitude,
+	}
+	result.Country = zh(record.Country.Names)
+	if len(record.Subdivisions) > 0 {
+		result.Region = zh(record.Subdivisions[0].Names)
+		result.RegionISO = record.Subdivisions[0].ISOCode
+	}
+	result.City = zh(record.City.Names)
+	result.District = zh(record.District.Names)
+	if result.DivisionCode == "0" {
+		result.DivisionCode = ""
+	}
+	return result, nil
+}
+
+// searchLemonDBASN 查 LemonDB 全球 ASN 库（记录键与 GeoLite2-ASN 相同，直接复用解析）
+func searchLemonDBASN(ip string) (*MMDBASNResult, error) {
+	mmdbMu.RLock()
+	db, ok := mmdbDBs["lemondb_asn"]
+	mmdbMu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("lemondb_asn not loaded")
+	}
+	return searchMMDBASNIn(db, ip)
+}
+
 // loadBilibiliEntry 查缓存（按正/负各自的 TTL 判新鲜），过期顺手删除
 func loadBilibiliEntry(ip string) (bilibiliCacheEntry, bool) {
 	if cached, ok := bilibiliCache.Load(ip); ok {
@@ -666,7 +772,7 @@ func Init(ghproxy string) {
 	}()
 }
 
-var allDatabases = []string{"ip2region", "ip2location", "ip2location_asn", "qqwry", "maxmind_city", "maxmind_asn", "dbip_asn", "geocn", "dbip_city", "bilibili"}
+var allDatabases = []string{"lemondb", "lemondb_asn", "ip2region", "ip2location", "ip2location_asn", "qqwry", "maxmind_city", "maxmind_asn", "dbip_asn", "geocn", "dbip_city", "bilibili"}
 
 func SearchIP(ip string, databases ...string) map[string]interface{} {
 	if len(databases) == 0 {
@@ -829,6 +935,22 @@ func SearchIP(ip string, databases ...string) map[string]interface{} {
 				result["dbip_city"] = "error: " + err.Error()
 			} else {
 				result["dbip_city"] = dbip
+			}
+
+		case "lemondb":
+			lemon, err := searchLemonDB(ip)
+			if err != nil {
+				result["lemondb"] = "error: " + err.Error()
+			} else {
+				result["lemondb"] = lemon
+			}
+
+		case "lemondb_asn":
+			asn, err := searchLemonDBASN(ip)
+			if err != nil {
+				result["lemondb_asn"] = "error: " + err.Error()
+			} else {
+				result["lemondb_asn"] = asn
 			}
 
 		default:
