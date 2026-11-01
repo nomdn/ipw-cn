@@ -103,12 +103,14 @@ let mapInstance: any = null
 let markerGroup: any = null
 
 const SOURCE_DEFS = [
-  { key: 'lemondb', lat: 'latitude', lng: 'longitude', gcj: false, label: 'LemonDB', color: '#ffab00' },
   { key: 'bilibili', lat: 'latitude', lng: 'longitude', gcj: true, label: 'bilibili Live', color: '#299764' },
   { key: 'maxmind_city', lat: 'latitude', lng: 'longitude', gcj: false, label: 'MaxMind', color: '#1d4ed8' },
   { key: 'ip2location', lat: 'latitude', lng: 'longitude', gcj: false, label: 'IP2Location', color: '#f97316' },
   { key: 'dbip_city', lat: 'latitude', lng: 'longitude', gcj: false, label: 'DB-IP', color: '#8b5cf6' },
   { key: 'geocn', lat: 'latitude', lng: 'longitude', gcj: true, label: 'GeoCN', color: '#0ea5e9' },
+  // LemonDB 放最后：圆点按顺序绘制，后画的盖在先画的上面。
+  // 各源坐标基本重合，先画会被完全遮住看不见
+  { key: 'lemondb', lat: 'latitude', lng: 'longitude', gcj: false, label: 'LemonDB', color: '#ffab00' },
 ]
 
 const mapPoints = computed(() => {
