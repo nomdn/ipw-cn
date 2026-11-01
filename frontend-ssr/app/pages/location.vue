@@ -108,15 +108,15 @@ const SOURCE_DEFS = [
   { key: 'ip2location', lat: 'latitude', lng: 'longitude', gcj: false, label: 'IP2Location', color: '#f97316' },
   { key: 'dbip_city', lat: 'latitude', lng: 'longitude', gcj: false, label: 'DB-IP', color: '#8b5cf6' },
   { key: 'geocn', lat: 'latitude', lng: 'longitude', gcj: true, label: 'GeoCN', color: '#0ea5e9' },
-  // LemonDB 放最后：圆点按顺序绘制，后画的盖在先画的上面。
-  // 各源坐标基本重合，先画会被完全遮住看不见
-  { key: 'lemondb', lat: 'latitude', lng: 'longitude', gcj: false, label: 'LemonDB', color: '#ffab00' },
+  // ring: 画成空心大环。各源坐标基本重合，实心点互相遮盖只能看见最后一个，
+  // LemonDB 用环套在外面，与内部实心点互不遮挡
+  { key: 'lemondb', lat: 'latitude', lng: 'longitude', gcj: false, label: 'LemonDB', color: '#ffab00', ring: true },
 ]
 
 const mapPoints = computed(() => {
   const r = IPLocation.value
   if (!r) return []
-  const pts: Array<{ lat: number; lng: number; label: string; color: string }> = []
+  const pts: Array<{ lat: number; lng: number; label: string; color: string; ring?: boolean }> = []
   for (const s of SOURCE_DEFS) {
     const lat = parseFloat(r[s.key]?.[s.lat])
     const lng = parseFloat(r[s.key]?.[s.lng])
@@ -125,7 +125,7 @@ const mapPoints = computed(() => {
       // 若哪天源库换坐标系标注会自动跟随）；其余源维持静态标记
       const gcj = s.gcj || r[s.key]?.coord_system === 'gcj02'
       const p = gcj ? { lat, lng } : wgs84ToGcj02(lat, lng)
-      pts.push({ ...p, label: s.label, color: s.color })
+      pts.push({ ...p, label: s.label, color: s.color, ring: s.ring })
     }
   }
   return pts
@@ -152,13 +152,11 @@ async function renderLocationMap() {
   if (markerGroup) markerGroup.remove()
   markerGroup = L.featureGroup()
   for (const p of pts) {
-    L.circleMarker([p.lat, p.lng], {
-      radius: 8,
-      color: p.color,
-      fillColor: p.color,
-      fillOpacity: 0.85,
-      weight: 2,
-    })
+    // ring 源画成空心大环套在外面，其余实心小点：重合时互不遮挡
+    L.circleMarker([p.lat, p.lng], p.ring
+      ? { radius: 14, color: p.color, fillColor: p.color, fillOpacity: 0.08, weight: 3 }
+      : { radius: 7, color: '#2b2f34', fillColor: p.color, fillOpacity: 0.9, weight: 1.5 },
+    )
       .bindPopup(`<b>${p.label}</b><br>${ipAddress.value || UserIP.value}<br>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`)
       .addTo(markerGroup)
   }
