@@ -78,11 +78,10 @@ func finalFileName(name string) string {
 	return name
 }
 
-func PullDatabase(ghproxy string) error {
-	pullMu.Lock()
-	defer pullMu.Unlock()
-
-	tasks := []downloadTask{
+// downloadTasks 节点要拉取的全部文件及其镜像链（PullDatabase 的任务清单，
+// Init 的缺文件检查也用它——两处必须看到同一份清单）。
+func downloadTasks(ghproxy string) []downloadTask {
+	return []downloadTask{
 		// full/short.txt（GeoCN 行政区划）：主通道与其他文件统一走 ghproxy+raw
 		// 加速（注意 raw 的分支是路径段，不带 @；jsdelivr 的 @main 写法在 raw 上是 404）。
 		// jsdelivr 系（含 fastly/gcore 镜像）降为兜底——国内移动网络下会被 RST，
@@ -99,6 +98,13 @@ func PullDatabase(ghproxy string) error {
 			"https://fastly.jsdelivr.net/gh/ljxi/GeoCN@main/data/short.txt",
 			"https://gcore.jsdelivr.net/gh/ljxi/GeoCN@main/data/short.txt",
 		}, "short.txt"},
+		// division-coords.json（区划代码→政府驻地坐标，GCJ-02）：自有数据仓的
+		// release 资产，tag 跟随 AreaCity 数据版本，releases/latest 恒指最新。
+		// releases/download 本身直连可用，ghproxy 作为国内兜底。
+		{[]string{
+			"https://github.com/nomdn/division-coords/releases/latest/download/division-coords.json",
+			ghproxy + "https://github.com/nomdn/division-coords/releases/latest/download/division-coords.json",
+		}, "division-coords.json"},
 		{[]string{ghproxy + "https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v4.xdb"}, "ip2region_v4.xdb"},
 		{[]string{ghproxy + "https://raw.githubusercontent.com/lionsoul2014/ip2region/master/data/ip2region_v6.xdb"}, "ip2region_v6.xdb"},
 		{[]string{ghproxy + "https://raw.githubusercontent.com/nmgliangwei/qqwry.ipdb/main/qqwry.ipdb"}, "qqwry.ipdb"},
@@ -116,6 +122,25 @@ func PullDatabase(ghproxy string) error {
 		{[]string{ghproxy + "https://github.com/nomdn/LemonDB/releases/latest/download/LEMON-LOCATION.mmdb"}, "LEMON-LOCATION.mmdb"},
 		{[]string{ghproxy + "https://github.com/nomdn/LemonDB/releases/latest/download/LEMON-ASN.mmdb"}, "LEMON-ASN.mmdb"},
 	}
+}
+
+// missingTaskFiles 检查下载任务的目标文件是否在工作目录齐全。
+// Init 的 localOK 只看「可加载的库」，坐标表这类增强文件缺失不影响加载成功——
+// 只看 localOK 会把补齐拖到 24h 后的日同步，这里按任务清单逐一核对。
+func missingTaskFiles() bool {
+	for _, t := range downloadTasks("") {
+		if !fileExists("./" + finalFileName(t.name)) {
+			return true
+		}
+	}
+	return false
+}
+
+func PullDatabase(ghproxy string) error {
+	pullMu.Lock()
+	defer pullMu.Unlock()
+
+	tasks := downloadTasks(ghproxy)
 
 	tmpDir := "./tmp"
 	os.RemoveAll(tmpDir)
