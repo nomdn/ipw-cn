@@ -1,16 +1,40 @@
 package ipdb
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
-func TestDivisionCoords(t *testing.T) {
-	if len(divisionCoords) < 2800 {
-		t.Fatalf("divisionCoords 区划数不足: %d", len(divisionCoords))
+func TestLoadDivisionCoords(t *testing.T) {
+	dir := t.TempDir()
+
+	// 正常解析：键保留、坐标按 [lng, lat] 原样读出
+	p := filepath.Join(dir, "division-coords.json")
+	if err := os.WriteFile(p, []byte(`{"110101":[116.416334,39.928359],"321324":[118.699761,33.721266]}`), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	c, ok := divisionCoords["110101"]
-	if !ok {
-		t.Fatal("缺少 110101(东城区)")
+	m, err := loadDivisionCoords(p)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if c[0] < 73 || c[0] > 136 || c[1] < 3 || c[1] > 54 {
-		t.Fatalf("110101 坐标超出中国范围: %v", c)
+	if len(m) != 2 {
+		t.Fatalf("应解析出 2 条，实际 %d 条", len(m))
+	}
+	if c := m["110101"]; c[0] != 116.416334 || c[1] != 39.928359 {
+		t.Fatalf("110101 坐标不符: %v", c)
+	}
+
+	// 坏 JSON 必须返回错误（防止静默空表被当成"无坐标"钉进缓存）
+	if err := os.WriteFile(p, []byte(`{"110101":`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadDivisionCoords(p); err == nil {
+		t.Fatal("坏 JSON 应返回错误")
+	}
+
+	// 缺文件返回错误（调用方降级为无坐标，不影响区划名解析）
+	if _, err := loadDivisionCoords(filepath.Join(dir, "absent.json")); err == nil {
+		t.Fatal("缺文件应返回错误")
 	}
 }
