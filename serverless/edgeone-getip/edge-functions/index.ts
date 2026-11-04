@@ -20,6 +20,28 @@ interface EORequest extends Request {
 }
 export function onRequest({ request }: { request: EORequest }) {
   const clientIp = request.eo.clientIp;//获取用户IP
+  // 默认保持纯文本 IP（历史消费方兼容）；?format=json 返回腾讯自产归属地全量
+  // （eo.geo：省/市/经纬度/运营商/ASN），免 key 免额度，作为前端访客自定位数据源
+  const url = new URL(request.url)
+  if (url.searchParams.get('format') === 'json') {
+    const g = request.eo.geo
+    return new Response(JSON.stringify({
+      ip: clientIp,
+      asn: g?.asn ?? 0,
+      country: g?.countryName ?? '',
+      country_code: g?.countryCodeAlpha2 ?? '',
+      administrative_area: g?.regionName ?? '',
+      city: g?.cityName ?? '',
+      latitude: g?.latitude ?? 0,
+      longitude: g?.longitude ?? 0,
+      isp: g?.cisp ?? '',
+    }, null, 2), {
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'Access-Control-Allow-Origin': '*',
+      },
+    })
+  }
   return new Response(clientIp, {
     headers: {
       'content-type': 'text/plain',
