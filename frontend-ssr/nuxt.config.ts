@@ -137,10 +137,13 @@ export default defineNuxtConfig({
     }
   },
   runtimeConfig: {
-    // IndexNow 所有权凭证：与 public/<同名>.txt 一致（IndexNow 靠抓取该文件验证），
-    // key 本身是公开凭证不是机密；环境变量 NUXT_INDEXNOW_KEY 可覆盖。
-    // 消费方：server/api/indexnow.*.ts（运行时提交端点）。
-    indexnowKey: 'd49c90fb2fb160cdd2cd4b09532bc380',
+    // IndexNow 所有权凭证，**不写死在仓库里**：由环境变量 NUXT_INDEXNOW_KEY 注入
+    // （Nuxt 的 runtimeConfig 会自动把 NUXT_<大写下划线> 映射到这个 key）。
+    // 本地开发放 .env（已 gitignore），线上放 Vercel 的 Environment Variables。
+    // 未配置时为空串，server/api/indexnow.*.ts 会直接 403，不会误用别的 key。
+    // 注意：public/<key>.txt 仍随仓库提交 —— 那是 IndexNow 协议要求的公开校验文件
+    // （Bing 会主动来抓，内容就是 key 本身），不是机密。
+    indexnowKey: '',
     apiKeys: '',
     public: {
       siteUrl: config.siteUrl,
