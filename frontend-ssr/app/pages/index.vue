@@ -1,11 +1,4 @@
 <script setup lang="ts">
-// 首页 SEO 正文：只新增内容，不改 H1 / slogan / blockquote 等原有视觉元素。
-// 走与工具页相同的 markdown 通道，SSR 期就进 HTML，不依赖客户端二次取数。
-const { data: pageDoc } = await useAsyncData('index-page-doc', () =>
-  $fetch('/api/markdown/index')
-)
-const doc = pageDoc.value
-
 import { ogImageMeta, siteUrl } from '../../utils/seo'
 import { computed, ref, onMounted } from 'vue';
 import { isIPv6 } from 'is-ip';
@@ -17,10 +10,12 @@ const route = useRoute();
 
 useHead({
   // 品牌词是站内唯一高权重词，工具页自身权重不足以独立撑起长尾词。
-  // 品牌固定占第一段；第二、三段承接 GSC 报告里卡在 7~9 位的品类词
+  // 第一段只放品牌；第二、三段承接 GSC 报告里卡在 7~9 位的品类词
   // （ip / ip查询 / ipv6检测 / ipv6查询 / ipv6地址查询）。
+  // 第四段单独承接「IPW 替代品」类查询（报告里以 ipw.cn 为坐标系找替代的
+  // 多站并列词，如 myip.ipip.net ip.sb ipw.cn），只有首页抢这组词。
   // 已知代价：SERP 按设备宽度截断时，后半段关键词可能不展示，但仍参与相关性计算。
-  title: `${config.siteName} | IP查询与IPv6检测工具 | IPv4/IPv6地址查询、IPv6查询与网络测试平台`,
+  title: `${config.siteName} | IP查询与IPv6检测工具 | IPv4/IPv6地址查询、IPv6查询与网络测试平台 | IPW替代品`,
   titleTemplate: '%s',
   // canonical / og:url / twitter:card 由 app.vue 全局下发（按纯路径去 query），
   // 这里不再重复声明，避免 head 里出现两条 canonical。
@@ -156,14 +151,20 @@ onMounted(() => {
 
   const consumeProbe = (key: string, apply: (ip: string) => void): boolean => {
     if (!probeStore) return false; // ③ 内联脚本没跑起来
-    if (typeof probeStore[key] === 'string') {
-      apply(probeStore[key]); // ① 值已就位
+    // noUncheckedIndexedAccess 打开后 probeStore[key] 的类型是 string | undefined，
+    // 直接传进 apply(string) 会报错；先落到局部常量，再用 typeof 收窄成 string。
+    const ready = probeStore[key];
+    if (typeof ready === 'string') {
+      apply(ready); // ① 值已就位
       return true;
     }
     const onProbe = (e: Event) => {
       if ((e as CustomEvent).detail !== key) return;
+      // 先摘监听再取值：即使这一次拿到的不是字符串也不会留下野生监听
       document.removeEventListener('ip-probe', onProbe);
-      apply(probeStore[key]); // ② 事件到达
+      const ip = probeStore[key];
+      if (typeof ip !== 'string') return; // ② 事件到达
+      apply(ip);
     };
     document.addEventListener('ip-probe', onProbe);
     return true;
@@ -224,28 +225,12 @@ onMounted(() => {
 
     <div v-if="highlightedCode" v-html="highlightedCode" class="code-block"></div>
     <div v-else class="code-block code-block--fallback">{{ code }}</div>
-
-    <div v-if="doc" class="markdown">
-      <div v-html="doc"></div>
-    </div>
   </div>
 
 </template>
 <style scoped>
 @import "../style.css";
 
-/* 首页正文样式单独写一份：tool-common.css 还带 pre / .one-line / .el-input 等规则，
-   整表引入会连带改动首页现有元素的视觉。这里只取 markdown 需要的几条。 */
-.markdown {
-  margin: 24px 0 8px;
-  line-height: 1.8;
-  overflow-wrap: anywhere;
-}
-.markdown :deep(h2) { font-size: 1.25em; margin: 20px 0 10px; }
-.markdown :deep(table) { border-collapse: collapse; margin: 12px 0; max-width: 100%; }
-.markdown :deep(th), .markdown :deep(td) { border: 1px solid rgba(128,128,128,.35); padding: 6px 12px; text-align: left; }
-.markdown :deep(a) { color: #299764; text-decoration: none; }
-.markdown :deep(code) { background: rgba(128,128,128,.12); padding: 1px 4px; border-radius: 3px; }
 .el-menu--horizontal > .el-menu-item:nth-child(1) {
   margin-right: auto;
 }

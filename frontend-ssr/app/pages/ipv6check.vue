@@ -128,6 +128,7 @@ useHead({
     <div v-if="doc" class="markdown">
       <div v-html="doc"></div>
     </div>
+    <IpProbeQuote />
   </div>
 </template>
 

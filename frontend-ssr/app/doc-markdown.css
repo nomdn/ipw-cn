@@ -1,0 +1,30 @@
+/* 文档正文（markdown 渲染出来的 .markdown-body 区域）的链接观感统一。
+   1) 颜色跟站内走，不用 github-markdown-css 自带的 GitHub 蓝：正文链接一律
+      用 --link-color（亮色 #1d7a4a、暗色 #299764），和侧栏、页脚那些链接同色；
+   2) 一律不加下划线（正文链接与标题锚点都算），只靠颜色区分。
+
+   权重说明：github-markdown-light.css 的 `.markdown-body a` 是 (0,1,1)，
+   github-markdown-dark.css 的 `html.dark .markdown-body a` 是 (0,2,2)；
+   这两个文件各自被打进不同 CSS chunk，加载先后不确定，所以这里不用 !important，
+   直接用更高权重压住：亮色 (0,2,2)、暗色带上 body 抬到 (0,2,3)，不依赖顺序。 */
+html:not(.dark) .markdown-body a,
+html:not(.dark) .markdown-body blockquote a {
+  color: var(--link-color);
+}
+
+html.dark body .markdown-body a,
+html.dark body .markdown-body blockquote a {
+  color: var(--link-color);
+}
+
+/* 下划线：全部去掉（默认态、hover、focus 都去）。标题文字本身包在
+   <a class="header-anchor"> 里，这条同时管住标题锚点，标题不会再画一整条下划线。
+   注意 github-markdown-css 里还有 `.markdown-body a:hover` (0,2,1) 会把下划线加
+   回来，所以 hover / focus 必须显式写一遍，权重 (0,2,2) 才压得住。 */
+html .markdown-body a,
+html .markdown-body a:hover,
+html .markdown-body a:focus,
+html .markdown-body blockquote a,
+html .markdown-body a.header-anchor {
+  text-decoration: none;
+}

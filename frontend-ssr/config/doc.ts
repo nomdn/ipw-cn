@@ -19,8 +19,26 @@ export const docConfig: Record<string, DocMeta> = {
   '/doc/user/enable_ipv6': {
     title: '个人宽带如何开启IPv6网络访问',
     description: 'IPv6 是大势所趋，就在前段时间湖南联通发布公告，对家庭宽带提供 IPv6 地址，不再提供 IPv4 地址，那本文就介绍个人宽带如何开启 IPv6 网络访问。',
-    seoTitle: '个人宽带如何开启 IPv6 网络访问：光猫与路由器设置教程',
-    seoDescription: '手把手教你为家庭宽带开启 IPv6 网络访问：从光猫与路由器的设置，到向运营商申请（湖南联通等已对家庭宽带提供 IPv6 地址、不再提供 IPv4），附开启后的 IPv6 地址验证方法与常见问题排查。'
+    // 电信侧：本文示例为电信天翼光猫 + 小米路由器，SEO 标题按「电信宽带」这一搜索习惯改写，
+    // 并把 IPv6 怎么开启 / 光猫桥接 / PPPoE 拨号 / IPv6 设置 / 地址验证等问法全部塞进描述。
+    seoTitle: '电信宽带IPv6怎么开启：天翼光猫桥接、路由器PPPoE拨号与IPv6设置教程',
+    seoDescription: '电信宽带 IPv6 开启教程：以电信天翼光猫与小米路由器为例，从光猫超级管理员账号登录、连接模式改桥接与 IPv4&IPv6 双栈，到路由器 PPPoE 拨号、IPv6 开启为 Native 与 IPv6 DNS 设置（240e 段），再到 IPv6 地址查询、网页与命令行验证；附电信宽带没有 IPv6、IPv6 地址获取失败、IPv6 打不开网页、IPv6 网速慢等常见问题排查，适用于电信家庭宽带、电信千兆宽带与天翼宽带用户。'
+  },
+  '/doc/user/enable_ipv6_cmcc': {
+    title: '移动宽带如何开启IPv6',
+    description: '中国移动宽带用户开启 IPv6 的完整教程：移动光猫改桥接、路由器 PPPoE 拨号与 IPv6 设置，以及开启后如何验证是否真正拿到 IPv6 地址。',
+    // 移动侧：与电信页共用同一套步骤，独立成页承接「移动宽带 / 中国移动 / 移动光猫」这组词，
+    // SEO 标题与描述按运营商改写，避免两页争同一个泛词。
+    seoTitle: '移动宽带IPv6怎么开启：中国移动光猫桥接、路由器PPPoE拨号与IPv6设置教程',
+    seoDescription: '中国移动宽带 IPv6 开启教程：手把手把移动光猫（华为 / 中兴 / 吉比特）改为桥接、路由器 PPPoE 拨号并开启 IPv6（Native / DHCPv6），覆盖移动宽带没有 IPv6、获取不到 IPv6 地址、IPv6 打不开网页、IPv6 网速慢等常见问题排查，附开启后的 IPv6 地址查询、IPv6 检测与 IPv6 测速验证方法，适用于移动家庭宽带、移动千兆宽带与移动政企宽带用户。'
+  },
+  '/doc/user/enable_ipv6_unicom': {
+    title: '联通光猫改桥接并开启IPv6',
+    description: '中国联通光猫改桥接、开启 IPv6 的实操教程（转载自「JZX 轻语」，CC BY-NC-SA 4.0）：创维 SK-D742-C 光猫获取管理员密码与宽带密码、CU.html 后台改桥模式、路由器 PPPoE 拨号与 IPv6 验证。',
+    // 联通侧：本篇为转载（jeza-chen.com 陈建彰，CC BY-NC-SA 4.0，出处与协议保留在正文末尾），
+    // 设备是广州联通创维 SK-D742-C 光猫 + 红米 AX6S，与电信页（天翼光猫）、移动页（移动光猫）区分运营商词。
+    seoTitle: '联通光猫改桥接并开启IPv6：SK-D742-C 管理员密码获取、CU.html 桥模式与路由器PPPoE拨号教程',
+    seoDescription: '联通宽带 IPv6 开启教程：以创维 SK-D742-C 光猫为例，从 Telnet / FTP 取出管理员密码与宽带密码，登录 192.168.1.1/CU.html 后台把连接模式由路由改为桥接（IPv4/v6 双栈、VLAN ID 与端口绑定保持不变），再到路由器设置 PPPoE 拨号获取 IPv4 与 IPv6 地址，最后用 test-ipv6 验证；附联通光猫改桥接后拨号失败、IPv6 地址获取不到、IPv6 能获取但打不开网页等常见问题排查，以及 IPv6 地址查询、IPv6 检测与 IPv6 测速方法，适用于联通家庭宽带、联通千兆宽带与联通沃宽带用户。'
   },
   '/doc/user/cmd_bash_disable_ipv6': {
     title: '命令行禁用/启用IPv6本地网络',

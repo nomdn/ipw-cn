@@ -133,5 +133,6 @@ ipw.wsmdn.top.		300	IN	CNAME	ipw.wsmdn.top.a1.initac.com.
 
 ## 相关工具
 
+- [IP 查询说明](/ip-query)：区分本机出口地址与域名解析结果
 - [IPv6 检测方法与工具](/ipv6check)：查 AAAA 记录前先分清本机检测与网站检测
 - [DNSSEC 验证](/dnssec) · [IPv6 网站检测](/ipv6webcheck)

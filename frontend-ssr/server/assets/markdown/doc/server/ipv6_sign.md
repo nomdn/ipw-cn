@@ -31,4 +31,4 @@ HTML+CSS 代码，可以提醒访客本网站支持 IPv6 访问，同时可以�
 
 ### 跳转检查页面
 
-![ipv6 webcheck](/doc/ipv6_webcheck.png)
+![ipv6 webcheck](/docimg/ipv6_webcheck.png)

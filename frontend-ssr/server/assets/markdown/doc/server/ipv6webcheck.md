@@ -5,7 +5,7 @@
 
 在 [腾讯云 cvm 开启 IPv6](/doc/server/tencent_cloud_cvm_ipv6) 中我们介绍了服务器如何开启 IPv6，接下来我们介绍下如何检查一个网站是否开启 IPv6。
 
-可以直接访问 [在线 IPv6 网站检测工具](https://ipw.wsmdn.top/ipv6webcheck/) 来确认一个网站是否开 IPv6 访问。 ![ipv6 webcheck](/doc/ipv6_webcheck.png)
+可以直接访问 [在线 IPv6 网站检测工具](https://ipw.wsmdn.top/ipv6webcheck/) 来确认一个网站是否开 IPv6 访问。 ![ipv6 webcheck](/docimg/ipv6_webcheck.png)
 
 如果细分来看，IPv6 网站检测主要是两块，**网站域名是否有 AAAA(IPv6 地址)的解析记录**，以及 **该 IPv6 地址是否可以访问成功**。
 

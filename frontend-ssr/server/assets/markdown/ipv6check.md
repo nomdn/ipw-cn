@@ -91,6 +91,7 @@
 
 ## 相关文档
 
+**基础概念**：[IP 查询说明](/ip-query) · 本机出口 IPv4 / IPv6 地址、网络优先级与两种查询的区别
 **个人网络**：[宽带开启 IPv6](/doc/user/enable_ipv6) · [命令行启用/禁用 IPv6](/doc/user/cmd_bash_disable_ipv6) · [IPv6 DNS 服务器地址列表](/doc/user/ipv6_dns) · [浏览器访问 IPv6 地址写法](/doc/user/view_ipv6_adress_url) · [国内 IPv6 资源导航](/doc/user/ipv6_daohang)
 
 **网站与服务器**：[添加 AAAA 记录](/doc/server/ipv6_domain_record) · [网站开启 IPv6 的三种方式](/doc/server/website_enable_ipv6) · [Nginx 开启 IPv6 与 SSL](/doc/server/nginx_ipv6) · [TLS 配置](/doc/server/tls) · [HTTP/2 配置](/doc/server/http2) · [网站添加「支持 IPv6 访问」标识](/doc/server/ipv6_sign)

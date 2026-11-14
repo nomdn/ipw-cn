@@ -14,7 +14,7 @@ IPv6 网站准备好了后，接下来可以为网站域名添加 IPv6 解析记
 -   A 记录：解析为 IPv4 地址
 -   AAAA 记录：解析为 IPv6 地址
 
-![IPv6 解析记录（AAAA)](/doc/ipv6_domain_resolve.png)
+![IPv6 解析记录（AAAA)](/docimg/ipv6_domain_resolve.png)
 
 ## 检查 IPv6 域名解析是否成功
 

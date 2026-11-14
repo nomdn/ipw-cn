@@ -78,7 +78,7 @@
 
 使用 wireshark 开启抓包，命令访问 \`curl 6.wsmdn.dpdns.org\`，抓包截图如下：
 
-![wireshark_ipv6](/doc/wireshark_ipv6.png)
+![wireshark_ipv6](/docimg/wireshark_ipv6.png)
 
 -   DNS 解析（2332-2335）
 
@@ -93,7 +93,7 @@
 -   TCP 四次挥手再见（2342-2345）
 
 
-![wireshark\_ipv6](/doc/wireshark_ipv6_tcp_ack.png)
+![wireshark\_ipv6](/docimg/wireshark_ipv6_tcp_ack.png)
 
 在上图中可以看到 IPv6 包头。
 

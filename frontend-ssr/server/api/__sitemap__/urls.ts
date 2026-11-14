@@ -10,6 +10,7 @@ import { docConfig } from '../../../config/doc'
 // 无论是否带 ?ip= 都统一指向 /location（历史语义），参数原样带上。
 const TOOL_PAGES: Array<{ loc: string; priority: number; changefreq: string }> = [
     { loc: '/', priority: 1.0, changefreq: 'daily' },
+    { loc: '/ip-query', priority: 0.9, changefreq: 'weekly' },
     { loc: '/location', priority: 0.9, changefreq: 'weekly' },
     { loc: '/asn', priority: 0.9, changefreq: 'weekly' },
     { loc: '/dns', priority: 0.9, changefreq: 'weekly' },

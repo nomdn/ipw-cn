@@ -23,11 +23,11 @@
 
 前往 [AccessKey 管理](https://ram.console.aliyun.com/manage/ak) 添加 accessKey。
 
-添加一个子账号，创建 AccessKey ![阿里云 RAM 子账号与 AccessKey 创建界面](/doc/ram.png)
+添加一个子账号，创建 AccessKey ![阿里云 RAM 子账号与 AccessKey 创建界面](/docimg/ram.png)
 
 给该 AccessKey 授权一个最小的权限：`AuthorizeSecurityGroup`，只能添加安全组的入方向规则。
 
-![为子账号添加权限](/doc/ram_add_authority.png)![创建自定义权限策略](/doc/addCustomRAM-1.png)
+![为子账号添加权限](/docimg/ram_add_authority.png)![创建自定义权限策略](/docimg/addCustomRAM-1.png)
 
 准备好了 AccessKey，就可以开始准备脚本了。
 

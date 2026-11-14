@@ -17,7 +17,7 @@
 
 访问 `http://[2402:4e00:1013:e500:0:9671:f018:4947]` ，会返回本机 IPv6 IP地址。
 
-![浏览器用中括号访问 IPv6 地址的示例](/doc/view_ipv6_adress_url.png)
+![浏览器用中括号访问 IPv6 地址的示例](/docimg/view_ipv6_adress_url.png)
 
 如果有端口，在 IP 地址后面添加端口，比如
 

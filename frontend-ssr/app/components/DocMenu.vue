@@ -48,6 +48,8 @@ const emit = defineEmits<{ select: [index: string] }>()
       </template>
 
       <el-menu-item index="/doc/user/enable_ipv6">个人宽带如何开启IPv6网络访问</el-menu-item>
+      <el-menu-item index="/doc/user/enable_ipv6_cmcc">移动宽带如何开启 IPv6（中国移动）</el-menu-item>
+      <el-menu-item index="/doc/user/enable_ipv6_unicom">联通光猫改桥接并开启 IPv6（中国联通）</el-menu-item>
       <el-menu-item index="/doc/user/cmd_bash_disable_ipv6">命令行禁用/启用IPv6本地网络</el-menu-item>
       <el-menu-item index="/doc/user/cmd_getip">命令行(curl)获取 IPv4 和 IPv6 地址</el-menu-item>
       <el-menu-item index="/doc/user/view_ipv6_adress_url">浏览器访问 IPv6 地址</el-menu-item>

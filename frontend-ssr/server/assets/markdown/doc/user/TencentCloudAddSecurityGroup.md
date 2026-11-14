@@ -24,17 +24,17 @@ Outer IP : 106.224.145.147
 -   访问方式：编程访问
 -   用户权限：`QcloudVPCFullAccess`
 
-![-w1796](/doc/16129597411766.jpg)
+![-w1796](/docimg/16129597411766.jpg)
 
 ## 1\. 创建参数模板，在安全组中引用
 
 直接用 API 频繁修改安全组存在风险，我们可以将[参数模板](https://console.cloud.tencent.com/vpc/tpl)作为安全组中的一行。
 
-![w1758](/doc/16129604712653.jpg)
+![w1758](/docimg/16129604712653.jpg)
 
 在[安全组](https://console.cloud.tencent.com/vpc/securitygroup)中引用即可。
 
-![w1733](/doc/16129602811940.jpg)
+![w1733](/docimg/16129602811940.jpg)
 
 ## 2 准备代码
 

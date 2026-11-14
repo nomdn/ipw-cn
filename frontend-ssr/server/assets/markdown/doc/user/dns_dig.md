@@ -6,7 +6,7 @@ SRV 记录：找到要添加 SRV 记录的位置，然后输入：
 
 端口 协议 名称 服务 优先级 权重 目标 443 _tcp @ _autodiscover 100 1 autodiscover.secureserver.net
 
-![网络请求的是 IPv6 地址](/doc/dns_srv_record.png)
+![网络请求的是 IPv6 地址](/docimg/dns_srv_record.png)
 
 ### 用途
 

@@ -54,7 +54,7 @@ Since 7.47.0, the curl tool enables HTTP/2 by default for HTTPS connections.
 
 在审查模式中，切换到`Network Tab`，列表页中增加`Protocol`一列，访问支持 HTTP2 的页面，可以看到值为`h2`
 
-![http2 chrome](/doc/http2-chrome.png)
+![http2 chrome](/docimg/http2-chrome.png)
 
 ## [Wireshark 抓取并分析 HTTP2协议](#wireshark-抓取并分析-http2协议)
 
@@ -74,7 +74,7 @@ souce  ~/.bash_profile
 
 在 Wireshark Preferences 的 Protocols 中找到 TLS，做如下配置：
 
-![wireshark http2](/doc/wireshark_tls_preferences.png)
+![wireshark http2](/docimg/wireshark_tls_preferences.png)
 
 ### [启动 Chrome](#启动-chrome)
 
@@ -92,13 +92,13 @@ open /Applications/Google\ Chrome.app
 
 Stream ID = 1，这也是与 HTTP/1.1 最大的区别，是流，而不是 文本。
 
-![wireshark http2](/doc/wireshark_http2_1.png)
+![wireshark http2](/docimg/wireshark_http2_1.png)
 
 - 服务端返回首页
 
 Stream ID = 1
 
-![wireshark http2](/doc/wireshark_http2.png)
+![wireshark http2](/docimg/wireshark_http2.png)
 
 ## [Nginx 开启 HTTP/2](#nginx-开启-http-2)
 

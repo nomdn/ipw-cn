@@ -12,15 +12,15 @@ TLS allows client/server applications to communicate over the Internet in a way 
 
 ### TCP 三次握手
 
-- SYN ![SYN](/doc/tls_tcp_01_syn.png)
-- SYN ACK ![SYN ACK](/doc/tls_tcp_02_syn_ack.png)
-- ACK ![ACK](/doc/tls_tcp_03_ack.png)
+- SYN ![SYN](/docimg/tls_tcp_01_syn.png)
+- SYN ACK ![SYN ACK](/docimg/tls_tcp_02_syn_ack.png)
+- ACK ![ACK](/docimg/tls_tcp_03_ack.png)
 
 ### TLS 协商
 
 以 TLS 1.3 为例
 
-- Client Hello ![Client Hello](/doc/tls_01_client_hello.png)
-- Server Hello, Change Cipher Spec, Encrypted Extensions ![Server Hello, Change Cipher Spec, Encrypted Extensions](/doc/tls_02_server_hello_change_cipher_spec_encrypted_extensions.png)
-- Certificate, Certificate Verify, Finished ![Certificate, Certificate Verify, Finished](/doc/tls_03_certificate_verify_finished.png)
-- Change Cipher Spec, Finished ![Change Cipher Spec, Finished](/doc/tls_04_change_cipher_spec_finished.png)
+- Client Hello ![Client Hello](/docimg/tls_01_client_hello.png)
+- Server Hello, Change Cipher Spec, Encrypted Extensions ![Server Hello, Change Cipher Spec, Encrypted Extensions](/docimg/tls_02_server_hello_change_cipher_spec_encrypted_extensions.png)
+- Certificate, Certificate Verify, Finished ![Certificate, Certificate Verify, Finished](/docimg/tls_03_certificate_verify_finished.png)
+- Change Cipher Spec, Finished ![Change Cipher Spec, Finished](/docimg/tls_04_change_cipher_spec_finished.png)

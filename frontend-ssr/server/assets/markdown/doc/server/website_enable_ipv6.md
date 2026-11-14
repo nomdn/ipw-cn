@@ -72,7 +72,7 @@ Accept-Ranges: bytes
 
 接下来在 \`安全组\` 中对 监听在 IPv6 地址上的 80 端口授权访问。
 
-![安全组-IPv6](/doc/securityGroupEnableIPv6.png)
+![安全组-IPv6](/docimg/securityGroupEnableIPv6.png)
 
 ### 1.4 本地电脑验证 IPv6 访问
 
@@ -80,7 +80,7 @@ Accept-Ranges: bytes
 
 ### 1.5 域名添加 IPv6 地址解析
 
-[给域名添加 IPv6 解析记录（AAAA）](/doc/server/ipv6_domain_record)![IPv6 解析记录（AAAA)](/doc/ipv6_domain_resolve.png)
+[给域名添加 IPv6 解析记录（AAAA）](/doc/server/ipv6_domain_record)![IPv6 解析记录（AAAA)](/docimg/ipv6_domain_resolve.png)
 
 添加完后可以通过 [IPv6 在线域名解析工具](https://ipw.wsmdn.top/dns/) 对其解析验证。
 
@@ -104,7 +104,7 @@ Accept-Ranges: bytes
 
 > IPv6 NAT64：用户与 \`IPv6 NAT64\` 的 LB 之间是 IPv6 访问，\`IPv6 NAT64\` 的 LB 与后端 Service、Pod 通信是 IPv4。 优点：业务程序无需改造网络，可支持 IPv6 网络访问。 缺点： 无法获取客户端真实 IPv6 地址。
 
-![K8S 如何开启 IPv6](/doc/k8s-ipv6-ingress.png)
+![K8S 如何开启 IPv6](/docimg/k8s-ipv6-ingress.png)
 
 接下来参照上文，对该 Ingress 背后的负载均衡器添加对来源 IPv6 地址访问的安全组策略即可。
 
@@ -118,13 +118,13 @@ Accept-Ranges: bytes
 
 ### 3.1 创建 IPv6 边缘代理网关
 
-创建边缘代理网关时，选择提前创建好 IPv6 LB。 ![创建 IPv6 边缘代理网关](/doc/istio-ingress-ipv6.png)
+创建边缘代理网关时，选择提前创建好 IPv6 LB。 ![创建 IPv6 边缘代理网关](/docimg/istio-ingress-ipv6.png)
 
 ### 3.2 创建 IPv6 Gateway
 
-创建 IPv6 Gateway 时，关联刚创建的 IPv6 边缘代理网关。 ![istio-gateway-ipv6](/doc/istio-gateway-ipv6.png)
+创建 IPv6 Gateway 时，关联刚创建的 IPv6 边缘代理网关。 ![istio-gateway-ipv6](/docimg/istio-gateway-ipv6.png)
 
-如果开启 HTTPS 访问，则添加好证书即可。 ![istio-gateway-ipv6-https](/doc/istio-gateway-ipv6-https.png)
+如果开启 HTTPS 访问，则添加好证书即可。 ![istio-gateway-ipv6-https](/docimg/istio-gateway-ipv6-https.png)
 
 ### 3.3 创建 IPv6 Virtual Service
 
