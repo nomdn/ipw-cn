@@ -24,3 +24,7 @@
 > - 国内纯 IPv6 网站数量极少，绝大多数网站均为 IPv4/IPv6 双栈
 > - [中国社会科学院大学网络中心 IPv6 资源列表](https://nc.ucass.edu.cn/index/IPV6zylb.htm) 中列出的多数站点经 DNS 查询验证后并非纯 IPv6
 > - 验证纯 IPv6 方法：使用本项目 [DNS 查询工具](https://ipw.wsmdn.top/dns) 查询域名的 AAAA 记录和 A 记录，若仅有 AAAA 记录而无 A 记录，则为纯 IPv6
+
+## 相关检测工具
+
+判断一个站点能否被 IPv6 用户访问，用 [网站 IPv6 检测](/ipv6webcheck)；工具选择见 [IPv6 检测方法与工具](/ipv6check)。

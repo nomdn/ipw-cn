@@ -1,4 +1,11 @@
 <script setup lang="ts">
+// 工具说明正文随 SSR 一起产出：可索引内容不依赖客户端二次取数。
+const { data: pageDoc } = await useAsyncData('ssl-page-doc', () =>
+  $fetch('/api/markdown/ssl')
+)
+const doc = pageDoc.value
+
+import { ogImageMeta, siteUrl } from '../../utils/seo'
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { CircleCheckFilled, CircleCloseFilled,InfoFilled } from '@element-plus/icons-vue';
@@ -11,24 +18,24 @@ const route = useRoute()
 const siteUrlWithSlash = computed(() => config.siteUrl.replace(/\/$/, '') + '/')
 
 useHead({
-  title: `SSL证书检测工具 | IPv4/IPv6证书检查 | ${config.siteName}`,
+  title: `SSL证书检测工具 | IPv4/IPv6双栈证书有效期与签发机构检查 | ${config.siteName}`,
   meta: [
     { name: 'description', content: '专业的SSL证书检测工具,全面检查网站的IPv4和IPv6 SSL证书状态、有效期、签发机构、HTTP版本等信息,支持HTTPS状态码检测、下载速度测试,帮助网站管理员及时发现证书问题,确保网站安全访问' },
-    { name: 'keywords', content: 'ssl证书检测,ssl检查,https证书,ipv6 ssl,ipv4 ssl,证书有效期,ssl状态,https检测,网站安全,证书签发机构' },
     { property: 'og:title', content: 'SSL证书检测 - IPv4/IPv6双栈证书状态检查工具' },
     { property: 'og:description', content: '全面检测网站SSL证书状态,支持IPv4和IPv6双栈检测,提供证书有效期、签发机构等详细信息' },
-    { property: 'og:image', content: siteUrlWithSlash.value + 'favicon.svg' },
+    ...ogImageMeta,
     { property: 'og:type', content: 'website' },
   ],
   script: [
     {
+      key: 'ssl-jsonld',
       type: 'application/ld+json',
       innerHTML: JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'WebApplication',
         name: 'SSL证书检测工具',
         description: '专业的SSL证书检测工具，支持IPv4和IPv6 SSL证书状态、有效期、签发机构、HTTP版本等检测，提供HTTPS状态码检测、下载速度测试。',
-        url: siteUrlWithSlash.value + 'ssl',
+        url: siteUrl('ssl'),
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Web',
         offers: {
@@ -351,46 +358,46 @@ onMounted(() => {
     <div v-if="result && result.ipv4 && result.ipv4.is_reachable && !result.ipv4.is_expired && (!result.ipv6 || (!result.ipv6.is_expired && result.ipv6.is_reachable))">
       <h3>结论：<el-icon><CircleCheckFilled style="color: lightgreen;"/></el-icon>网站{{ extractHost(testDomain) }} 证书有效 </h3>
       <p><el-icon><InfoFilled style="color: lightgreen;"/></el-icon>请把下方代码贴到网站底部，把这个好消息告诉你的用户，以便用户核验。</p>
-        <img src="/ssl-s1.svg"/>
+        <img src="/ssl-s1.svg" alt="本站支持 SSL 安全访问徽标 样式 1"/>
         <pre><code>&lt;a href="{{ siteUrlWithSlash }}ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="{{ siteUrlWithSlash }}ssl-s1.svg"&gt;&lt;/a&gt;</code></pre>
-        <img src="/ssl-s2.svg"/>
+        <img src="/ssl-s2.svg" alt="本站支持 SSL 安全访问徽标 样式 2"/>
         <pre><code>&lt;a href="{{ siteUrlWithSlash }}ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="{{ siteUrlWithSlash }}ssl-s2.svg"&gt;&lt;/a&gt;</code></pre>
-        <img src="/ssl-s3.svg"/>
+        <img src="/ssl-s3.svg" alt="本站支持 SSL 安全访问徽标 样式 3"/>
         <pre><code>&lt;a href="{{ siteUrlWithSlash }}ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="{{ siteUrlWithSlash }}ssl-s3.svg"&gt;&lt;/a&gt;</code></pre>
-        <img src="/ssl-s4.svg"/>
+        <img src="/ssl-s4.svg" alt="本站支持 SSL 安全访问徽标 样式 4"/>
         <pre><code>&lt;a href="{{ siteUrlWithSlash }}ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="{{ siteUrlWithSlash }}ssl-s4.svg"&gt;&lt;/a&gt;</code></pre>
-        <img src="/ssl-s5.svg"/>
+        <img src="/ssl-s5.svg" alt="本站支持 SSL 安全访问徽标 样式 5"/>
         <pre><code>&lt;a href="{{ siteUrlWithSlash }}ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="{{ siteUrlWithSlash }}ssl-s5.svg"&gt;&lt;/a&gt;</code></pre>
-        <img src="/ssl-s6.svg"/>
+        <img src="/ssl-s6.svg" alt="本站支持 SSL 安全访问徽标 样式 6"/>
         <pre><code>&lt;a href="{{ siteUrlWithSlash }}ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="{{ siteUrlWithSlash }}ssl-s6.svg"&gt;&lt;/a&gt;</code></pre>
 
     </div>
     <div v-if="result && result.ipv4 && result.ipv4.is_reachable && !result.ipv4.is_expired && result.ipv6 && result.ipv6.is_reachable && result.ipv6.is_expired">
       <h3>结论：<el-icon><CircleCheckFilled style="color: lightgreen;"/></el-icon>网站{{ extractHost(testDomain) }} 证书有效,但不支持IPv6访问 </h3>
       <p><el-icon><InfoFilled style="color: lightgreen;"/></el-icon>请把下方代码贴到网站底部，把这个好消息告诉你的用户，以便用户核验。</p>
-        <img src="/ssl-s1.svg"/>
+        <img src="/ssl-s1.svg" alt="本站支持 SSL 安全访问徽标 样式 1"/>
         <pre><code>&lt;a href="{{ siteUrlWithSlash }}ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="{{ siteUrlWithSlash }}ssl-s1.svg"&gt;&lt;/a&gt;</code></pre>
-        <img src="/ssl-s2.svg"/>
+        <img src="/ssl-s2.svg" alt="本站支持 SSL 安全访问徽标 样式 2"/>
         <pre><code>&lt;a href="{{ siteUrlWithSlash }}ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="{{ siteUrlWithSlash }}ssl-s2.svg"&gt;&lt;/a&gt;</code></pre>
-        <img src="/ssl-s3.svg"/>
+        <img src="/ssl-s3.svg" alt="本站支持 SSL 安全访问徽标 样式 3"/>
         <pre><code>&lt;a href="{{ siteUrlWithSlash }}ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="{{ siteUrlWithSlash }}ssl-s3.svg"&gt;&lt;/a&gt;</code></pre>
-        <img src="/ssl-s4.svg"/>
+        <img src="/ssl-s4.svg" alt="本站支持 SSL 安全访问徽标 样式 4"/>
         <pre><code>&lt;a href="{{ siteUrlWithSlash }}ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="{{ siteUrlWithSlash }}ssl-s4.svg"&gt;&lt;/a&gt;</code></pre>
-        <img src="/ssl-s5.svg"/>
+        <img src="/ssl-s5.svg" alt="本站支持 SSL 安全访问徽标 样式 5"/>
         <pre><code>&lt;a href="{{ siteUrlWithSlash }}ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="{{ siteUrlWithSlash }}ssl-s5.svg"&gt;&lt;/a&gt;</code></pre>
-        <img src="/ssl-s6.svg"/>
+        <img src="/ssl-s6.svg" alt="本站支持 SSL 安全访问徽标 样式 6"/>
         <pre><code>&lt;a href="{{ siteUrlWithSlash }}ssl/?site={{ extractHost(testDomain) }}" title="本站支持 SSL 安全访问" target='_blank'&gt;&lt;img style='display:inline-block;vertical-align:middle' alt="本站支持 SSL 安全访问" src="{{ siteUrlWithSlash }}ssl-s6.svg"&gt;&lt;/a&gt;</code></pre>
 
     </div>
     <div v-else-if="result && result.ipv4 && result.ipv4.is_reachable && result.ipv4.is_expired">
       <h3>结论：<CircleCloseFilled style="width: 1.3em;color: red;"/>网站{{ testDomain }} 证书无效 </h3>
       <h2>都没有证书了这网站还活啥</h2>
-      <el-image src="/jingya.jpg"></el-image>
+      <el-image src="/jingya.jpg" alt="提示配图：建议尽快适配 IPv6 / 续期证书"></el-image>
     </div>
     <div v-else-if="result && result.ipv4 && !result.ipv4.is_reachable && result.ipv6 && !result.ipv6.is_reachable">
       <h3>结论：<CircleCloseFilled style="width: 1.3em;color: red;"/>网站{{ testDomain }} 不可达 </h3>
       <h2>...</h2>
-      <el-image src="/jingya.jpg"></el-image>
+      <el-image src="/jingya.jpg" alt="提示配图：建议尽快适配 IPv6 / 续期证书"></el-image>
     </div> 
     <blockquote>
       网站不支持 IPv6 SSL 可能原因：<br/>
@@ -400,6 +407,9 @@ onMounted(() => {
        3. 网站所在服务器已开启 IPv6，但未开启SSL证书，请参考 <a href="/doc/server/nginx_ipv6" target="_blank">Nginx 开启 IPv6 SSL</a><br/>
     </blockquote>
 
+  <div v-if="doc" class="markdown">
+    <div v-html="doc"></div>
+  </div>
   </div>
 
   

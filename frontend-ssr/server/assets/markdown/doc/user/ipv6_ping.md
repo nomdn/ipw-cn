@@ -128,3 +128,7 @@ Internet Control Message Protocol v6
             Data: 62e681fd000c22fb
             [Length: 8]
 ```
+
+## 相关检测工具
+
+ICMPv6 不通时建议再用 [IPv6 TCPing](/ipv6tcping) 判断端口是否可达；三类检测场景见 [IPv6 检测方法与工具](/ipv6check)。

@@ -45,3 +45,6 @@
 
 通过 [IPv6 TCPing 测试工具](https://ipw.wsmdn.top/ipv6tcping) 可以查询对应 IPv6 DNS 地址是否可以 Ping 通。
 
+## 相关检测工具
+
+配好 IPv6 DNS 后可用 [DNS 查询](/dns) 核对 A / AAAA 解析；完整检测路径见 [IPv6 检测方法与工具](/ipv6check)。

@@ -85,6 +85,12 @@ export default defineNuxtConfig({
   url: config.siteUrl, 
   name: 'Lemon IPW' 
   },
+  // config.noindex 是「整站禁止索引」开关（预发布/内部演示用）。
+  // 只在 app.vue 加 <meta name=robots> 不够：@nuxtjs/robots 生成的 robots.txt
+  // 仍会 Allow: / 并列出 Sitemap，等于一边关门一边递钥匙。
+  robots: config.noindex
+    ? { disallow: ['/'], sitemap: [] }
+    : {},
   // Element Plus 样式走按需引入：@element-plus/nuxt 默认 importStyle: 'css'，
   // 模板里用到的每个组件都会各自带上 `element-plus/es/components/<组件>/style/css`
   // （其内部再链到 theme-chalk/base.css，`:root` 的 --el-* 变量就在那里定义）。
@@ -116,7 +122,7 @@ export default defineNuxtConfig({
         }
       ],
       link: [
-        { rel: 'icon', type: 'image/x-icon', href: '/favicon.svg' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
         // preconnect 三个 IP 探测源站。crossorigin 不能省：$fetch 走 fetch() 的跨域
         // （CORS）模式，不带它预热出来的是 no-cors 连接，真正的 fetch 用不上、还得重连。
         ...ipProbeOrigins.map((href) => ({

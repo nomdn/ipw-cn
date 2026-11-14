@@ -1,5 +1,3 @@
-# DNS 解析的流程
-
 DNS 一般分为 **本地DNS**（一般由电信运营商提供）和 **权威DNS**（由根 DNS、顶级 DNS、二级 DNS 组成）。
 
 ## 本地 DNS
@@ -132,3 +130,8 @@ wsmdn.top.		3600	IN	NS	gloria.ns.cloudflare.com.
 ;; ANSWER SECTION:
 ipw.wsmdn.top.		300	IN	CNAME	ipw.wsmdn.top.a1.initac.com.
 ```
+
+## 相关工具
+
+- [IPv6 检测方法与工具](/ipv6check)：查 AAAA 记录前先分清本机检测与网站检测
+- [DNSSEC 验证](/dnssec) · [IPv6 网站检测](/ipv6webcheck)

@@ -1,4 +1,11 @@
 <script setup lang="ts">
+// 工具说明正文随 SSR 一起产出：可索引内容不依赖客户端二次取数。
+const { data: pageDoc } = await useAsyncData('ipv6tcping-page-doc', () =>
+  $fetch('/api/markdown/ipv6tcping')
+)
+const doc = pageDoc.value
+
+import { ogImageMeta, siteUrl } from '../../utils/seo'
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
@@ -12,21 +19,21 @@ useHead({
   title: `IPv6 TCPing测试工具 | IPv6服务器连通性检测 | ${config.siteName}`,
   meta: [
     { name: 'description', content: '专业的IPv6 TCPing测试工具,提供多节点IPv6 TCP连通性检测服务,支持自定义端口测试,实时检测IPv6服务器丢包率、平均延迟、最大最小响应时间,助力IPv6网络质量诊断与优化,推进IPv6规模部署和应用' },
-    { name: 'keywords', content: 'ipv6 tcping测试,ipv6连通性检测,ipv6服务器延迟,ipv6丢包率,ipv6端口测试,ipv6网络质量,ipv6服务器测试,ipv6网络诊断' },
     { property: 'og:title', content: 'IPv6 TCPing测试 - IPv6服务器连通性与延迟检测' },
     { property: 'og:description', content: '多节点IPv6 TCPing测试,检测服务器连通性、丢包率与响应延迟' },
-    { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
+    ...ogImageMeta,
     { property: 'og:type', content: 'website' },
   ],
   script: [
     {
+      key: 'ipv6tcping-jsonld',
       type: 'application/ld+json',
       innerHTML: JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'WebApplication',
         name: 'IPv6 TCPing连通性测试工具',
         description: '专业的IPv6 TCPing测试工具，多节点检测IPv6服务器连通性和延迟，支持自定义端口测试，提供丢包率、平均延迟、最大最小响应时间等数据。',
-        url: config.siteUrl + 'ipv6tcping',
+        url: siteUrl('ipv6tcping'),
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Web',
         offers: {
@@ -280,6 +287,9 @@ onMounted(() => {
         访客IP: {{ userIP }}，您的网络{{ isIPv6(userIP) ? 'IPv6' : 'IPv4'}}访问优先
       </blockquote>
 
+  <div v-if="doc" class="markdown">
+    <div v-html="doc"></div>
+  </div>
   </div>
 </template>
 

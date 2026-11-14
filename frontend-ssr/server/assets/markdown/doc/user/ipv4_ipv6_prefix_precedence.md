@@ -397,3 +397,6 @@ set teredo     - 设定 Teredo 状态。
 -   [RFC6724: Default Address Selection for Internet Protocol Version 6 (IPv6)](https://www.rfc-editor.org/rfc/rfc6724)
 -   [IANA IPv6 Special-Purpose Address Registry](https://www.iana.org/assignments/iana-ipv6-special-registry/iana-ipv6-special-registry.xhtml)
 
+## 相关检测工具
+
+改完前缀策略可在 [首页](/) 复查当前是 IPv6 优先还是 IPv4 优先；完整检测流程见 [IPv6 检测方法与工具](/ipv6check)。

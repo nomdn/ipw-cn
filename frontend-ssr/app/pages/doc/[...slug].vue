@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { getDocMeta } from '../../../config/doc'
+import { ogImageMeta, siteUrl } from '../../../utils/seo'
+import { docConfig, getDocMeta } from '../../../config/doc'
 import { config } from '../../../config/index'
 
 // 窄屏下这条侧栏被 CSS 隐藏（导航在顶栏抽屉里），但照样要花钱水合 ——
@@ -9,6 +10,11 @@ const isNarrow = useShellNarrow()
 const route = useRoute();
 
 const path = computed(() => route.path)
+// 未知 slug 直接 404：否则 getDocMeta 返回空 title/description、markdown 接口 404，
+// 页面却仍以 200 输出并带 canonical —— 标准 soft 404，会被当作空内容页收录。
+if (!docConfig[path.value]) {
+  throw createError({ statusCode: 404, statusMessage: '文档不存在' })
+}
 const { data: page } = await useFetch(() => `/api/markdown${path.value}`)
 
 const meta = computed(() => getDocMeta(route.path))
@@ -16,7 +22,7 @@ const meta = computed(() => getDocMeta(route.path))
 // 侧栏菜单与卡片仍读原字段展示，不受影响。
 const seoTitle = computed(() => meta.value.seoTitle ?? meta.value.title)
 const seoDescription = computed(() => meta.value.seoDescription ?? meta.value.description)
-const docUrl = computed(() => new URL(route.path, config.siteUrl).href)
+const docUrl = computed(() => siteUrl(route.path))
 useHead({
   title: seoTitle,
   titleTemplate: computed(() => `%s | ${config.siteName}`),
@@ -24,18 +30,19 @@ useHead({
     { name: 'description', content: seoDescription },
     { property: 'og:title', content: computed(() => `${seoTitle.value} | ${config.siteName}`) },
     { property: 'og:description', content: seoDescription },
-    { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
+    ...ogImageMeta,
     { property: 'og:type', content: 'article' },
   ],
   script: [
     {
+      key: 'doc-slug-jsonld',
       type: 'application/ld+json',
       innerHTML: computed(() => JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'BreadcrumbList',
         itemListElement: [
-          { '@type': 'ListItem', position: 1, name: '首页', item: config.siteUrl },
-          { '@type': 'ListItem', position: 2, name: '文档', item: new URL('/doc', config.siteUrl).href },
+          { '@type': 'ListItem', position: 1, name: '首页', item: siteUrl() },
+          { '@type': 'ListItem', position: 2, name: '文档', item: siteUrl('/doc') },
           { '@type': 'ListItem', position: 3, name: meta.value.title, item: docUrl.value }
         ]
       }))

@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onBeforeUnmount, ref } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import { Moon, Sunny, Expand } from '@element-plus/icons-vue';
 import { config } from '../config/index';
+import { siteOrigin, siteUrl } from '../utils/seo'
 
 // ==================== 窄屏判定（水合前就必须定下来） ====================
 // 为什么不能等到 onMounted 才算：SSR 不知道视口宽度，只能按宽屏输出 ——
@@ -132,8 +133,8 @@ let umamiScript: HTMLScriptElement | null = null
 // canonical 按纯路径（不含 query）：工具页普遍接受 ?ip= / ?site= 等参数，
 // 同一内容会以无限多组 query 变体出现，SEO 审计由此判定「sitemap 缺少重要页面」；
 // 统一收敛到裸路径，爬虫就不会把 ?ip=x 当独立页面收录。
-const siteOrigin = config.siteUrl.endsWith('/') ? config.siteUrl : config.siteUrl + '/'
-const canonicalUrl = computed(() => new URL(route.path, siteOrigin).href)
+// siteOrigin 由 utils/seo.ts 统一推导，全站的 canonical / og:url / JSON-LD 共用同一份基准。
+const canonicalUrl = computed(() => siteUrl(route.path))
 // 站点级结构化数据（WebSite + Organization）：给搜索引擎的实体锚点，
 // 各工具页的 WebApplication 与文档页的 BreadcrumbList 通过 url 与之关联。
 const siteJsonLd = JSON.stringify({
@@ -184,6 +185,7 @@ useHead({
       ],
   script: [
     {
+      key: 'site-jsonld',
       type: 'application/ld+json',
       innerHTML: siteJsonLd,
     }
@@ -288,7 +290,7 @@ onMounted(() => {
              有 JS 时也要闪一下）。原生 <img> 直接进 HTML，还顺带省掉 el-image
              及其 image-viewer 的样式。宽高属性声明固有比例，显示宽度由下文
              :deep(.el-menu-item a img) 定为 50px。 -->
-        <img src="/favicon.svg" alt="" width="50" height="50" style="margin-top: 20px;" />
+        <img src="/favicon.svg" alt="柠檬味ipw.cn 站点标识" width="50" height="50" style="margin-top: 20px;" />
         <h2 style="display: inline-block; margin-left: 10px" v-if="!isNarrow">{{ config.siteName }}</h2>
       </router-link>
     </el-menu-item>
@@ -360,7 +362,7 @@ onMounted(() => {
       <span v-if="config.ICP">&nbsp;|&nbsp;</span>
       <!-- 同上：原生 <img> 而非 el-image（1em 见方的小图标，用不着 lazy/预览器）。
            显示尺寸由行内 style 定死；width/height 属性只声明固有比例（36×40），防抖动。 -->
-      <img v-if="config.GongAn" src="/备案图标.png" alt="" width="36" height="40" style="height: 1em; width: 1em;" />
+      <img v-if="config.GongAn" src="/备案图标.png" alt="公安备案标识" width="36" height="40" style="height: 1em; width: 1em;" />
       <a v-if="config.GongAn" :href="'https://beian.mps.gov.cn/#/query/webSearch?code=' + cleanChineseCharacters(config.GongAn)" target="_blank" rel="noreferrer" >{{ config.GongAn }}</a>
       <span v-if="config.GongAn">&nbsp;|&nbsp;</span>
       <a href="https://www.china-ipv6.cn/" target="_blank" rel="noreferrer" >国家IPv6发展监测平台</a>

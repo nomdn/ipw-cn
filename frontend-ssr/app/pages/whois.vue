@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ogImageMeta, siteUrl } from '../../utils/seo'
 import { useMiddlewareFetch } from '../../utils/middleware';
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
@@ -9,30 +10,32 @@ import { isIPv6 } from 'is-ip'
 
 const route = useRoute()
 
+// 带 ?site= 时标题指向具体域名；og:title 必须跟着变，
+// 否则搜索结果标题与分享卡片标题对不上。
+const pageTitle = computed(() => route.query.site
+  ? `Whois查询结果 - ${route.query.site} 的域名注册信息 | ${config.siteName}`
+  : `Whois域名查询工具 | 域名注册商、注册时间与到期时间查询 | ${config.siteName}`)
+
 useHead({
-  // 原标题「Whois查询 | 站名」只有十几个字符，被 SEO 审计判为过短；
-  // 带查询参数时展示的是具体域名，单独给一个含关键词的标题。
-  title: route.query.site
-    ? `Whois查询结果 - ${route.query.site} 的域名注册信息 | ${config.siteName}`
-    : `Whois域名查询工具 | 域名注册信息与到期时间查询 | ${config.siteName}`,
+  title: pageTitle,
   titleTemplate: '%s',
   meta: [
     { name: 'description', content: '专业的Whois域名查询工具,支持.com、.net、.cn等国内外域名WHOIS信息在线查询,提供域名注册商、注册时间、到期时间、DNS服务器、域名状态等详细信息,支持IPv4/IPv6多节点检测,助力域名管理与交易决策' },
-    { name: 'keywords', content: 'whois查询,域名whois,whois信息查询,域名注册信息,域名到期时间,域名注册商,dns服务器查询,域名whois工具' },
-    { property: 'og:title', content: 'Whois域名查询工具 - 域名注册信息在线查询' },
+    { property: 'og:title', content: pageTitle },
     { property: 'og:description', content: '专业的Whois域名查询工具,支持国内外域名WHOIS信息查询,提供域名注册商、注册时间、到期时间等详细信息' },
-    { property: 'og:image', content: `${config.siteUrl}favicon.svg` },
+    ...ogImageMeta,
     { property: 'og:type', content: 'website' },
   ],
   script: [
     {
+      key: 'whois-jsonld',
       type: 'application/ld+json',
       innerHTML: JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'WebApplication',
         name: 'Whois域名查询工具',
         description: '专业的Whois域名查询工具,支持国内外域名WHOIS信息查询,提供域名注册商、注册时间、到期时间、DNS服务器等详细信息',
-        url: config.siteUrl + 'whois',
+        url: siteUrl('whois'),
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Any',
         offers: {

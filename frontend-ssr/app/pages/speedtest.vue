@@ -1,4 +1,11 @@
 <script setup lang="ts">
+// 工具说明正文随 SSR 一起产出：可索引内容不依赖客户端二次取数。
+const { data: pageDoc } = await useAsyncData('speedtest-page-doc', () =>
+  $fetch('/api/markdown/speedtest')
+)
+const doc = pageDoc.value
+
+import { ogImageMeta, siteUrl } from '../../utils/seo'
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
@@ -10,24 +17,24 @@ import AdvancedOptions from '../components/AdvancedOptions.vue';
 const route = useRoute()
 
 useHead({
-  title: `IPv4网站测速工具 | 全国多节点并发测速 | ${config.siteName}`,
+  title: `IPv4网站测速工具 | 全国多节点并发测速与网站性能分析工具 | ${config.siteName}`,
   meta: [
     { name: 'description', content: '专业的IPv4网站测速工具,提供全国多节点并发测速服务,快速返回网站响应时间、下载速度、页面大小、DNS解析时间、HTTP连接时间等详细性能指标,支持IPv4网站性能检测与优化,助力网站性能监控与用户体验改善' },
-    { name: 'keywords', content: 'ipv4网站测速,ipv4测速,网站速度测试,ipv4性能检测,网站响应时间,ipv4下载速度,ipv4性能优化,网站性能监控' },
     { property: 'og:title', content: 'IPv4网站测速 - 全国多节点并发性能检测工具' },
     { property: 'og:description', content: '全国多节点IPv4网站测速,快速获取响应时间、下载速度等性能数据' },
-    { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
+    ...ogImageMeta,
     { property: 'og:type', content: 'website' },
   ],
   script: [
     {
+      key: 'speedtest-jsonld',
       type: 'application/ld+json',
       innerHTML: JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'WebApplication',
         name: 'IPv4网站性能测速工具',
         description: '专业的IPv4网站测速工具，全国多节点并发测速，提供响应时间、下载速度、页面大小、DNS解析时间等详细性能指标。',
-        url: config.siteUrl + 'speedtest',
+        url: siteUrl('speedtest'),
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Web',
         offers: {
@@ -260,6 +267,9 @@ onMounted(() => {
       </table>
     </div>
 
+  <div v-if="doc" class="markdown">
+    <div v-html="doc"></div>
+  </div>
   </div>
 </template>
 

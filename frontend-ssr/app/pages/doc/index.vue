@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ogImageMeta, siteUrl } from '../../../utils/seo'
 import { getDocMeta } from '../../../config/doc'
 import { config } from '../../../config/index'
 
@@ -26,18 +27,19 @@ useHead({
     { name: 'description', content: seoDescription },
     { property: 'og:title', content: `${seoTitle} | ${config.siteName}` },
     { property: 'og:description', content: seoDescription },
-    { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
+    ...ogImageMeta,
     { property: 'og:type', content: 'website' },
   ],
   script: [
     {
+      key: 'doc-index-jsonld',
       type: 'application/ld+json',
       innerHTML: JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'BreadcrumbList',
         itemListElement: [
-          { '@type': 'ListItem', position: 1, name: '首页', item: config.siteUrl },
-          { '@type': 'ListItem', position: 2, name: meta.title, item: new URL('/doc', config.siteUrl).href }
+          { '@type': 'ListItem', position: 1, name: '首页', item: siteUrl() },
+          { '@type': 'ListItem', position: 2, name: meta.title, item: siteUrl('/doc') }
         ]
       })
     }

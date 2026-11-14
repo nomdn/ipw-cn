@@ -5,6 +5,7 @@
 // https://nipw.cn/<key>.txt 并比对，所以 key 必须能公开访问（见 public/ 下的 key 文件）。
 // 放进 runtimeConfig 只是为了支持环境变量覆盖（NUXT_INDEXNOW_KEY），默认值与 key 文件一致。
 import { useRuntimeConfig } from '#imports'
+import { config as siteConfig } from '../../config/index'
 
 const INDEXNOW_ENDPOINT = 'https://api.indexnow.org/IndexNow'
 
@@ -37,6 +38,10 @@ export async function fetchSitemapUrls(siteUrl: string): Promise<string[]> {
 }
 
 export async function submitIndexNow(urls: string[], siteUrl: string): Promise<IndexNowResult> {
+  // 整站 noindex 时不主动推送：robots.txt 已 Disallow，再往 IndexNow 递 URL 是自相矛盾。
+  if (siteConfig.noindex) {
+    return { submitted: 0, status: 0, body: 'site is noindex, submission skipped' }
+  }
   const key = useRuntimeConfig().indexnowKey
   if (!key) throw new Error('indexnowKey is not configured')
   const res = await fetch(INDEXNOW_ENDPOINT, {

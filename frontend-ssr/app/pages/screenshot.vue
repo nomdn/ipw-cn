@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ogImageMeta, siteUrl } from '../../utils/seo'
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index'
@@ -13,24 +14,24 @@ useHead({
   // 原标题「网站截图工具 - 站名」默认态过短；描述不足 50 字被审计判过短，一并加长。
   title: route.query.site
     ? `网站截图工具 - ${route.query.site} 的网页快照 | ${config.siteName}`
-    : `网站截图工具 - 在线网页快照生成 | ${config.siteName}`,
+    : `网站截图工具 | 在线网页快照生成、整页截图预览与设计走查 | ${config.siteName}`,
   meta: [
     { name: 'description', content: '在线网站截图工具：输入网址即可获取网页实时快照，支持任意公开网站的整页截图与预览，查看网页布局、设计效果与渲染状态，可用于页面监控、设计走查与内容存档比对，免费无需注册' },
-    { name: 'keywords', content: '网站截图,网页快照,在线截图,网页预览,网站布局查看,截图工具,整页截图,网页快照生成' },
     { property: 'og:title', content: '网站截图工具 - 在线网页快照生成' },
     { property: 'og:description', content: '输入网址即可获取网页实时快照，查看网页布局与设计效果，支持任意公开网站，免费无需注册' },
-    { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
+    ...ogImageMeta,
     { property: 'og:type', content: 'website' },
   ],
   script: [
     {
+      key: 'screenshot-jsonld',
       type: 'application/ld+json',
       innerHTML: JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'WebApplication',
         name: '网站截图工具',
         description: '在线网站截图工具，输入网址即可获取网页实时快照，支持任意公开网站的整页截图与预览。',
-        url: new URL('/screenshot', config.siteUrl).href,
+        url: siteUrl('/screenshot'),
         applicationCategory: 'UtilitiesApplication',
         operatingSystem: 'Web',
         offers: {

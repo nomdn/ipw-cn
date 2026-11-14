@@ -1,4 +1,12 @@
 <script setup lang="ts">
+// 首页 SEO 正文：只新增内容，不改 H1 / slogan / blockquote 等原有视觉元素。
+// 走与工具页相同的 markdown 通道，SSR 期就进 HTML，不依赖客户端二次取数。
+const { data: pageDoc } = await useAsyncData('index-page-doc', () =>
+  $fetch('/api/markdown/index')
+)
+const doc = pageDoc.value
+
+import { ogImageMeta, siteUrl } from '../../utils/seo'
 import { computed, ref, onMounted } from 'vue';
 import { isIPv6 } from 'is-ip';
 import { config } from '../../config/index';
@@ -8,20 +16,24 @@ const route = useRoute();
 // canonical 由 app.vue 全局下发（见下方 useHead 注释）。
 
 useHead({
-  title: `${config.siteName} | IP查询工具 | IPv4/IPv6地址查询与网络测试平台`,
+  // 品牌词是站内唯一高权重词，工具页自身权重不足以独立撑起长尾词。
+  // 品牌固定占第一段；第二、三段承接 GSC 报告里卡在 7~9 位的品类词
+  // （ip / ip查询 / ipv6检测 / ipv6查询 / ipv6地址查询）。
+  // 已知代价：SERP 按设备宽度截断时，后半段关键词可能不展示，但仍参与相关性计算。
+  title: `${config.siteName} | IP查询与IPv6检测工具 | IPv4/IPv6地址查询、IPv6查询与网络测试平台`,
   titleTemplate: '%s',
   // canonical / og:url / twitter:card 由 app.vue 全局下发（按纯路径去 query），
   // 这里不再重复声明，避免 head 里出现两条 canonical。
   meta: [
-    { name: 'description', content: `${config.siteName}提供专业的IP查询服务,支持IPv4和IPv6地址在线查询、归属地定位、网络测速、DNS解析、SSL证书检测、TCPing测试等多种网络工具,致力于推进IPv6规模部署和应用,打造去中心化的IP查询平台` },
-    { name: 'keywords', content: 'ipv6,ipv4,ip查询,ipv6查询,ipv4查询,ipv6地址查询,ipv4地址查询,网络测速,DNS查询,SSL检测,TCPing,IP归属地,IPv6优先' },
-    { property: 'og:title', content: `${config.siteName} - 专业IP查询与网络测试工具平台` },
-    { property: 'og:description', content: '提供IPv4/IPv6地址查询、网络测速、DNS解析、SSL检测等全方位网络诊断工具,助力IPv6普及与部署' },
-    { property: 'og:image', content: `${config.siteUrl}favicon.svg` },
+    { name: 'description', content: `打开即完成 IP 查询：显示本机公网 IPv4 地址、IPv6 地址与 IPv4/IPv6 访问优先级，支持 IPv6 查询、IP 归属地定位、DNS 解析、SSL 证书检测、TCPing 与 Whois 查询。免费、无需注册，多节点并发返回结果 —— ${config.siteName}` },
+    { property: 'og:title', content: `${config.siteName} - IP查询与IPv6检测工具` },
+    { property: 'og:description', content: '打开即显示本机公网 IPv4 / IPv6 地址与网络优先级，支持 IP 查询、IPv6 查询、归属地定位、DNS、SSL、TCPing 与 Whois 检测，免费无需注册' },
+    ...ogImageMeta,
     { property: 'og:type', content: 'website' },
   ],
   script: [
     {
+      key: 'ip-probe',
       // —— IP 探测提前到 HTML 解析期（LCP 优化）——
       // 原来三个探测请求在 onMounted（水合完成后）才发出，模拟链路是
       // 「水合 → 发请求 → 等服务端 → 回填渲染」，IPv6 行作为 LCP 元素被整段串行拖住
@@ -48,13 +60,14 @@ useHead({
       ].join('\n'),
     },
     {
+      key: 'index-jsonld',
       type: 'application/ld+json',
       innerHTML: JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'WebApplication',
         name: config.siteName,
-        description: `${config.siteName}提供专业的IP查询服务,支持IPv4和IPv6地址在线查询、归属地定位、网络测速、DNS解析、SSL证书检测、TCPing测试等多种网络工具,致力于推进IPv6规模部署和应用,打造去中心化的IP查询平台`,
-        url: new URL(route.path, config.siteUrl).toString(),
+        description: `${config.siteName}提供本机 IPv6 检测、IPv4/IPv6 地址查询、归属地定位、DNS 解析、SSL 证书检测、TCPing 测速与 Whois 查询，多节点并发的网络诊断工具，免费无需注册`,
+        url: siteUrl(route.path),
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Any',
         offers: {
@@ -62,7 +75,7 @@ useHead({
           price: '0',
           priceCurrency: 'CNY'
         },
-        featureList: 'IPv4地址查询,IPv6地址查询,IP归属地定位,网络测速,DNS解析,SSL证书检测,TCPing测试,IPv6优先检测',
+        featureList: 'IPv4地址查询,IPv6地址查询,IP归属地定位,网络测速,DNS解析,SSL证书检测,TCPing测试,本机IPv6检测,IPv6优先检测',
         about: [
           {
             '@type': 'Thing',
@@ -211,11 +224,28 @@ onMounted(() => {
 
     <div v-if="highlightedCode" v-html="highlightedCode" class="code-block"></div>
     <div v-else class="code-block code-block--fallback">{{ code }}</div>
+
+    <div v-if="doc" class="markdown">
+      <div v-html="doc"></div>
+    </div>
   </div>
 
 </template>
 <style scoped>
 @import "../style.css";
+
+/* 首页正文样式单独写一份：tool-common.css 还带 pre / .one-line / .el-input 等规则，
+   整表引入会连带改动首页现有元素的视觉。这里只取 markdown 需要的几条。 */
+.markdown {
+  margin: 24px 0 8px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.markdown :deep(h2) { font-size: 1.25em; margin: 20px 0 10px; }
+.markdown :deep(table) { border-collapse: collapse; margin: 12px 0; max-width: 100%; }
+.markdown :deep(th), .markdown :deep(td) { border: 1px solid rgba(128,128,128,.35); padding: 6px 12px; text-align: left; }
+.markdown :deep(a) { color: #299764; text-decoration: none; }
+.markdown :deep(code) { background: rgba(128,128,128,.12); padding: 1px 4px; border-radius: 3px; }
 .el-menu--horizontal > .el-menu-item:nth-child(1) {
   margin-right: auto;
 }

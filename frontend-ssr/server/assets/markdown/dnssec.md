@@ -1,5 +1,3 @@
-# DNSSEC 原理介绍
-
 DNSSEC（Domain Name System Security Extensions，DNS 安全扩展）通过**数字签名**为 DNS 应答提供来源验证与数据完整性保护：解析器收到应答后，用域名公钥本地验证签名，确认记录确实来自该域名的权威 DNS、且在传输途中没有被篡改或劫持。它防的是 DNS 欺骗与中间人攻击，但不加密内容——机密性仍由 TLS 负责。
 
 ![DNSSEC 验证链](/dnssec-trustchain-openai.svg)
@@ -35,4 +33,4 @@ DNSSEC（Domain Name System Security Extensions，DNS 安全扩展）通过**数
 - 解析器不支持 DNSSEC（带 DO 位也不返回 RRSIG，本站已默认规避）；
 - 域名处于 ClientHold / ServerHold 暂停状态。
 
-[DNS 解析查询](/dns) | [Whois 域名查询](/whois) | [回到顶部](#dnssec-原理介绍)
+[DNS 解析查询](/dns) | [Whois 域名查询](/whois) | [回到顶部](#dnssec-原理介绍) | [IPv6 检测方法与工具](/ipv6check)

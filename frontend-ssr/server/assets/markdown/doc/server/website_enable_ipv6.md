@@ -135,3 +135,7 @@ Accept-Ranges: bytes
 验证方法同上，此处不再赘述。
 
 IPv6 大势所趋，广大站长赶紧行动吧。
+
+## 相关检测工具
+
+改完配置用 [网站 IPv6 检测](/ipv6webcheck) 复核双栈访问结果，端口不通时用 [IPv6 TCPing](/ipv6tcping)；验收自查清单见 [IPv6 检测方法与工具](/ipv6check)。

@@ -325,3 +325,16 @@ html.dark pre code {
     font-size: 1em;
   }
 }
+
+/* 工具页 markdown 说明正文：内容见 server/assets/markdown/*.md，随 SSR 输出 */
+.markdown {
+  margin: 24px 0 8px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.markdown :deep(h1) { font-size: 1.5em; margin: 0 0 12px; }
+.markdown :deep(h2) { font-size: 1.25em; margin: 20px 0 10px; }
+.markdown :deep(table) { border-collapse: collapse; margin: 12px 0; max-width: 100%; }
+.markdown :deep(th), .markdown :deep(td) { border: 1px solid rgba(128,128,128,.35); padding: 6px 12px; text-align: left; }
+.markdown :deep(a) { color: #299764; text-decoration: none; }
+.markdown :deep(code) { background: rgba(128,128,128,.12); padding: 1px 4px; border-radius: 3px; }

@@ -1,4 +1,11 @@
 <script setup lang="ts">
+// 工具说明正文随 SSR 一起产出：可索引内容不依赖客户端二次取数。
+const { data: pageDoc } = await useAsyncData('asn-page-doc', () =>
+  $fetch('/api/markdown/asn')
+)
+const doc = pageDoc.value
+
+import { ogImageMeta, siteUrl } from '../../utils/seo'
 import { useMiddlewareFetch } from '../../utils/middleware';
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
@@ -8,24 +15,24 @@ import { isIPv6 } from 'is-ip'
 const route = useRoute()
 
 useHead({
-  title: `ASN查询 | IP自治系统号查询 | ${config.siteName}`,
+  title: `ASN查询 | IP自治系统号、归属运营商与路由分析查询工具 | ${config.siteName}`,
   meta: [
     { name: 'description', content: '专业的ASN自治系统查询工具,支持IP地址ASN号查询,提供Maxmind GEOLite2、DB-IP、IP2Location 多数据源对比,同时集成WHOIS解析获取ASN详细信息,包括组织名称、国家、注册日期等,助力网络运维和路由分析' },
-    { name: 'keywords', content: 'asn查询,自治系统号,asn lookup,ip asn,asn whois,网络自治系统,运营商asn,ip归属asn' },
     { property: 'og:title', content: 'ASN自治系统查询工具 - IP ASN号与组织信息查询' },
     { property: 'og:description', content: '多数据源ASN查询,支持Maxmind GEOLite2、DB-IP、IP2Location，集成WHOIS解析获取ASN详细信息' },
-    { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
+    ...ogImageMeta,
     { property: 'og:type', content: 'website' },
   ],
   script: [
     {
+      key: 'asn-jsonld',
       type: 'application/ld+json',
       innerHTML: JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'WebApplication',
         name: 'ASN自治系统查询工具',
         description: '专业的ASN自治系统查询工具，支持IP地址ASN号查询，提供Maxmind GEOLite2、DB-IP、IP2Location 多数据源对比，集成WHOIS解析。',
-        url: config.siteUrl + 'asn',
+        url: siteUrl('asn'),
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Web',
         offers: {
@@ -253,6 +260,9 @@ function getStatusClass(status: string): string {
       <a href="/location" target="_blank">IP 归属地查询</a> | <a href="/whois" target="_blank">Whois 查询</a><br/>
       访客IP: {{ userIP || '获取中...' }}，您的网络{{ isIPv6(userIP) ? 'IPv6' : 'IPv4' }}优先<br/>
     </blockquote>
+  <div v-if="doc" class="markdown">
+    <div v-html="doc"></div>
+  </div>
   </div>
 </template>
 

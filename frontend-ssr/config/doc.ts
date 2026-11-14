@@ -37,7 +37,7 @@ export const docConfig: Record<string, DocMeta> = {
   '/doc/user/view_ipv6_adress_url': {
     title: '浏览器访问 IPv6 地址',
     description: '在 IPv6 地址两边加上中括号，就可以通过浏览器访问了，比如 http://[2402:4e00:1013:e500:0:9671:f018:4947]/',
-    seoTitle: '浏览器访问 IPv6 地址：中括号写法与端口注意事项',
+    seoTitle: '浏览器访问 IPv6 地址：中括号写法、端口位置与常见错误排查',
     seoDescription: '在 IPv6 地址两边加上中括号即可用浏览器访问，例如 http://[2402:4e00:1013:e500:0:9671:f018:4947]/。本文介绍浏览器访问 IPv6 地址的正确写法、端口号的书写位置，以及无法访问时的排查思路。'
   },
   '/doc/user/ipv4_ipv6_prefix_precedence': {
@@ -73,13 +73,13 @@ export const docConfig: Record<string, DocMeta> = {
   '/doc/user/AliyunAuthorizeSecurityGroup': {
     title: '阿里云自动化添加安全组',
     description: 'Golang 代码实操阿里云自动化添加安全组',
-    seoTitle: 'Golang 实现阿里云 ECS 安全组规则自动化添加',
+    seoTitle: 'Golang 实现阿里云 ECS 安全组规则自动化添加与批量管理',
     seoDescription: '使用 Golang 调用阿里云 ECS OpenAPI 实现安全组放行规则的自动化添加：包含 SDK 初始化、AccessKey 鉴权、AuthorizeSecurityGroup 接口的参数说明与完整示例代码，适合批量管理多台 ECS 实例的场景。'
   },
   '/doc/user/TencentCloudAddSecurityGroup': {
     title: '腾讯云自动化添加安全组',
     description: 'Golang 代码实操腾讯云自动化添加安全组',
-    seoTitle: 'Golang 实现腾讯云 CVM 安全组规则自动化添加',
+    seoTitle: 'Golang 实现腾讯云 CVM 安全组规则自动化添加与批量管理',
     seoDescription: '使用 Golang 调用腾讯云 CVM OpenAPI 实现安全组规则的自动化添加：涵盖 SDK 安装、密钥配置、安全组策略接口的调用示例与完整源码，便于在脚本中批量放行端口、管理大量云主机实例。'
   },
   '/doc/server/website_enable_ipv6': {
@@ -103,7 +103,7 @@ export const docConfig: Record<string, DocMeta> = {
   '/doc/server/ipv6webcheck': {
     title: '如何确认一个网站是否开启 IPv6',
     description: '通过 IPv6 网站检测工具，一键检查网站是否开启 IPv6 访问。',
-    seoTitle: '如何确认一个网站是否开启 IPv6：一键检测方法',
+    seoTitle: '如何确认一个网站是否开启 IPv6：一键检测与结果判读方法',
     seoDescription: '使用本站的 IPv6 网站检测工具，输入域名即可一键检查网站是否开启 IPv6 访问：返回 IPv4 与 IPv6 双栈的 HTTP/HTTPS 状态码、DNS 解析与连接耗时对比数据，并可申请 IPv6 徽标认证。'
   },
   '/doc/server/ipv6_sign': {
@@ -115,13 +115,13 @@ export const docConfig: Record<string, DocMeta> = {
   '/doc/server/ipv6_domain_record': {
     title: '如何为域名添加 IPv6 解析记录',
     description: 'IPv6 网站准备好了后，接下来可以为网站域名添加 IPv6 解析记录（AAAA）。',
-    seoTitle: '如何为域名添加 IPv6 解析记录（AAAA 记录）',
+    seoTitle: '如何为域名添加 IPv6 解析记录（AAAA 记录）并验证生效',
     seoDescription: '网站支持 IPv6 后，还需为域名添加 IPv6 解析记录（AAAA）。本文演示在常见 DNS 服务商控制台添加 AAAA 记录的操作步骤、TTL 建议值，以及添加后用 dig / nslookup 验证解析是否生效。'
   },
   '/doc/server/http2': {
     title: '网站如何开启 HTTP/2',
     description: 'HTTP/2 通过引入字段压缩和允许在同一连接上进行多个并发交换，使网络资源得到更有效的利用，并减少了延迟。',
-    seoTitle: '网站如何开启 HTTP/2：Nginx 配置与抓包验证',
+    seoTitle: '网站如何开启 HTTP/2：Nginx 配置、抓包验证与性能对比',
     seoDescription: 'HTTP/2 通过引入字段压缩和允许在同一连接上进行多个并发交换，使网络资源得到更有效的利用并减少延迟。本文介绍网站在 Nginx 中开启 HTTP/2 的配置方法，并用浏览器与 Wireshark 抓包验证协商结果。'
   },
   '/doc/rfc/rfc8200': {
@@ -157,7 +157,7 @@ export const docConfig: Record<string, DocMeta> = {
   '/doc/api/ip/locate': {
     title: '获取客户端公网 IP 及位置',
     description: '调用本项目的 /v1/location 接口，一次取回访问者自己的公网 IP 与 10 套 IP 库的归属地结果。',
-    seoTitle: 'API 文档：获取客户端公网 IP 与多库归属地结果',
+    seoTitle: 'API 文档：获取客户端公网 IP 与多库归属地查询结果',
     seoDescription: '调用本项目的 /v1/location 接口，一次取回访问者自己的公网 IPv4/IPv6 地址与 10 套 IP 库（MaxMind、IP2Region、GeoCN 等）的归属地结果，返回 JSON、支持跨域，附请求示例与响应字段说明。'
   },
   '/doc/api/ip/myip': {
@@ -187,7 +187,7 @@ export const docConfig: Record<string, DocMeta> = {
   '/doc/server/tls': {
     title: '网站如何开启 TLS',
     description: '用 Wireshark 抓包分析 TLS 1.3 的 TCP 三次握手与 TLS 协商全过程。',
-    seoTitle: '网站如何开启 TLS：TLS 1.3 握手过程抓包分析',
+    seoTitle: '网站如何开启 TLS：TLS 1.3 握手过程抓包分析与排错',
     seoDescription: '用 Wireshark 抓包分析 TLS 1.3 的 TCP 三次握手与 TLS 协商全过程：ClientHello、密钥共享（Key Share）、证书验证与 Finished 报文逐个拆解，理解网站开启 TLS 加密后的完整建连链路。'
   },
   '/doc/user/code_getip': {
@@ -199,7 +199,7 @@ export const docConfig: Record<string, DocMeta> = {
   '/doc/user/dns_dig': {
     title: 'DNS 解析流程',
     description: '剖析 DNS 解析流程',
-    seoTitle: 'DNS 解析流程详解：递归查询与迭代查询全过程',
+    seoTitle: 'DNS 解析流程详解：递归查询与迭代查询全过程与常见报文',
     seoDescription: '剖析一次完整的 DNS 解析流程：浏览器缓存 → 操作系统缓存 → 本地 DNS 服务器的递归查询 → 根域名 / 顶级域 / 权威服务器的迭代过程，配合 dig 命令逐步演示，理解域名解析为何时快时慢。'
   }
 }

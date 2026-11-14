@@ -4,6 +4,9 @@
 */
 
 const config = {
+    // 全站 SEO 的基准域名：canonical / og:url / og:image / JSON-LD / sitemap.xml 的 loc
+    // 全部由它推导，本地调试时也不要改成 localhost（会让整站把 localhost 当正式域名收录）。
+    // 末尾必须带斜杠，各处仍用 `config.siteUrl + path` 拼接（见 utils/seo.ts 的收口说明）。
     siteUrl: "https://nipw.cn/",
     // 站点名称：用于页面标题 / 描述 / 页脚品牌展示
     siteName: "柠檬味ipw.cn",

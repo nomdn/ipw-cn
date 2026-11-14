@@ -6,7 +6,8 @@ import { docConfig } from '../../../config/doc'
 
 // 显式枚举全部工具页并标注权重：与 nuxt:pages 自动扫描并存（模块会按 loc 去重合并），
 // 好处是收录不依赖扫描行为、且带 priority/changefreq。
-// 注意 /ipv6 不在列表里：它已改为 server/routes/ipv6.get.ts 的服务端 301，不再是页面。
+// 注意 /ipv6 不在列表里：它是 server/routes/ipv6.get.ts 的服务端 301 入口，
+// 不带 ?ip= 时指向下面的 /ipv6check，带 ?ip= 时指向 /location（历史语义）。
 const TOOL_PAGES: Array<{ loc: string; priority: number; changefreq: string }> = [
     { loc: '/', priority: 1.0, changefreq: 'daily' },
     { loc: '/location', priority: 0.9, changefreq: 'weekly' },
@@ -20,6 +21,7 @@ const TOOL_PAGES: Array<{ loc: string; priority: number; changefreq: string }> =
     { loc: '/ipv6speedtest', priority: 0.9, changefreq: 'weekly' },
     { loc: '/ipv6tcping', priority: 0.9, changefreq: 'weekly' },
     { loc: '/ipv6webcheck', priority: 0.9, changefreq: 'weekly' },
+    { loc: '/ipv6check', priority: 0.9, changefreq: 'weekly' },
     { loc: '/screenshot', priority: 0.8, changefreq: 'weekly' },
 ]
 

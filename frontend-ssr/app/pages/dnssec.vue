@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ogImageMeta, siteUrl } from '../../utils/seo'
 import { useMiddlewareFetch } from '../../utils/middleware';
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
@@ -9,24 +10,24 @@ import { isIPv6 } from 'is-ip'
 const route = useRoute()
 
 useHead({
-  title: `DNSSEC查询 | 域名DNSSEC验证检测 | ${config.siteName}`,
+  title: `DNSSEC查询 | 域名DNSSEC签名验证与信任链检测工具 | ${config.siteName}`,
   meta: [
     { name: 'description', content: '专业的DNSSEC查询工具,支持域名DNSSEC验证检测,检查域名是否启用DNSSEC签名,验证DNSKEY、RRSIG、DS记录链式信任关系,检测域名DNS数据完整性和真实性,防止DNS欺骗和中间人攻击,保障域名解析安全' },
-    { name: 'keywords', content: 'dnssec查询,dnssec验证,dnskey,rrsig,ds记录,域名安全,链式信任,dns欺骗防护,域名解析安全,dns签名验证' },
     { property: 'og:title', content: 'DNSSEC查询工具 - 域名DNSSEC验证与安全检测' },
     { property: 'og:description', content: 'DNSSEC验证检测工具,检查域名DNSSEC签名状态,验证DNSKEY、RRSIG、DS记录链式信任关系' },
-    { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
+    ...ogImageMeta,
     { property: 'og:type', content: 'website' },
   ],
   script: [
     {
+      key: 'dnssec-jsonld',
       type: 'application/ld+json',
       innerHTML: JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'WebApplication',
         name: 'DNSSEC验证查询工具',
         description: '专业的DNSSEC验证查询工具，检测域名DNSSEC签名状态，验证DNSKEY、RRSIG、DS记录链式信任关系，保障域名解析安全。',
-        url: config.siteUrl + 'dnssec',
+        url: siteUrl('dnssec'),
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Web',
         offers: {

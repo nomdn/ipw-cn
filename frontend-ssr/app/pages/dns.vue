@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ogImageMeta, siteUrl } from '../../utils/seo'
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
@@ -9,24 +10,24 @@ import AdvancedOptions from '../components/AdvancedOptions.vue';
 const route = useRoute()
 
 useHead({
-  title: `DNS查询工具 | 多节点域名解析检测 | ${config.siteName}`,
+  title: `DNS查询工具 | 多节点A/AAAA/CNAME/MX记录解析检测 | ${config.siteName}`,
   meta: [
     { name: 'description', content: '专业的多节点DNS查询工具,支持A记录、AAAA记录、CNAME记录、MX记录、NS记录、TXT记录、SRV记录、CAA记录等多种DNS解析记录查询,提供全国多节点并发检测,快速返回DNS解析结果,助力域名解析问题排查与优化' },
-    { name: 'keywords', content: 'dns查询,dns解析,域名解析,a记录查询,aaaa记录,cname记录,mx记录,ns记录,txt记录,srv记录,dns服务器,域名dns检测' },
     { property: 'og:title', content: 'DNS查询工具 - 多节点域名解析记录检测' },
     { property: 'og:description', content: '多节点DNS查询工具,支持多种DNS记录类型查询,快速检测域名解析状态' },
-    { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
+    ...ogImageMeta,
     { property: 'og:type', content: 'website' },
   ],
   script: [
     {
+      key: 'dns-jsonld',
       type: 'application/ld+json',
       innerHTML: JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'WebApplication',
         name: 'DNS查询与解析检测工具',
         description: '专业的多节点DNS查询工具，支持A、AAAA、CNAME、MX、NS、TXT、SRV、CAA等多种记录类型，全国多节点并发检测。',
-        url: config.siteUrl + 'dns',
+        url: siteUrl('dns'),
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Web',
         offers: {

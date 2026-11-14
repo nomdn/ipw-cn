@@ -70,3 +70,7 @@ ns4.dnsv2.com.		157105	IN	A	183.192.164.118
 ### 在线多地域 DNS 解析
 
 通过 [IPv6 在线域名解析工具](https://ipw.wsmdn.top/dns) 对其解析验证。
+
+## 相关检测工具
+
+添加 AAAA 后用 [DNS 查询](/dns) 确认记录生效，再用 [网站 IPv6 检测](/ipv6webcheck) 确认可访问；两者为何要分开测见 [IPv6 检测方法与工具](/ipv6check)。

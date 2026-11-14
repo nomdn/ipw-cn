@@ -1,4 +1,11 @@
 <script setup lang="ts">
+// 工具说明正文随 SSR 一起产出：可索引内容不依赖客户端二次取数。
+const { data: pageDoc } = await useAsyncData('location-page-doc', () =>
+  $fetch('/api/markdown/location')
+)
+const doc = pageDoc.value
+
+import { ogImageMeta, siteUrl } from '../../utils/seo'
 import { ref, onMounted, computed, nextTick, watch } from 'vue';
 import { isIPv6 } from 'is-ip';
 import {config} from '../../config/index';
@@ -11,24 +18,24 @@ const route = useRoute();
 const loading = ref(false);
 
 useHead({
-  title: `IPv6/IPv4地址查询工具 | IP归属地定位 | ${config.siteName}`,
+  title: `IPv6地址查询 | IPv4查询、IP归属地定位与多数据源对比工具 | ${config.siteName}`,
   meta: [
-    { name: 'description', content: '专业的IPv6/IPv4地址查询工具,支持IPv4和IPv6地址归属地查询,提供BiliBili Live、GeoCN、IP2Region、Maxmind等多种数据源对比,精确定位IP地理位置、运营商信息,支持中国大陆及境外地址查询,助力IPv6普及与应用' },
-    { name: 'keywords', content: 'ipv6地址查询,ipv4地址查询,ip归属地,ip地理位置,ip定位,运营商查询,ipv6归属地,ipv4归属地,maxmind,ip2region,geocn' },
+    { name: 'description', content: 'IPv6 地址查询与 IPv4 地址查询工具：输入 IP 即可并列查看 BiliBili Live、GeoCN、IP2Region、Maxmind 等多个地理库与 ASN 库的归属地、运营商结果，支持中国大陆及境外地址，免费无需注册' },
     { property: 'og:title', content: `IPv6/IPv4地址归属地查询工具 - ${config.siteName}` },
     { property: 'og:description', content: '多数据源IP地址归属地查询,支持IPv4和IPv6,提供地理位置、运营商等详细信息' },
-    { property: 'og:image', content: config.siteUrl + 'favicon.svg' },
+    ...ogImageMeta,
     { property: 'og:type', content: 'website' },
   ],
   script: [
     {
+      key: 'location-jsonld',
       type: 'application/ld+json',
       innerHTML: JSON.stringify({
         '@context': 'https://schema.org',
         '@type': 'WebApplication',
         name: 'IPv6/IPv4地址归属地查询工具',
         description: '专业的IPv6/IPv4地址归属地查询工具，支持BiliBili Live、GeoCN、IP2Region、Maxmind、纯真社区库等多数据源对比，精确定位IP地理位置、运营商信息。',
-        url: config.siteUrl + 'ipv6',
+        url: siteUrl('location'),
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Web',
         offers: {
@@ -348,6 +355,9 @@ onMounted(async () => {
 
     <div v-html="html"></div>
 
+    <div v-if="doc" class="markdown">
+      <div v-html="doc"></div>
+    </div>
     </div>
 
 

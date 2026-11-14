@@ -174,3 +174,6 @@ curl https://6.wsmdn.dpdns.org -v
 
 > listen ssl 后一个指令是 http2，在开启 ssl 的同时可以把 http2 一并开启了。在上面的测试效果可以看到 \`HTTP/2\`
 
+## 相关检测工具
+
+Nginx 改完用 [网站 IPv6 检测](/ipv6webcheck) 与 [SSL 证书检测](/ssl) 分别验证监听和双栈证书；排查顺序见 [IPv6 检测方法与工具](/ipv6check)。
