@@ -1,0 +1,25 @@
+{
+	"headers": [
+		{
+			"source": "/_nuxt/(.*)",
+			"headers": [
+				{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" },
+				{ "key": "Access-Control-Allow-Origin", "value": "*" }
+			]
+		},
+		{
+			"source": "/docimg/(.*)",
+			"headers": [
+				{ "key": "Cache-Control", "value": "public, max-age=604800" },
+				{ "key": "Access-Control-Allow-Origin", "value": "*" }
+			]
+		},
+		{
+			"source": "/((?!_nuxt/|docimg/|api/|middleware/|_headers).*)\\.(svg|png|jpe?g|webp|ico|css|js|woff2?|txt)",
+			"headers": [
+				{ "key": "Cache-Control", "value": "public, max-age=86400" },
+				{ "key": "Access-Control-Allow-Origin", "value": "*" }
+			]
+		}
+	]
+}

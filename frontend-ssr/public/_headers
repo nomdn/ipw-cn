@@ -1,0 +1,12 @@
+# Cloudflare Workers 静态资产缓存头（同时供前置国内 CDN「遵循源站」模式使用）。
+# _nuxt 文件名带内容 hash，可永久缓存；docimg 变更极少，给一周；
+# 其余 public 文件（favicon / 认证徽章 svg 等）一天，变更后最多一天内全量生效。
+
+/_nuxt/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/docimg/*
+  Cache-Control: public, max-age=604800
+
+/*
+  Cache-Control: public, max-age=86400

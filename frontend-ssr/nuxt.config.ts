@@ -101,6 +101,11 @@ export default defineNuxtConfig({
     'element-plus/theme-chalk/dark/css-vars.css',
   ],
   app:{
+    // 静态资产加速域：_nuxt 与 public 资产的引用全部指向 CDN（备案域，源站回源
+    // Cloudflare，见 config.assetOrigin 与 public/_headers）。SSR HTML 本身仍由
+    // nipw.cn 出，og:image / JSON-LD / 认证徽章 embed 等 SEO / 第三方引用不走此域。
+    // 域名是占位，CDN 控制台绑定好后改 config.assetOrigin 即可。
+    cdnURL: config.assetOrigin + '/',
     head: {
       // 站点内容为简体中文。不写时 Nuxt 输出的就是裸 <html>，
       // 屏幕阅读器会按系统语言瞎猜发音，Lighthouse 的 html-has-lang 也会失败。
@@ -123,6 +128,10 @@ export default defineNuxtConfig({
       ],
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        // 预热静态资产加速域的握手。crossorigin 必须带：_nuxt 的脚本按 module
+        // （CORS 模式）加载，不带它预热出的连接真正的请求用不上。样式表虽是
+        // no-cors，但脚本连接复用价值更大，共用这一条即可。
+        { rel: 'preconnect', href: config.assetOrigin, crossorigin: 'anonymous' },
         // preconnect 三个 IP 探测源站。crossorigin 不能省：$fetch 走 fetch() 的跨域
         // （CORS）模式，不带它预热出来的是 no-cors 连接，真正的 fetch 用不上、还得重连。
         ...ipProbeOrigins.map((href) => ({

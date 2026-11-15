@@ -3,6 +3,7 @@ import GithubSlugger from 'github-slugger'
 import { getSingletonHighlighter } from './shiki.bundle'
 import { fromHighlighter } from '@shikijs/markdown-it/core'
 import MarkdownIt from 'markdown-it'
+import { config } from '../config/index'
 
 const slugger = new GithubSlugger()
 
@@ -37,6 +38,18 @@ async function initMarkdown() {
     })
   })
   md.use(fromHighlighter(highlighter, { theme: 'vitesse-dark' }))
+  // 文档配图指向静态资产加速域：cdnURL 只会改写 Nuxt 自己管理的资产引用，
+  // 这里是 markdown 文本渲染出的 <img>，不会被自动加前缀，须手动拼。
+  // 只改站内根路径 /docimg/**，其余（外链、data:）原样保留。
+  const defaultImage = md.renderer.rules.image!
+  md.renderer.rules.image = (tokens, idx, options, env, self) => {
+    const token = tokens[idx]
+    const src = token.attrGet('src')
+    if (src && src.startsWith('/docimg/')) {
+      token.attrSet('src', config.assetOrigin + src)
+    }
+    return defaultImage(tokens, idx, options, env, self)
+  }
 }
 
 // Start initialization at module load time

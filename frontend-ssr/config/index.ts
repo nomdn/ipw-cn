@@ -8,6 +8,12 @@ const config = {
     // 全部由它推导，本地调试时也不要改成 localhost（会让整站把 localhost 当正式域名收录）。
     // 末尾必须带斜杠，各处仍用 `config.siteUrl + path` 拼接（见 utils/seo.ts 的收口说明）。
     siteUrl: "https://nipw.cn/",
+    // 静态资产加速域（备案域名经国内 CDN 回源 Cloudflare，缓存策略见 public/_headers）。
+    // _nuxt 构建产物与 public/ 资产引用都指到这里；主域名 nipw.cn 上的同路径资源仍随
+    // Worker 部署保留，加速域故障时可回退直连。末尾不带斜杠（拼接处各自处理）。
+    // 注意：它是 config 里的 https URL，nuxt.config 的 extractDomains 会自动把它
+    // 收进 CSP script-src / connect-src 白名单，无需另改安全头。
+    assetOrigin: "https://static.wsmdn.top",
     // 站点名称：用于页面标题 / 描述 / 页脚品牌展示
     siteName: "柠檬味ipw.cn",
     // 是否启用前端内置中间件（server/routes/middleware/[...slug].get.ts 本地转发）。
