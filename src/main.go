@@ -209,6 +209,14 @@ func (b *zstdReader) Close() error {
 func normalizeURL(input string) string {
 	input = strings.TrimSpace(input)
 	input = strings.TrimPrefix(input, "/")
+	// fiber 的通配符参数不做百分号解码（实测 %3A%2F%2F 原样进入 c.Params("*")），
+	// 而转发端（middleware 代理）会把目标整体编码后再发：目标自带的查询串 '?'
+	// 以 %3F 形态到达这里。先解码还原字面 '?'、'#'，gin 版边缘函数（自动解码）
+	// 与字面传输两条路径不受影响（不含 '%' 时解码等于原样返回）。
+	// 畸形 % 序列按原文处理，不吞请求。
+	if unescaped, err := url.PathUnescape(input); err == nil {
+		input = unescaped
+	}
 	if strings.HasPrefix(input, "http://") || strings.HasPrefix(input, "https://") {
 		return input
 	}
@@ -869,6 +877,13 @@ func whoisHandler(c fiber.Ctx) error {
 			"error": "Domain parameter is required",
 		})
 	}
+	// fiber 的 Params 不做百分号解码（fasthttp 原样返回路径）：前端/中间件发来的
+	// IDN 在 URL 里是 %E4%B8%AD%E6%96%87 这种形式，不先解开，whois 查询会原样
+	// 把「%E4%B8%AD%E6%96%87.COM」发给注册局。域名里合法字符不含 %，这里
+	// 解码失败时按原文处理即可。
+	if unescaped, err := url.PathUnescape(domain); err == nil {
+		domain = unescaped
+	}
 
 	// whois 不走请求级 DNS 覆盖（见 webtest.QueryWhois 注释），缓存键就是域名本身
 	cacheKey := domain
@@ -899,6 +914,10 @@ func dnssecHandler(c fiber.Ctx) error {
 			"error": "Domain parameter is required",
 		})
 	}
+	// 同 dnsQueryHandler：fiber 不解码路径参数，IDN 先解开再交给 punycode 转换
+	if unescaped, err := url.PathUnescape(domain); err == nil {
+		domain = unescaped
+	}
 
 	result, err := webtest.ResolveDNSSEC(domain)
 	if err != nil {
@@ -913,6 +932,12 @@ func dnssecHandler(c fiber.Ctx) error {
 func dnsQueryHandler(c fiber.Ctx) error {
 
 	domain := c.Params("*")
+	// fiber 不解码路径参数，IDN 在 URL 里是 %E4%B8%AD… 形态，不先解开，
+	// 下一步 punycode 转换拿到的还是百分号编码原文。域名合法字符不含 %，
+	// 解码失败按原文处理即可。
+	if unescaped, err := url.PathUnescape(domain); err == nil {
+		domain = unescaped
+	}
 	parsedURL, err := parseURL(domain)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{

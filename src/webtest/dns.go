@@ -554,6 +554,11 @@ func ResolvePTRRecord(ip string, servers []string) (DNSResult, error) {
 // ResolveByType 按记录类型名（a/aaaa/cname/mx/ns/txt/srv/ptr/caa）解析，servers 为请求级覆盖。
 // DNS 拨测的 HTTP 路由与 WS 报文统一走这里，避免两处各维护一套 switch。
 func ResolveByType(domain, recodeType string, servers []string) (DNSResult, error) {
+	// DNS 报文只认 ASCII：中文域名（如 中文.com）原文发出去只会得到 NXDOMAIN。
+	// HTTP 路由与 WS 拨测都从这里进，IDN → Punycode 统一收口在这一处
+	// （与 whois.QueryWhois 的 toPunycode 同口径）；PTR 反查传的是 IP，
+	// 纯 ASCII 原样返回，不受影响。
+	domain = toPunycode(domain)
 	switch recodeType {
 	case "a":
 		return ResolveARecord(domain, servers)

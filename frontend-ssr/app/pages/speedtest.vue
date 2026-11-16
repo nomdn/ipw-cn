@@ -10,7 +10,7 @@ import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { config } from '../../config/index';
 import { useMiddlewareFetch } from '../../utils/middleware';
-import { extractHost, formatTime, formatSpeed, formatSize, getStatusCodeClass, withQuery } from '../../utils/tools';
+import { encodeTargetPath, extractTarget, formatTime, formatSpeed, formatSize, getStatusCodeClass, withQuery } from '../../utils/tools';
 import AdvancedOptions from '../components/AdvancedOptions.vue';
 
 
@@ -82,7 +82,7 @@ const serverResults = ref<ServerResult[]>([])
 
 /** 双栈服务器：同时支持 IPv4/IPv6 的节点 */
 const dualStackFetches = config.APIBaseURL.DualStack.map((server) => {
-  const url = computed(() => withQuery("/middleware/" + server.id + "/speed/v4/" + encodeURIComponent(domain.value), adv.value?.query() ?? {}));
+  const url = computed(() => withQuery("/middleware/" + server.id + "/speed/v4/" + encodeTargetPath(domain.value), adv.value?.query() ?? {}));
   const { data, error: fetchError, execute } = useMiddlewareFetch(url, {
     immediate: false,
     watch: false,
@@ -92,7 +92,7 @@ const dualStackFetches = config.APIBaseURL.DualStack.map((server) => {
 
 /** IPv4 专用服务器：仅支持 IPv4 的节点 */
 const ipv4Fetches = config.APIBaseURL.IPv4.map((server) => {
-  const url = computed(() => withQuery("/middleware/" + server.id + "/speed/v4/" + encodeURIComponent(domain.value), adv.value?.query() ?? {}));
+  const url = computed(() => withQuery("/middleware/" + server.id + "/speed/v4/" + encodeTargetPath(domain.value), adv.value?.query() ?? {}));
   const { data, error: fetchError, execute } = useMiddlewareFetch(url, {
     immediate: false,
     watch: false,
@@ -124,7 +124,7 @@ function initServerResults() {
  * 并发调用所有服务器的 execute() 方法，逐个更新对应行的结果
  */
 async function SpeedTest() {
-  domain.value = extractHost(tmpDomain.value)
+  domain.value = extractTarget(tmpDomain.value)
   loading.value = true
   error.value = ''
   await nextTick()

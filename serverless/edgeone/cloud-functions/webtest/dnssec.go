@@ -61,6 +61,9 @@ type DNSSECResult struct {
 //  3. 用 DNSKEY 中的密钥逐一对 RRSIG.Verify(dnskey, aRRset) 验证
 //  4. 查询 DS 记录，检查链式信任
 func ResolveDNSSEC(domain string) (*DNSSECResult, error) {
+	// IDN → Punycode：DNS 报文只认 ASCII，中文域名不转换查不到任何记录
+	// （与 ResolveByType 的收口同口径）
+	domain = toPunycode(domain)
 	start := time.Now()
 	result := &DNSSECResult{
 		Domain: domain,

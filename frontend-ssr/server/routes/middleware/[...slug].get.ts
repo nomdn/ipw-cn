@@ -48,12 +48,19 @@ export default defineEventHandler(async (event) => {
     // h3 出于路径安全不会把 %2F 解码回 '/'，而 detail/ssl/speed 的目标 URL 恰恰依赖它
     // （前端 encodeURIComponent('https://x') → 'https%3A%2F%2Fx'）。远程中间件（fiber）会解码，
     // 这里补齐同样的语义，否则内置中间件转发带协议头的拨测目标必然拼坏
-    // （下游拿到 'https://https:%2F%2Fx'）。畸形 % 序列解码失败时按原文处理。
+    // （下游拿到 'https://https:%2F%2Fx'）。
+    // 解码循环到不再变化（上限 3 层）：前端 encodeTargetPath 会把目标自带的 '?'
+    // 双层编码（%3F → %253F）以穿过 h3 的查询串切分，单层解码只能还原到
+    // 单层编码形态，节点拿到的就不是合法 URL。畸形 % 序列按原文处理。
     let slugString: string = rawSlug
-    try {
-        slugString = decodeURIComponent(rawSlug)
-    } catch {
-        // keep raw
+    for (let i = 0; i < 3; i++) {
+        try {
+            const next = decodeURIComponent(slugString)
+            if (next === slugString) break
+            slugString = next
+        } catch {
+            break
+        }
     }
     // 将路径参数转为数组
     let slug: string[] = slugString ? slugString.split('/') : []
@@ -88,6 +95,16 @@ export default defineEventHandler(async (event) => {
     if (raw.split('/').some(seg => seg === '.' || seg === '..')) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid path' })
     }
+    // raw 此时是「已解码」的目标串。拼回下游 URL 前只做最小编码：
+    // '%' → %25、'?' → %3F、'#' → %23 —— 这三个字符在 URL 结构里有特殊含义，
+    // 字面发送会被当下游请求自己的 query / fragment 截断。其余字符（':'、字母、
+    // 汉字等）一律保持字面，与历史行为逐字节一致，老节点（不做任何解码）照常工作。
+    // 带 '?' 的目标：老节点会拿到字面 %3F（本来 '?' 字面发送就解析不对，不算回退）；
+    // 新节点（normalizeURL 里的 PathUnescape）解码回 '?' 后目标查询串真实生效。
+    const encodedRaw = raw
+        .replace(/%/g, '%25')
+        .replace(/\?/g, '%3F')
+        .replace(/#/g, '%23')
     const query = getQuery(event)
     const runtimeConfig = useRuntimeConfig(event)
 
@@ -147,7 +164,7 @@ export default defineEventHandler(async (event) => {
                 Object.entries(query).filter(([_, v]) => v !== undefined) as [string, string][]
             ).toString()
 
-            data = await $fetch(`${apiBaseUrl}v1/${apiType}/${raw}${queryString ? '?' + queryString : ''}`, {
+            data = await $fetch(`${apiBaseUrl}v1/${apiType}/${encodedRaw}${queryString ? '?' + queryString : ''}`, {
                 method: 'GET',
                 headers: authHeaders,
                 timeout: 15_000,
@@ -192,7 +209,7 @@ export default defineEventHandler(async (event) => {
             Object.entries(query).filter(([_, v]) => v !== undefined) as [string, string][]
         ).toString()
 
-        data = await $fetch(`${apiBaseUrl}v1/${apiType}/${raw}${queryString ? '?' + queryString : ''}`, {
+        data = await $fetch(`${apiBaseUrl}v1/${apiType}/${encodedRaw}${queryString ? '?' + queryString : ''}`, {
                 method: 'GET',
                 headers: authHeaders,
                 timeout: 30_000, // tcping/测速上游本身较慢，给更长超时

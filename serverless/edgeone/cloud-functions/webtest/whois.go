@@ -12,6 +12,7 @@ import (
 	"edgeone-cloud-functions/ssrf"
 	"github.com/likexian/whois"
 	"github.com/likexian/whois-parser"
+	"golang.org/x/net/idna"
 )
 
 // WhoisResult 包含 WHOIS 查询的结构化结果
@@ -91,7 +92,34 @@ const whoisConnectTimeout = 10 * time.Second
 // 使用 likexian/whois 库查询原始响应，再用 whois-parser 解析为结构化数据
 // 首次失败后 fallback：内置 TLD 映射 → IANA 查询服务器地址 →
 // 用 ResolveA/AAAA(自定义DNS) 解析IP → Happy Eyeballs 双栈竞争拨号
+// toPunycode 把含非 ASCII 字符的国际化域名（IDN）转成 Punycode（xn--…）形式。
+// WHOIS 服务器只认 ASCII：把 UTF-8 域名原文发过去，注册局要么回空、要么回
+// "no entries found"，中文域名（如 中文.世界）就永远查不到。
+// 转换失败（非法 IDN）或本身已是纯 ASCII 时原样返回，不吞错误 —— 让后续
+// 查询按原样失败并走正常的错误呈现。
+func toPunycode(domain string) string {
+	ascii := true
+	for _, r := range domain {
+		if r > 127 {
+			ascii = false
+			break
+		}
+	}
+	if ascii {
+		return domain
+	}
+	// Lookup profile：UTS46 映射（大小写归一、全角转半角等）+ 校验，
+	// 与浏览器地址栏对 IDN 的处理一致
+	converted, err := idna.Lookup.ToASCII(domain)
+	if err != nil || converted == "" {
+		return domain
+	}
+	return converted
+}
+
 func QueryWhois(domain string) (*WhoisResult, error) {
+	// HTTP handler 与拨测入口都从这里进，IDN → Punycode 统一收口在这一处
+	domain = toPunycode(strings.TrimSpace(domain))
 	raw, err := whois.Whois(domain)
 	if err != nil {
 		raw, err = whoisRetryWithFallback(domain, err)

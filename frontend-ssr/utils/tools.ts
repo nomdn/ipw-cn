@@ -5,6 +5,20 @@ export function extractHost(url: string): string {
   return match?.groups?.host ?? url;
 }
 
+/**
+ * extractTarget 只剥掉协议前缀，保留 host 之后全部内容（路径 / 查询串）。
+ *
+ * 供 detail（网站检测）与 speed（测速）这类「目标是完整 URL」的拨测使用：
+ * 之前沿用 extractHost 会把路径整个丢掉，用户测 https://example.com/bigfile.zip
+ * 实际测成了首页，测速/检测结论都与输入对不上。
+ *
+ * 注意分界：tcping 仍用 extractHost —— TCP 探测目标只能是 host:port，
+ * 路径没有语义；whois 输入本来就是纯域名。
+ */
+export function extractTarget(url: string): string {
+  return url.trim().replace(/^[a-zA-Z][a-zA-Z\d+.-]*:\/\//, '');
+}
+
 export function formatTime(ms?: number | null): string {
   if (ms == null || typeof ms !== 'number' || !isFinite(ms) || ms <= 0) return '-'
   if (ms < 1000) {
@@ -39,6 +53,19 @@ export function getStatusCodeClass(code?: number | null): string {
 export function isIPv4(ip: string): boolean {
   const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
   return ipRegex.test(ip);
+}
+
+/**
+ * 拨测目标写入 /middleware/<id>/<type>/<target> 路径专用编码。
+ *
+ * 单层 encodeURIComponent 不够：h3 解析请求 URL 时会先做一次百分号解码、
+ * 再按 '?' 拆查询串（h3 1.15 实测），目标 URL 自带的查询串会被当成拨测请求
+ * 自己的 query 截掉（进 getQuery 后与高级选项混在一起，无法区分）。
+ * 所以 '?' 再叠一层编码（%3F → %253F），穿过 h3 后由代理端统一解码还原，
+ * 再按段重编码发给节点。'/' 与 '#' 单层编码即可穿过，无需处理。
+ */
+export function encodeTargetPath(target: string): string {
+  return encodeURIComponent(target).replace(/%3F/gi, '%253F')
 }
 
 /**

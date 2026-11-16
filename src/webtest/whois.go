@@ -13,6 +13,7 @@ import (
 
 	"github.com/likexian/whois"
 	whoisparser "github.com/likexian/whois-parser"
+	"golang.org/x/net/idna"
 )
 
 // WhoisResult 包含 WHOIS 查询的结构化结果
@@ -98,6 +99,31 @@ const whoisLibTimeout = 6 * time.Second
 // 转介只是「锦上添花」，失败即放弃，绝不阻塞已到手的注册局数据。
 const whoisReferralTimeout = 3 * time.Second
 
+// toPunycode 把含非 ASCII 字符的国际化域名（IDN）转成 Punycode（xn--…）形式。
+// WHOIS 服务器只认 ASCII：把 UTF-8 域名原文发过去，注册局要么回空、要么回
+// "no entries found"，中文域名（如 中文.世界）就永远查不到。
+// 转换失败（非法 IDN）或本身已是纯 ASCII 时原样返回，不吞错误 —— 让后续
+// 查询按原样失败并走正常的错误呈现。
+func toPunycode(domain string) string {
+	ascii := true
+	for _, r := range domain {
+		if r > 127 {
+			ascii = false
+			break
+		}
+	}
+	if ascii {
+		return domain
+	}
+	// Lookup profile：UTS46 映射（大小写归一、全角转半角等）+ 校验，
+	// 与浏览器地址栏对 IDN 的处理一致
+	converted, err := idna.Lookup.ToASCII(domain)
+	if err != nil || converted == "" {
+		return domain
+	}
+	return converted
+}
+
 // QueryWhois 执行 WHOIS 查询并解析结构化数据
 // 主路径：likexian/whois 走「IANA → 注册局」两跳，**不追注册商转介**（转介由 chaseReferral 单独限时补），
 // 这样即便转介服务器不可达也只在 ~1s 内拿到注册局记录，不会干等满库的 30s 超时。
@@ -106,6 +132,8 @@ const whoisReferralTimeout = 3 * time.Second
 // whois 不走自定义 DNS（dns-server / 请求级 dns=）：whois 服务器是稳定的公共基础设施，
 // 解析结果只用于建立连接、不作为拨测结论，没必要让 DNS 配置的故障面波及 whois。
 func QueryWhois(domain string) (*WhoisResult, error) {
+	// HTTP handler 与 WS 拨测都从这里进，IDN → Punycode 统一收口在这一处
+	domain = toPunycode(strings.TrimSpace(domain))
 	raw, err := queryWhoisRegistry(domain)
 
 	// 库在「连接成功但读失败」等场景会同时返回部分数据与错误，此时数据不能丢；

@@ -645,6 +645,9 @@ func ResolvePTRRecord(ip string, servers []string) (DNSResult, error) {
 // ResolveByType 按记录类型名（a/aaaa/cname/mx/ns/txt/srv/ptr/caa）解析，servers 为请求级覆盖。
 // DNS 拨测的 HTTP 路由统一走这里，与主线保持同构，避免 handler 各维护一套 switch。
 func ResolveByType(domain, recodeType string, servers []string) (DNSResult, error) {
+	// DNS 报文只认 ASCII：gin 版边缘函数的 c.Param 自带解码，中文域名到达时是
+	// 字面汉字，必须先转 Punycode 再进查询（与主线 ResolveByType 同口径）。
+	domain = toPunycode(domain)
 	switch recodeType {
 	case "a":
 		return ResolveARecord(domain, servers)

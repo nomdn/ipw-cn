@@ -11,7 +11,7 @@ import { useRoute } from 'vue-router'
 import { CircleCheckFilled, CircleCloseFilled,InfoFilled } from '@element-plus/icons-vue';
 import { config } from '../../config/index';
 import { useMiddlewareFetch } from '../../utils/middleware';
-import { extractHost, getStatusCodeClass, formatTime, formatSpeed, withQuery } from '../../utils/tools';
+import { encodeTargetPath, extractTarget, getStatusCodeClass, formatTime, formatSpeed, withQuery } from '../../utils/tools';
 import AdvancedOptions from '../components/AdvancedOptions.vue';
 const route = useRoute()
 
@@ -93,7 +93,7 @@ const showSanRow = computed(() => {
 })
 // 高级选项（dns4/dns6 + resolve/resolve4/resolve6）：本页一次探测两栈
 const adv = ref<InstanceType<typeof AdvancedOptions> | null>(null)
-const sslUrl = computed(() => withQuery("/middleware/" + backendID.value + "/ssl/" + encodeURIComponent(testDomain.value), adv.value?.query() ?? {}));
+const sslUrl = computed(() => withQuery("/middleware/" + backendID.value + "/ssl/" + encodeTargetPath(testDomain.value), adv.value?.query() ?? {}));
 
 const { data: sslData, error: sslError, execute: executeSSL } = useMiddlewareFetch<SSLCheckResponse>(sslUrl, {
   immediate: false,
@@ -137,7 +137,7 @@ function formatDate(dateString: string): string {
 }
 
 function checkSSL() {
-  testDomain.value = extractHost(tmpDomain.value)
+  testDomain.value = extractTarget(tmpDomain.value)
   currentApiIndex.value = 0
   loading.value = true
   error.value = ''
